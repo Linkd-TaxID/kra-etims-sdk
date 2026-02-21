@@ -1,19 +1,19 @@
+Metadata-Version: 2.4
+Name: kra-etims-sdk
+Version: 0.1.0
+Summary: Senior-level Python SDK for KRA eTIMS via TIaaS Middleware
+License: Proprietary
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: requests>=2.31.0
+Requires-Dist: httpx>=0.25.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+
 # KRA eTIMS SDK (Python)
 
 A high-performance "Public Handshake" SDK for integrating with the **TIaaS (Tax Identity as a Service)** Middleware. This tool facilitates compliant communication with `taxid-production.up.railway.app` for enterprises operating within the Republic of Kenya.
-
-## Installation
-
-Install the SDK directly via pip. Ensure you are using Python 3.8+.
-
-```bash
-# Install from source
-pip install .
-
-# Or install directly from the repository
-pip install git+https://github.com/officialnyabuto/kra-etims-sdk.git
-```
-
 
 ---
 
@@ -51,11 +51,6 @@ The SDK implements a strict mapping of HTTP 503 errors to the `KRAConnectivityTi
 - **GavaConnect Sanitization**: Mandatory `@sanitize_kra_url` middleware strips trailing whitespace from URL strings to prevent signature failures on KRA production endpoints.
 - **Proactive Token Refresh**: Implements a 60-second proactive OAuth 2.0 buffer, refreshing credentials preemptively to ensure zero-latency for high-volume high-concurrency environments.
 - **Spec-Strict Models**: Full Pydantic V2 implementation of all 8 KRA functional categories (Initialization, Sync, Sale, Stock, etc.).
-- **Idempotency Engine**: Native support for `X-TIaaS-Idempotency-Key` headers to safely retry "Schrödinger's Invoices" (network drops) without risking double taxation.
-- **Asynchronous I/O**: Includes a fully native `AsyncKRAeTIMSClient` powered by `httpx` for non-blocking, high-concurrency event loops (FastAPI, Starlette).
-- **High-Volume Batching**: The `batch_update_stock` method automatically chunks massive ERP inventory updates (e.g., 10,000 SKUs) into safe 500-item requests to prevent KRA rate-limiting.
-- **Strict Decimal Math**: Automatically intercepts and normalizes floating-point drift (e.g., `100.1 * 3 = 300.300000000004`) to absolute 2-decimal precision before transmission.
-
 
 ---
 
@@ -82,48 +77,6 @@ try:
 except KRAConnectivityTimeoutError:
     # Handle VSCU offline ceiling breach
     pass
-```
-
----
-
-## Advanced Usage
-
-### 1. Preventing Double Taxation (Idempotency)
-If your network drops after sending a payload, you won't know if KRA recorded it. Pass a unique idempotency key. The TIaaS middleware will cache the KRA response and safely replay it on retries.
-
-```python
-try:
-    result = client.submit_sale(sale, idempotency_key="INV-2026-001-RETRY-1")
-except TIaaSAmbiguousStateError:
-    # The request was sent, but the connection died. 
-    # Safe to retry with the exact same idempotency_key.
-    pass
-```
-
-### 2. High-Performance Async (FastAPI / Starlette)
-For modern asynchronous backends, use the async client to prevent thread blocking.
-
-```python
-import asyncio
-from kra_etims.async_client import AsyncKRAeTIMSClient
-
-async def process_checkout(invoice):
-    async with AsyncKRAeTIMSClient(client_id="ID", client_secret="SEC") as client:
-        result = await client.submit_sale(invoice)
-        return result['invoiceSignature']
-```
-
-### 3. Bulk Inventory Synchronization
-Chunk and transmit thousands of SKUs automatically.
-
-```python
-from kra_etims.models import StockItem
-
-# Generate thousands of stock updates from your ERP
-items = [StockItem(tin="P0...", bhfId="00", itemCd=f"SKU-{i}", rsonCd="01", qty=100) for i in range(5000)]
-
-# The SDK automatically chunks this into 10 separate requests of 500 items
-client.batch_update_stock(items)
 ```
 
 ---
