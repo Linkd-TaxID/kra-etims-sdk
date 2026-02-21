@@ -2,7 +2,7 @@ import requests
 import os
 
 # Production URL or override via environment variable
-URL = os.getenv("TAXID_API_URL", "https://taxid-production.up.railway.app/health")
+URL = os.getenv("TAXID_API_URL", "https://taxid-production.up.railway.app/actuator/health")
 
 print(f"Pinging Railway endpoint: {URL}")
 
