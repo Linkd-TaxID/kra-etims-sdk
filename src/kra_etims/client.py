@@ -1,8 +1,13 @@
 import time
+import os
 import requests
 from typing import Optional, Dict, Any, Union
 from .middleware import sanitize_kra_url
-from .exceptions import KRAConnectivityTimeoutError, KRAeTIMSAuthError
+from .exceptions import (
+    KRAConnectivityTimeoutError, 
+    KRAeTIMSAuthError,
+    TIaaSUnavailableError
+)
 from .models import (
     DeviceInit, DataSyncRequest, BranchInfo, ItemSave, 
     ImportItem, SaleInvoice, ReverseInvoice, StockItem
@@ -17,12 +22,23 @@ class KRAeTIMSClient:
     middleware handles the underlying VSCU JAR orchestration and AES-256 encryption.
     """
     
-    def __init__(self, client_id: str, client_secret: str, base_url: str = "https://api.taxid.co.ke"):
+    def __init__(self, client_id: str, client_secret: str, base_url: Optional[str] = None):
         self.client_id = client_id
         self.client_secret = client_secret
-        self.base_url = base_url.strip()
+        
+        # Priority: TAXID_API_URL > constructor argument > Hardcoded Production URL
+        env_url = os.getenv("TAXID_API_URL")
+        default_url = "https://taxid-production.up.railway.app"
+        self.base_url = (env_url or base_url or default_url).strip()
+        
         self._access_token: Optional[str] = None
         self._token_expiry: float = 0
+        
+        # Connection Pooling and Handshake Compliance
+        self._session = requests.Session()
+        self._session.headers.update({
+            "X-TIaaS-Service": "Handshake"
+        })
         
     def _authenticate(self) -> None:
         """
@@ -33,7 +49,7 @@ class KRAeTIMSClient:
         now = time.time()
         # Proactive refresh: if token is missing or < 60s remains
         if not self._access_token or (self._token_expiry - now) < 60:
-            resp = requests.post(
+            resp = self._session.post(
                 f"{self.base_url}/oauth/token",
                 auth=(self.client_id, self.client_secret),
                 data={"grant_type": "client_credentials"}
@@ -57,7 +73,7 @@ class KRAeTIMSClient:
         headers = {"Authorization": f"Bearer {self._access_token}"}
         
         try:
-            resp = requests.request(method, url, json=json, headers=headers, timeout=30)
+            resp = self._session.request(method, url, json=json, headers=headers, timeout=30)
             
             # Map HTTP 503 to KRAConnectivityTimeoutError
             # Triggered when the 24-hour VSCU offline ceiling is breached.
@@ -69,6 +85,9 @@ class KRAeTIMSClient:
                 
             resp.raise_for_status()
             return resp.json()
+        except requests.exceptions.ConnectionError:
+            # Map ConnectionError to TIaaSUnavailableError for Railway instance issues
+            raise TIaaSUnavailableError()
         except requests.exceptions.RequestException as e:
             if hasattr(e, 'response') and e.response is not None and e.response.status_code == 503:
                 raise KRAConnectivityTimeoutError()
@@ -86,9 +105,15 @@ class KRAeTIMSClient:
         """Category 4: Save or Update Item master data."""
         return self._request("POST", "/v2/etims/item", json=data.model_dump())
 
+    @sanitize_kra_url
     def submit_sale(self, invoice: SaleInvoice) -> Dict[str, Any]:
         """Category 6: Submit a Sales Invoice (Normal/Copy/Training)."""
         return self._request("POST", "/v2/etims/sale", json=invoice.model_dump(exclude_none=True))
+
+    @sanitize_kra_url
+    def check_compliance(self, pin: str) -> Dict[str, Any]:
+        """Verify device compliance at the Railway endpoint."""
+        return self._request("GET", f"/v2/etims/compliance/{pin}")
 
     def submit_reverse_invoice(self, invoice: ReverseInvoice) -> Dict[str, Any]:
         """Category 7: Submit a Reverse/Credit Note Invoice."""

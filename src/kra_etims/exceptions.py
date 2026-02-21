@@ -18,3 +18,11 @@ class KRAeTIMSAuthError(KRAeTIMSError):
 class KRAeTIMSValidationError(KRAeTIMSError):
     """Raised when the payload does not match the KRA v2.0 spec."""
     pass
+
+class TIaaSUnavailableError(KRAeTIMSError):
+    """
+    Raised when the Railway instance is sleeping or down.
+    Maps to requests.exceptions.ConnectionError.
+    """
+    def __init__(self, message="TIaaS Service Unavailable: The Railway instance is unreachable."):
+        super().__init__(message)
