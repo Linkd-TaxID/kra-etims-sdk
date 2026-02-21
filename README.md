@@ -82,4 +82,4 @@ This SDK and the associated TIaaS Middleware are compliant with the **Kenya Data
 ---
 
 ## Support
-For architectural escalations or middleware orchestration support, contact `dev@taxid.co.ke`.
+For architectural escalations or middleware orchestration support, contact `ronnyabuto@icloud.com`.
