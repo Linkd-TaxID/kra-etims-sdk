@@ -1,0 +1,85 @@
+# KRA eTIMS SDK (Python)
+
+A high-performance "Public Handshake" SDK for integrating with the **TIaaS (Tax Identity as a Service)** Middleware. This tool facilitates compliant communication with `api.taxid.co.ke` for enterprises operating within the Republic of Kenya.
+
+---
+
+## Legal Foundation & Obligation
+
+This SDK is engineered to facilitate compliance with **Section 16(1)(c) of the Income Tax Act (Cap 470)**, as amended by the Finance Act (2023/2025). 
+
+> [!IMPORTANT]
+> **Statutory Notice**: Effective January 1, 2026, the Kenya Revenue Authority (KRA) will disallow any business expense deduction that is not supported by a valid eTIMS invoice transmitted via a compliant VSCU/OSCU architecture and linked to a verified Buyer PIN. 
+
+By utilizing this SDK, organizations ensure their digital sales pipeline meets the rigorous standards of the **eTIMS Technical Specification v2.0**.
+
+---
+
+## The 'Middleware Moat'
+
+While this SDK provides the interface logic (the "Remote Control"), it requires the **TIaaS Middleware** to function. The middleware manages the underlying, stateful KRA infrastructure:
+- **VSCU Orchestration**: Management of the KRA-issued JAR files and Port 8088 services.
+- **Security**: AES-256 `cmcKey` encryption and digital signature generation.
+- **Resilience**: A 24-hour offline signing window, ensuring business continuity during transit-layer disruptions.
+
+---
+
+## Institutional Resilience
+
+The SDK implements a strict mapping of HTTP 503 errors to the `KRAConnectivityTimeoutError` exception.
+
+- **VSCU Offline Ceiling**: This error is triggered only when the 24-hour Virtual Sales Control Unit offline window is breached. 
+- **Warm Cache Logic**: Validation of TCC and PIN metadata is served via local middleware caches to maintain sub-500ms latency for B2B checkout flows.
+
+---
+
+## Core Features
+
+- **GavaConnect Sanitization**: Mandatory `@sanitize_kra_url` middleware strips trailing whitespace from URL strings to prevent signature failures on KRA production endpoints.
+- **Proactive Token Refresh**: Implements a 60-second proactive OAuth 2.0 buffer, refreshing credentials preemptively to ensure zero-latency for high-volume high-concurrency environments.
+- **Spec-Strict Models**: Full Pydantic V2 implementation of all 8 KRA functional categories (Initialization, Sync, Sale, Stock, etc.).
+
+---
+
+## Quick Start (Category 6: Sale)
+
+```python
+from kra_etims.client import KRAeTIMSClient
+from kra_etims.models import SaleInvoice, ItemDetail, ReceiptLabel
+
+# 1. Initialize Authority Client
+client = KRAeTIMSClient(client_id="TIaaS_ID", client_secret="TIaaS_SEC")
+
+# 2. Transmit Compliant Sale
+try:
+    sale = SaleInvoice(
+        tin="P0000...", bhfId="00", invcNo="INV-001",
+        custNm="Enterprise Client Ltd", rcptLbel=ReceiptLabel.NORMAL,
+        confirmDt="20260221100000", totItemCnt=1, 
+        totTaxblAmt=1000.0, totTaxAmt=160.0, totAmt=1160.0,
+        itemList=[ItemDetail(...)]
+    )
+    result = client.submit_sale(sale)
+    print(f"KRA Signature: {result['invoiceSignature']}")
+except KRAConnectivityTimeoutError:
+    # Handle VSCU offline ceiling breach
+    pass
+```
+
+---
+
+## Sovereignty & Data Protection
+
+This SDK and the associated TIaaS Middleware are compliant with the **Kenya Data Protection Act (2019)**. All taxpayer metadata is handled in accordance with sovereign data residency requirements and encryption standards.
+
+---
+
+## Liability Disclaimer
+
+> [!CAUTION]
+> This SDK is a technical implementation tool, not tax advice. KRA eTIMS SDK and the authors are not responsible for KRA penalties, non-deductible expenses, or financial losses resulting from user error, misconfigured payloads, or middleware misapplication.
+
+---
+
+## Support
+For architectural escalations or middleware orchestration support, contact `dev@taxid.co.ke`.

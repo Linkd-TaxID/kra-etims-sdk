@@ -1,0 +1,20 @@
+class KRAeTIMSError(Exception):
+    """Base exception for all KRAeTIMS SDK errors."""
+    pass
+
+class KRAConnectivityTimeoutError(KRAeTIMSError):
+    """
+    Triggered when the 24-hour VSCU offline ceiling is breached (HTTP 503).
+    This indicates that the middleware cannot reach the KRA endpoint and
+    the local VSCU cache has expired.
+    """
+    def __init__(self, message="KRA connectivity timeout: VSCU offline ceiling breached (HTTP 503)."):
+        super().__init__(message)
+
+class KRAeTIMSAuthError(KRAeTIMSError):
+    """Raised when authentication fails or token refresh fails."""
+    pass
+
+class KRAeTIMSValidationError(KRAeTIMSError):
+    """Raised when the payload does not match the KRA v2.0 spec."""
+    pass
