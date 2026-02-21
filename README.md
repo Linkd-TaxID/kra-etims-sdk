@@ -1,6 +1,6 @@
 # KRA eTIMS SDK (Python)
 
-A high-performance "Public Handshake" SDK for integrating with the **TIaaS (Tax Identity as a Service)** Middleware. This tool facilitates compliant communication with `api.taxid.co.ke` for enterprises operating within the Republic of Kenya.
+A high-performance "Public Handshake" SDK for integrating with the **TIaaS (Tax Identity as a Service)** Middleware. This tool facilitates compliant communication with `taxid-production.up.railway.app` for enterprises operating within the Republic of Kenya.
 
 ---
 
@@ -47,7 +47,7 @@ The SDK implements a strict mapping of HTTP 503 errors to the `KRAConnectivityTi
 from kra_etims.client import KRAeTIMSClient
 from kra_etims.models import SaleInvoice, ItemDetail, ReceiptLabel
 
-# 1. Initialize Authority Client
+# 1. Initialize Authority Client (Defaults to Railway Production)
 client = KRAeTIMSClient(client_id="TIaaS_ID", client_secret="TIaaS_SEC")
 
 # 2. Transmit Compliant Sale
