@@ -11,7 +11,7 @@ Install the SDK directly via pip. Ensure you are using Python 3.8+.
 pip install .
 
 # Or install directly from the repository
-pip install git+https://github.com/officialnyabuto/kra-etims-sdk.git
+pip install git+https://github.com/Linkd-TaxID/kra-etims-sdk.git
 ```
 
 
