@@ -26,3 +26,12 @@ class TIaaSUnavailableError(KRAeTIMSError):
     """
     def __init__(self, message="TIaaS Service Unavailable: The Railway instance is unreachable."):
         super().__init__(message)
+
+class TIaaSAmbiguousStateError(KRAeTIMSError):
+    """
+    Raised when a network interruption occurs after a request was sent, 
+    but before a response was received. The state of the invoice on the 
+    KRA/TIaaS side is unknown (Schrödinger's Invoice).
+    """
+    def __init__(self, message="TIaaS Ambiguous State: Request sent but connection was dropped before response. Submit again with the same idempotency key."):
+        super().__init__(message)

@@ -1,7 +1,8 @@
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Union
-from pydantic import BaseModel, Field
+from decimal import Decimal, ROUND_HALF_UP
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 
 # --- Consumable Enums ---
 
@@ -23,22 +24,24 @@ class ReceiptLabel(str, Enum):
     PROFORMA = "PS" # Proforma
 
 # --- Category 1: Initialization ---
+class BaseSchema(BaseModel):
+    model_config = ConfigDict(extra='forbid')
 
-class DeviceInit(BaseModel):
+class DeviceInit(BaseSchema):
     tin: str = Field(..., description="Taxpayer Identification Number")
     bhfId: str = Field(..., description="Branch ID")
     dvcSrlNo: str = Field(..., description="Device Serial Number")
 
 # --- Category 2: Data Sync ---
 
-class DataSyncRequest(BaseModel):
+class DataSyncRequest(BaseSchema):
     tin: str
     bhfId: str
     lastReqDt: str  # YYYYMMDDHHmmss
 
 # --- Category 3: Branch Management ---
 
-class BranchInfo(BaseModel):
+class BranchInfo(BaseSchema):
     tin: str
     bhfId: str
     bhfNm: str
@@ -47,7 +50,7 @@ class BranchInfo(BaseModel):
 
 # --- Category 4: Item Management ---
 
-class ItemSave(BaseModel):
+class ItemSave(BaseSchema):
     tin: str
     bhfId: str
     itemCd: str
@@ -55,36 +58,53 @@ class ItemSave(BaseModel):
     itemNm: str
     itemTyCd: ItemType
     taxTyCd: TaxType
-    uprc: float
+    uprc: Decimal
     isUsed: str = "Y"
 
 # --- Category 5: Import Information ---
 
-class ImportItem(BaseModel):
+class ImportItem(BaseSchema):
     tin: str
     bhfId: str
     dclNo: str  # Declaration Number
     itemSeq: int
     itemCd: str
-    qty: float
-    prc: float
+    qty: Decimal
+    prc: Decimal
 
 # --- Category 6 & 7: Transactional Core ---
 
-class ItemDetail(BaseModel):
+class ItemDetail(BaseSchema):
     itemCd: str = Field(..., description="Item Code")
     itemNm: str = Field(..., description="Item Name")
     pkgUnitCd: str = "UNT"
-    pkg: float = 1.0
+    pkg: Decimal = Decimal("1.0")
     qtyUnitCd: str = "U"
-    qty: float = Field(..., description="Quantity")
-    uprc: float = Field(..., description="Unit Price")
-    totAmt: float = Field(..., description="Total Amount (qty * uprc)")
+    qty: Decimal = Field(..., description="Quantity")
+    uprc: Decimal = Field(..., description="Unit Price")
+    totAmt: Decimal = Field(..., description="Total Amount (qty * uprc)")
     taxTyCd: TaxType = Field(..., description="Tax Type Code (A/B/C/D/E)")
-    taxblAmt: float = Field(..., description="Taxable Amount")
-    taxAmt: float = Field(..., description="Tax Amount")
+    taxblAmt: Decimal = Field(..., description="Taxable Amount")
+    taxAmt: Decimal = Field(..., description="Tax Amount")
 
-class InvoiceBase(BaseModel):
+    @model_validator(mode='after')
+    def validate_math(self) -> 'ItemDetail':
+        # 1. Total Amount = Qty * Price
+        # We quantize the expected total to 2 decimal places to match KRA rounding
+        expected_tot = (self.qty * self.uprc).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        
+        # Strict check: input must match expected_tot EXACTLY. 
+        # This catches float drift because Decimal("300.3000...04") != Decimal("300.30")
+        if self.totAmt != expected_tot:
+             raise ValueError(f"Math Error: totAmt ({self.totAmt}) must be exactly qty * uprc = {expected_tot}. Detected precision drift or mismatch.")
+
+        # 2. Taxable + Tax = Total
+        if (self.taxblAmt + self.taxAmt).quantize(Decimal('0.01')) != self.totAmt.quantize(Decimal('0.01')):
+            raise ValueError(f"Math Error: taxblAmt ({self.taxblAmt}) + taxAmt ({self.taxAmt}) must be exactly totAmt ({self.totAmt})")
+
+        return self
+
+class InvoiceBase(BaseSchema):
     tin: str
     bhfId: str
     invcNo: str
@@ -96,10 +116,19 @@ class InvoiceBase(BaseModel):
     rcptLbel: ReceiptLabel = ReceiptLabel.NORMAL
     confirmDt: str # YYYYMMDDHHmmss
     totItemCnt: int
-    totTaxblAmt: float
-    totTaxAmt: float
-    totAmt: float
+    totTaxblAmt: Decimal
+    totTaxAmt: Decimal
+    totAmt: Decimal
     itemList: List[ItemDetail]
+
+    @model_validator(mode='after')
+    def validate_invoice_totals(self) -> 'InvoiceBase':
+        # sum of items
+        sum_items_tot = sum((item.totAmt for item in self.itemList), Decimal("0"))
+        if self.totAmt.quantize(Decimal('0.01')) != sum_items_tot.quantize(Decimal('0.01')):
+            raise ValueError(f"Math Error: Invoice totAmt ({self.totAmt}) must match sum of items ({sum_items_tot})")
+        
+        return self
 
 class SaleInvoice(InvoiceBase):
     """Category 6: Sales Invoice"""
@@ -111,12 +140,12 @@ class ReverseInvoice(InvoiceBase):
 
 # --- Category 8: Stock Management ---
 
-class StockItem(BaseModel):
+class StockItem(BaseSchema):
     tin: str
     bhfId: str
     itemCd: str
     rsonCd: str # Reason Code
-    qty: float
+    qty: Decimal
     tin2: Optional[str] = None # For transfer
     bhfId2: Optional[str] = None
 
