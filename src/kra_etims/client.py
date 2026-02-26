@@ -25,32 +25,44 @@ class KRAeTIMSClient:
     middleware handles the underlying VSCU JAR orchestration and AES-256 encryption.
     """
     
-    def __init__(self, client_id: str, client_secret: str, base_url: Optional[str] = None):
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ):
         self.client_id = client_id
         self.client_secret = client_secret
-        
+
         # Priority: TAXID_API_URL > constructor argument > Hardcoded Production URL
         env_url = (os.getenv("TAXID_API_URL") or "").strip()
         default_url = "https://taxid-production.up.railway.app"
         raw_url = env_url or base_url or default_url
         self.base_url = raw_url.strip().rstrip('/')
-        
+
+        # API Key auth (preferred for production B2B).  Priority: env var > constructor arg.
+        # When set, OAuth2 token fetch is skipped entirely.
+        self._api_key: Optional[str] = os.getenv("TAXID_API_KEY") or api_key
+
         self._access_token: Optional[str] = None
         self._token_expiry: float = 0
-        
+
         # Connection Pooling and Handshake Compliance
         self._session = requests.Session()
-        self._session.headers.update({
-            "X-TIaaS-Service": "Handshake"
-        })
+        self._session.headers.update({"X-TIaaS-Service": "Handshake"})
         self._lock = threading.Lock()
         
     def _authenticate(self) -> None:
         """
-        Implements OAuth 2.0 flow with a 60-second proactive refresh buffer.
-        Ensures zero-latency for high-volume B2B operations by preemptively 
-        refreshing credentials before they expire.
+        Obtains a Bearer token via OAuth2 Client Credentials (60-second refresh buffer).
+
+        Skipped entirely when an API key is configured — ``self._api_key`` takes
+        precedence and the key is sent directly as an ``X-API-Key`` header.
         """
+        if self._api_key:
+            return  # API key auth — no token fetch needed
+
         with self._lock:
             now = time.time()
             # Double-check inside lock to prevent redundant refreshes
@@ -62,7 +74,7 @@ class KRAeTIMSClient:
                 )
                 if resp.status_code != 200:
                     raise KRAeTIMSAuthError(f"TIaaS Authentication failed: {resp.text}")
-                
+
                 data = resp.json()
                 self._access_token = data.get("access_token")
                 # expires_in usually 3600; we subtract the buffer internally in the check
@@ -76,7 +88,12 @@ class KRAeTIMSClient:
         """
         self._authenticate()
         url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
-        headers = {"Authorization": f"Bearer {self._access_token}"}
+
+        # Choose auth header based on configured auth mode
+        if self._api_key:
+            headers: Dict[str, str] = {"X-API-Key": self._api_key}
+        else:
+            headers = {"Authorization": f"Bearer {self._access_token}"}
         
         if idempotency_key:
             headers["X-TIaaS-Idempotency-Key"] = idempotency_key
@@ -108,6 +125,18 @@ class KRAeTIMSClient:
     def initialize_device(self, data: DeviceInit) -> Dict[str, Any]:
         """Category 1: Initialize device/branch on eTIMS."""
         return self._request("POST", "/v2/etims/init", json=data.model_dump(mode='json', exclude_none=True))
+
+    def initialize_device_handshake(self) -> Dict[str, Any]:
+        """
+        Category 1 (Pre-step): Trigger the middleware's device wake-up / init-handshake.
+
+        Sends a GET to /v2/etims/init-handshake. The middleware calls the KRA
+        Sandbox API, retrieves the cmcKey for the configured tenant, encrypts it
+        with AES-256, and persists it to the TenantDevice record.
+
+        Returns the middleware response confirming the handshake outcome.
+        """
+        return self._request("GET", "/v2/etims/init-handshake")
 
     def sync_data(self, data: DataSyncRequest) -> Dict[str, Any]:
         """Category 2: Data Synchronization (Codes, Items, Branches)."""
