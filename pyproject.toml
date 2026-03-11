@@ -4,11 +4,30 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kra-etims-sdk"
-version = "0.1.0"
-description = "Senior-level Python SDK for KRA eTIMS via TIaaS Middleware"
+version = "0.2.0"
+description = "Enterprise Python SDK for KRA eTIMS via TIaaS Middleware — idempotency engine with offline resilience"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = {text = "Proprietary"}
+authors = [
+    {name = "TaxID Engineering", email = "engineering@taxid.co.ke"},
+]
+keywords = ["kra", "etims", "kenya", "tax", "invoicing", "vscu", "tiims"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: Other/Proprietary License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = [
     "pydantic>=2.0.0",
     "requests>=2.31.0",
@@ -18,9 +37,20 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-httpx>=0.30.0",
     "responses>=0.23.0",
+]
+qr = [
+    "qrcode[pil]>=7.4.2",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["kra_etims*"]
+
+[tool.setuptools.package-data]
+kra_etims = ["py.typed"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

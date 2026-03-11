@@ -10,7 +10,7 @@ def test_payload_integrity_excludes_none():
     Scenario: Submit a SaleInvoice with optional fields (like orgInvcNo) set to None.
     Assertion: The raw JSON payload must NOT contain the key "orgInvcNo".
     """
-    client = KRAeTIMSClient("id", "secret", "https://api.test")
+    client = KRAeTIMSClient("id", "secret", base_url="https://api.test")
     client._access_token = "mock"
     client._token_expiry = 9999999999
     

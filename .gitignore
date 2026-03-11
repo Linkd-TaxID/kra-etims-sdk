@@ -10,3 +10,4 @@ env/
 .DS_Store
 *.log
 verify_v2.py
+.claude/

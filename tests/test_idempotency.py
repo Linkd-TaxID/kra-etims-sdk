@@ -10,7 +10,7 @@ from kra_etims.models import SaleInvoice, TaxType
 
 @responses.activate
 def test_sync_idempotency_header_injection():
-    client = KRAeTIMSClient("id", "secret", "https://api.test")
+    client = KRAeTIMSClient("id", "secret", base_url="https://api.test")
     client._access_token = "mock"
     client._token_expiry = 9999999999
     
@@ -60,7 +60,7 @@ def test_sync_unavailable_state_on_get():
 
 @pytest.mark.asyncio
 async def test_async_ambiguous_state(httpx_mock):
-    async with AsyncKRAeTIMSClient("id", "secret", "https://api.test") as client:
+    async with AsyncKRAeTIMSClient("id", "secret", base_url="https://api.test") as client:
         client._access_token = "mock"
         client._token_expiry = 9999999999
         
