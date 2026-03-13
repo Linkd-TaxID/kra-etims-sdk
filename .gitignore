@@ -11,3 +11,4 @@ env/
 *.log
 verify_v2.py
 .claude/
+CLAUDE.md
