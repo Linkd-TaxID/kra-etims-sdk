@@ -18,27 +18,43 @@ from typing import Union
 
 from .models import ItemDetail, TaxType
 
-# Multiplier stored as (1 + rate) to compute taxable from inclusive price.
+# KRA eTIMS Technical Specification v2.0 — Tax Band Rate Table
+# Source: KRA eTIMS Integration Guide v2.0 (official)
+#   A — Standard Rate:  16% VAT
+#   B — Zero-Rated:      0% VAT (Petroleum / Exports)
+#   C — Special Rate:    8% VAT
+#   D — Exempt:          0% (no VAT credit)
+#   E — Special Rate:    8% VAT (Non-VAT scope items at 8%)
 _INCLUSIVE_DIVISOR: dict[str, Decimal] = {
     "A": Decimal("1.16"),
-    "B": Decimal("1.08"),
-    "C": Decimal("1.00"),
+    "B": Decimal("1.00"),
+    "C": Decimal("1.08"),
     "D": Decimal("1.00"),
-    "E": Decimal("1.00"),
+    "E": Decimal("1.08"),
 }
 
 _EXCLUSIVE_RATE: dict[str, Decimal] = {
     "A": Decimal("0.16"),
-    "B": Decimal("0.08"),
-    "C": Decimal("0.00"),
+    "B": Decimal("0.00"),
+    "C": Decimal("0.08"),
     "D": Decimal("0.00"),
-    "E": Decimal("0.00"),
+    "E": Decimal("0.08"),
 }
 
 
 def _q(value: Decimal) -> Decimal:
     """Quantize to 2 decimal places using KRA-mandated ROUND_HALF_UP."""
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _qty(value: Decimal) -> Decimal:
+    """Quantize quantity to 4 decimal places.
+
+    KRA allows up to 6 significant figures for quantity.  Using 2dp (the
+    monetary precision) silently truncates fuel (15.456L), weight (0.375kg),
+    and pharmaceutical quantities, causing fiscal misrepresentation.
+    """
+    return value.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
 
 def calculate_item(
@@ -100,7 +116,7 @@ def calculate_item(
         )
 
     price = _q(Decimal(str(total_price)))
-    quantity = _q(Decimal(str(qty)))
+    quantity = _qty(Decimal(str(qty)))
     rate = _EXCLUSIVE_RATE[band]
 
     if price_is_inclusive:
@@ -150,6 +166,14 @@ def build_invoice_totals(items: list[ItemDetail]) -> dict:
     tot_taxbl = _q(sum((i.taxblAmt for i in items), Decimal("0")))
     tot_tax   = _q(sum((i.taxAmt   for i in items), Decimal("0")))
     tot_amt   = _q(sum((i.totAmt   for i in items), Decimal("0")))
+
+    # Cross-band integrity: if per-line ROUND_HALF_UP accumulates a residual
+    # at invoice level, assign it to tot_tax (mirrors the per-line convention
+    # in calculate_item). Without this, KRA rejects the invoice with code 20.
+    residual = tot_amt - tot_taxbl - tot_tax
+    if residual != Decimal("0"):
+        tot_tax = _q(tot_tax + residual)
+
     return {
         "totItemCnt":  len(items),
         "totTaxblAmt": tot_taxbl,

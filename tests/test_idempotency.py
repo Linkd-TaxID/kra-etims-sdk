@@ -27,24 +27,25 @@ def test_sync_idempotency_header_injection():
     assert responses.calls[0].request.headers["X-TIaaS-Idempotency-Key"] == "unique_123"
     print("\n✅ Sync: X-TIaaS-Idempotency-Key found in headers.")
 
-@responses.activate
 def test_sync_ambiguous_state_on_post():
+    from unittest.mock import patch
     client = KRAeTIMSClient("id", "secret", "https://api.test")
     client._access_token = "mock"
     client._token_expiry = 9999999999
-    
-    # Simulate connection drop after request sent
-    responses.add(responses.POST, "https://api.test/v2/etims/sale", body=requests.exceptions.ConnectionError("Drop"))
-    
-    invoice = SaleInvoice(
-        tin="P1", bhfId="00", invcNo="1", custNm="C", confirmDt="20240101000000",
-        totItemCnt=0, totTaxblAmt=Decimal("0"), totTaxAmt=Decimal("0"), totAmt=Decimal("0"),
-        itemList=[]
-    )
-    
-    with pytest.raises(TIaaSAmbiguousStateError):
-        client.submit_sale(invoice)
-    print("✅ Sync: ConnectionError during POST raised TIaaSAmbiguousStateError.")
+
+    # `responses` wraps body exceptions in ConnectionError, so we patch the
+    # session directly to inject a genuine ReadTimeout (request sent, no reply).
+    with patch.object(
+        client._session, "request",
+        side_effect=requests.exceptions.ReadTimeout("response never arrived"),
+    ):
+        invoice = SaleInvoice(
+            tin="P1", bhfId="00", invcNo="1", custNm="C", confirmDt="20240101000000",
+            totItemCnt=0, totTaxblAmt=Decimal("0"), totTaxAmt=Decimal("0"), totAmt=Decimal("0"),
+            itemList=[]
+        )
+        exc = pytest.raises(TIaaSAmbiguousStateError, client.submit_sale, invoice)
+    print("✅ Sync: ReadTimeout during POST raised TIaaSAmbiguousStateError.")
 
 @responses.activate
 def test_sync_unavailable_state_on_get():

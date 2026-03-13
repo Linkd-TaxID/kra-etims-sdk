@@ -5,28 +5,24 @@ from kra_etims.client import KRAeTIMSClient
 from kra_etims.exceptions import TIaaSAmbiguousStateError
 from kra_etims.models import SaleInvoice, ReceiptLabel, TaxType
 
-@responses.activate
 def test_schrodinger_invoice_throws_ambiguous_error():
     """
-    Scenario: The TCP connection drops after the request bytes are sent 
-    but before the KRA response is read.
+    Scenario: The TCP connection drops after the request bytes are sent
+    but before the KRA response is read (ReadTimeout).
     Assertion: The SDK must raise TIaaSAmbiguousStateError for POST requests.
+
+    Note: `responses` wraps body exceptions inside ConnectionError, so we
+    inject ReadTimeout directly via patch.object on the session.
     """
+    from unittest.mock import patch
+
     client = KRAeTIMSClient(
         client_id="test_id",
         client_secret="test_secret",
         base_url="https://api.test.co.ke"
     )
-    # Bypass auth for this test
     client._access_token = "mock_token"
     client._token_expiry = 9999999999
-
-    # Mock a connection error during the request
-    responses.add(
-        responses.POST,
-        "https://api.test.co.ke/v2/etims/sale",
-        body=requests.exceptions.ConnectionError("Connection dropped after sending bytes")
-    )
 
     invoice = SaleInvoice(
         tin="P000000000X",
@@ -53,9 +49,13 @@ def test_schrodinger_invoice_throws_ambiguous_error():
         ]
     )
 
-    with pytest.raises(TIaaSAmbiguousStateError) as excinfo:
-        client.submit_sale(invoice)
-    
+    with patch.object(
+        client._session, "request",
+        side_effect=requests.exceptions.ReadTimeout("response never arrived"),
+    ):
+        with pytest.raises(TIaaSAmbiguousStateError) as excinfo:
+            client.submit_sale(invoice)
+
     assert "TIaaS Ambiguous State" in str(excinfo.value)
 
 @responses.activate
