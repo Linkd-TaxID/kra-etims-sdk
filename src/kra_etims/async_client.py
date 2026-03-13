@@ -8,6 +8,7 @@ from .middleware import sanitize_kra_url
 from .exceptions import (
     KRA_ERROR_MAP,
     KRAConnectivityTimeoutError,
+    KRADuplicateInvoiceError,
     KRAeTIMSAuthError,
     KRAeTIMSError,
     TIaaSUnavailableError,
@@ -49,7 +50,7 @@ class AsyncKRAeTIMSClient:
         base_url: Optional[str] = None,
     ):
         self.client_id = client_id
-        self.client_secret = client_secret
+        self._client_secret = client_secret
 
         env_url = (os.getenv("TAXID_API_URL") or "").strip()
         default_url = "https://taxid-production.up.railway.app"
@@ -71,6 +72,22 @@ class AsyncKRAeTIMSClient:
         # Sub-interfaces (lazy initialised on first access)
         self._reports = None
         self._gateway = None
+
+    # ------------------------------------------------------------------
+    # Representation — never echo secrets
+    # ------------------------------------------------------------------
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"client_id={self.client_id!r}, "
+            f"base_url={self.base_url!r}, "
+            f"auth_mode={'api_key' if self._api_key else 'oauth2'}"
+            f")"
+        )
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
     # ------------------------------------------------------------------
     # Context manager
@@ -121,24 +138,28 @@ class AsyncKRAeTIMSClient:
             return
 
         async with self._lock:
-            now = time.time()
+            now = time.time()  # re-read: time elapsed while waiting for lock
             if not self._access_token or (self._token_expiry - now) < 60:
                 try:
                     resp = await self._client.post(
                         f"{self.base_url}/oauth/token",
-                        auth=(self.client_id, self.client_secret),
+                        auth=(self.client_id, self._client_secret),
                         data={"grant_type": "client_credentials"},
                     )
                     if resp.status_code != 200:
-                        raise KRAeTIMSAuthError(
-                            f"TIaaS Authentication failed: {resp.text}"
-                        )
+                        try:
+                            body = resp.json()
+                            detail = body.get("error_description") or body.get("error") or f"HTTP {resp.status_code}"
+                        except Exception:
+                            detail = f"HTTP {resp.status_code}"
+                        raise KRAeTIMSAuthError(f"TIaaS Authentication failed: {detail}")
                     data = resp.json()
                     self._access_token = data.get("access_token")
-                    self._token_expiry = now + data.get("expires_in", 3600)
+                    expires_in = int(data.get("expires_in", 3600))
+                    self._token_expiry = now + (expires_in if expires_in > 0 else 3600)
                 except httpx.RequestError as exc:
                     raise KRAeTIMSAuthError(
-                        f"TIaaS Authentication unreachable: {exc}"
+                        f"TIaaS Authentication unreachable: {type(exc).__name__}"
                     ) from exc
 
     # ------------------------------------------------------------------
@@ -349,14 +370,22 @@ class AsyncKRAeTIMSClient:
 
         async def _submit_one(invoice: SaleInvoice) -> Dict[str, Any]:
             async with semaphore:
-                return await self.submit_sale(invoice)
+                idem_key = f"{invoice.tin}:{invoice.invcNo}"
+                return await self.submit_sale(invoice, idempotency_key=idem_key)
 
         tasks = [_submit_one(inv) for inv in invoices]
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         results: List[Dict[str, Any]] = []
         for invoice, outcome in zip(invoices, raw_results):
-            if isinstance(outcome, Exception):
+            if isinstance(outcome, KRADuplicateInvoiceError):
+                # Code 12 = already processed on a prior attempt.  The fiscal
+                # record exists on KRA — this is a safe idempotent success.
+                results.append({
+                    "invoice_no": invoice.invcNo,
+                    "status":     "already_processed",
+                })
+            elif isinstance(outcome, Exception):
                 results.append({
                     "invoice_no": invoice.invcNo,
                     "status":     "error",

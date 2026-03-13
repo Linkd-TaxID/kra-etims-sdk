@@ -174,28 +174,40 @@ class TestCalculateItem:
         # Core invariant: taxable + tax == total
         assert item.taxblAmt + item.taxAmt == item.totAmt
 
-    def test_band_b_inclusive_math(self):
+    def test_band_b_zero_rated(self):
+        # Band B = Zero-Rated (0% VAT) — KRA eTIMS Technical Specification v2.0.
+        # Full retail price is the taxable amount; no VAT charged.
         from kra_etims.tax import calculate_item
         item = calculate_item("Diesel", "HS270900", 1080, "B")
         assert item.totAmt == Decimal("1080.00")
-        assert item.taxblAmt == Decimal("1000.00")
-        assert item.taxAmt == Decimal("80.00")
+        assert item.taxblAmt == Decimal("1080.00")
+        assert item.taxAmt == Decimal("0.00")
 
-    def test_band_c_exempt_zero_vat(self):
+    def test_band_c_special_rate_8pct(self):
+        # Band C = Special Rate (8% VAT) — KRA eTIMS Technical Specification v2.0.
+        # 200.00 inclusive → taxable = 200/1.08 = 185.19, tax = 14.81
         from kra_etims.tax import calculate_item
         item = calculate_item("Unga", "HS110100", 200, "C")
-        assert item.taxAmt == Decimal("0.00")
-        assert item.taxblAmt == Decimal("200.00")
+        assert item.totAmt == Decimal("200.00")
+        assert item.taxblAmt == Decimal("185.19")
+        assert item.taxAmt == Decimal("14.81")
+        assert item.taxblAmt + item.taxAmt == item.totAmt
 
-    def test_band_d_zero_rated(self):
+    def test_band_d_exempt(self):
+        # Band D = Exempt (0% VAT, no credit) — KRA eTIMS Technical Specification v2.0.
         from kra_etims.tax import calculate_item
         item = calculate_item("Export Goods", "HS999999", 10000, "D")
         assert item.taxAmt == Decimal("0.00")
 
-    def test_band_e_non_vat(self):
+    def test_band_e_special_rate_8pct(self):
+        # Band E = Special Rate (8% VAT) — KRA eTIMS Technical Specification v2.0.
+        # 500.00 inclusive → taxable = 500/1.08 = 462.96, tax = 37.04
         from kra_etims.tax import calculate_item
         item = calculate_item("Bank Charges", "SRV001", 500, "E")
-        assert item.taxAmt == Decimal("0.00")
+        assert item.totAmt == Decimal("500.00")
+        assert item.taxblAmt == Decimal("462.96")
+        assert item.taxAmt == Decimal("37.04")
+        assert item.taxblAmt + item.taxAmt == item.totAmt
 
     def test_quantity_multiplies_correctly(self):
         from kra_etims.tax import calculate_item
