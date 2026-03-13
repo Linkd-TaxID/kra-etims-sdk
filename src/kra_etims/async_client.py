@@ -166,11 +166,17 @@ class AsyncKRAeTIMSClient:
     # Error handling
     # ------------------------------------------------------------------
 
-    def _handle_error_response(self, response_json: dict) -> None:
+    def _handle_error_response(self, response_json: Any) -> None:
         """
         Intercept opaque KRA application errors embedded in HTTP 200 bodies.
         Maps KRA result codes to precise, actionable exceptions.
         """
+        if not isinstance(response_json, dict):
+            raise KRAeTIMSError(
+                f"Unexpected response format: expected JSON object, "
+                f"got {type(response_json).__name__}"
+            )
+
         result_cd = str(response_json.get("resultCd", "00")).strip()
         if result_cd == "00":
             return
@@ -221,11 +227,18 @@ class AsyncKRAeTIMSClient:
                 raise KRAConnectivityTimeoutError()
 
             resp.raise_for_status()
-            response_data = resp.json()
+            try:
+                response_data = resp.json()
+            except (ValueError, httpx.DecodingError):
+                raise KRAeTIMSError(
+                    f"Non-JSON response from TIaaS [{resp.status_code}]: "
+                    f"{resp.text[:200]}"
+                )
             self._handle_error_response(response_data)
             return response_data
 
         except (httpx.ConnectError, httpx.ConnectTimeout):
+            # TCP handshake never completed — request was never sent.
             raise TIaaSUnavailableError()
         except (
             httpx.ReadTimeout,
@@ -233,8 +246,9 @@ class AsyncKRAeTIMSClient:
             httpx.PoolTimeout,
             httpx.RequestError,
         ):
+            # Request was sent; response never arrived — state is ambiguous.
             if method.upper() in {"POST", "PUT", "DELETE", "PATCH"}:
-                raise TIaaSAmbiguousStateError()
+                raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
             raise TIaaSUnavailableError()
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 503:

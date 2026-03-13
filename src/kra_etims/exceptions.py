@@ -61,13 +61,21 @@ class TIaaSAmbiguousStateError(KRAeTIMSError):
     received.  The invoice state on KRA / TIaaS is unknown — Schrödinger's
     Invoice.  Retry with the **same** idempotency key; the middleware will
     deduplicate automatically.
+
+    ``idempotency_key`` carries the key that was in-flight so callers can
+    retry without having to manage key storage separately.
     """
-    def __init__(self, message: str = (
-        "TIaaS Ambiguous State: Request sent but connection dropped before "
-        "response. Retry with the same idempotency key — the middleware will "
-        "deduplicate it safely."
-    )):
+    def __init__(
+        self,
+        message: str = (
+            "TIaaS Ambiguous State: Request sent but connection dropped before "
+            "response. Retry with the same idempotency key — the middleware will "
+            "deduplicate it safely."
+        ),
+        idempotency_key: str | None = None,
+    ):
         super().__init__(message)
+        self.idempotency_key = idempotency_key
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +119,12 @@ class KRADuplicateInvoiceError(KRAeTIMSError):
     The invoice number was already processed successfully (KRA result code 12).
     This is idempotent — the original submission succeeded.
     Do NOT retry with a new invoice number; retrieve the original receipt instead.
+
+    ``is_idempotent_success = True`` signals callers (e.g. flush_offline_queue)
+    that the invoice IS on KRA and the exception should be treated as success.
     """
+    is_idempotent_success: bool = True
+
     def __init__(self, message: str = (
         "Duplicate Invoice Number (Code 12): This invoice was already "
         "processed. Retrieve the original signed receipt instead of retrying."
@@ -146,13 +159,17 @@ class KRAServerError(KRAeTIMSError):
 # ---------------------------------------------------------------------------
 
 KRA_ERROR_MAP: dict = {
-    "01": (KRAeTIMSAuthError,       "Authentication failed"),
-    "10": (KRAInvalidPINError,      "Invalid PIN Format: Expected A123456789B"),
-    "11": (KRAVSCUMemoryFullError,  "VSCU Memory Full: Device storage is at capacity"),
-    "12": (KRADuplicateInvoiceError,"Duplicate Invoice Number"),
-    "13": (KRAInvalidItemCodeError, "Invalid Item Code"),
-    "14": (KRAInvalidBranchError,   "Invalid Branch ID"),
-    "20": (KRAServerError,          "KRA Server Processing Error"),
-    "96": (KRAServerError,          "KRA System Error (transient)"),
-    "99": (KRAServerError,          "KRA Unknown System Error"),
+    # Numeric result codes — KRA eTIMS Technical Specification v2.0
+    "01": (KRAeTIMSAuthError,        "Authentication failed"),
+    "10": (KRAInvalidPINError,       "Invalid PIN Format: Expected A123456789B"),
+    "11": (KRAVSCUMemoryFullError,   "VSCU Memory Full: Device storage is at capacity"),
+    "12": (KRADuplicateInvoiceError, "Duplicate Invoice Number"),
+    "13": (KRAInvalidItemCodeError,  "Invalid Item Code"),
+    "14": (KRAInvalidBranchError,    "Invalid Branch ID"),
+    "20": (KRAServerError,           "KRA Server Processing Error"),
+    "96": (KRAServerError,           "KRA System Error (transient)"),
+    "99": (KRAServerError,           "KRA Unknown System Error"),
+    # Letter-prefixed variants observed in live KRA GavaConnect responses
+    "E04": (KRAInvalidBranchError,   "Device/Branch Not Found"),
+    "E11": (KRAVSCUMemoryFullError,  "VSCU Memory Full (prefixed)"),
 }

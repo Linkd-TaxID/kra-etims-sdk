@@ -151,13 +151,19 @@ class KRAeTIMSClient:
     # Error handling
     # ------------------------------------------------------------------
 
-    def _handle_error_response(self, response_json: dict) -> None:
+    def _handle_error_response(self, response_json: Any) -> None:
         """
         Intercept opaque KRA application errors embedded in HTTP 200 bodies.
 
         KRA returns ``resultCd: "00"`` on success.  Any other code maps to a
         precise, actionable exception so developers never parse raw JSON.
         """
+        if not isinstance(response_json, dict):
+            raise KRAeTIMSError(
+                f"Unexpected response format: expected JSON object, "
+                f"got {type(response_json).__name__}"
+            )
+
         result_cd = str(response_json.get("resultCd", "00")).strip()
         if result_cd == "00":
             return
@@ -208,13 +214,26 @@ class KRAeTIMSClient:
                 raise KRAConnectivityTimeoutError()
 
             resp.raise_for_status()
-            response_data = resp.json()
+            try:
+                response_data = resp.json()
+            except (ValueError, requests.exceptions.JSONDecodeError):
+                raise KRAeTIMSError(
+                    f"Non-JSON response from TIaaS [{resp.status_code}]: "
+                    f"{resp.text[:200]}"
+                )
             self._handle_error_response(response_data)
             return response_data
 
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+        except requests.exceptions.ConnectTimeout:
+            # TCP handshake never completed — request was never sent.
+            raise TIaaSUnavailableError()
+        except requests.exceptions.ReadTimeout:
+            # Request was sent; response never arrived — state is ambiguous.
+            # Must precede ConnectionError: ReadTimeout is a subclass of it.
             if method.upper() in {"POST", "PUT", "DELETE", "PATCH"}:
-                raise TIaaSAmbiguousStateError()
+                raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
+            raise TIaaSUnavailableError()
+        except requests.exceptions.ConnectionError:
             raise TIaaSUnavailableError()
         except requests.exceptions.RequestException as exc:
             if (
