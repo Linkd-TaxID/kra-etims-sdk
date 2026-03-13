@@ -59,9 +59,9 @@ from kra_etims import KRAeTIMSClient, SaleInvoice, calculate_item, build_invoice
 client = KRAeTIMSClient(client_id="TIaaS_ID", client_secret="TIaaS_SEC")
 
 # Zero math: pass retail price + tax band → get a KRA-compliant ItemDetail
-maize   = calculate_item("Maize Flour 2kg",  "HS110100", 200,  "C")  # Exempt
-laptop  = calculate_item("MacBook Pro M3",   "HS847130", 5800, "A")  # 16% VAT
-diesel  = calculate_item("Diesel 1L",        "HS270900", 216,  "B")  # 8% VAT
+maize   = calculate_item("Maize Flour 2kg",  "HS110100", 200,  "D")  # Exempt (Band D)
+laptop  = calculate_item("MacBook Pro M3",   "HS847130", 5800, "A")  # 16% VAT (Band A)
+diesel  = calculate_item("Diesel 1L",        "HS270900", 216,  "B")  # 0% Zero-Rated (Band B)
 
 items = [maize, laptop, diesel]
 
@@ -104,20 +104,130 @@ client = KRAeTIMSClient("ID", "SEC", base_url="https://your-tiims-instance.railw
 
 ---
 
+## Mathematical Precision
+
+The SDK enforces KRA's strict numeric precision rules automatically. There is nothing to configure.
+
+### Quantity Precision — Fuel, Weight, Pharmaceuticals
+
+Monetary amounts use 2 decimal places (`0.01`). Quantities use **4 decimal places** (`0.0001`) per the KRA v2.0 specification. This prevents fiscal misrepresentation for continuous-measure goods:
+
+```python
+# Fuel: 15.456 L — truncating to 2dp (15.45) would understate the taxable amount
+diesel = calculate_item("Diesel", "HS270900", total_price=3236.57, tax_band="B", qty=15.456)
+# qty stored as Decimal("15.4560") — transmitted to KRA exactly
+
+# Weight: 0.375 kg of a controlled pharmaceutical
+drug = calculate_item("Amoxicillin 500mg", "HS300490", total_price=450, tax_band="A", qty=0.375)
+# qty stored as Decimal("0.3750")
+```
+
+### Residual Drift — Invoice Integrity
+
+`ROUND_HALF_UP` applied independently to `taxblAmt` and `taxAmt` can leave a 1-cent gap at line and invoice level. The SDK absorbs this residual into `taxAmt` before transmission, preventing KRA result code 20 rejections:
+
+```python
+# Line level: tot_amt - taxbl_amt - tax_amt = residual → assigned to tax_amt
+# Invoice level: totAmt - totTaxblAmt - totTaxAmt = residual → assigned to totTaxAmt
+
+items = [
+    calculate_item("Item A", "SKU001", 999.99, "A"),
+    calculate_item("Item B", "SKU002", 1999.99, "A"),
+]
+totals = build_invoice_totals(items)
+# totals["totTaxblAmt"] + totals["totTaxAmt"] == totals["totAmt"]  ← always true
+```
+
+> All inputs (`total_price`, `qty`) are coerced through `Decimal(str(value))` before any arithmetic. Floating-point intermediates are never used.
+
+---
+
+## Tax Bands (KRA eTIMS v2.0)
+
+| Band | Rate | Description |
+|---|---|---|
+| `A` | 16% | Standard VAT (most goods & services) |
+| `B` | 0% | Zero-Rated (petroleum products — VAT credit allowed) |
+| `C` | 8% | Special Rate (specific goods per schedule) |
+| `D` | 0% | Exempt (basic foodstuffs — no VAT credit) |
+| `E` | 8% | Non-VAT (outside VAT scope, 8% levy applies) |
+
+```python
+from kra_etims import calculate_item
+
+# Band A — 16% Standard VAT, inclusive pricing
+laptop = calculate_item("MacBook Pro M3", "HS847130", 5800, "A")
+# laptop.taxblAmt == Decimal("5000.00")
+# laptop.taxAmt   == Decimal("800.00")
+# laptop.totAmt   == Decimal("5800.00")
+
+# Band C — 8% Special Rate, inclusive pricing
+service = calculate_item("Hotel Accommodation", "SRV910", 10800, "C")
+# service.taxblAmt == Decimal("10000.00")
+# service.taxAmt   == Decimal("800.00")
+# service.totAmt   == Decimal("10800.00")
+
+# Band D — 0% Exempt (no VAT computation)
+maize = calculate_item("Maize Flour 2kg", "HS110100", 200, "D")
+# maize.taxblAmt == Decimal("200.00")
+# maize.taxAmt   == Decimal("0.00")
+# maize.totAmt   == Decimal("200.00")
+
+# Exclusive pricing — net price supplied, SDK adds VAT on top
+item = calculate_item("Consulting Fee", "SRV001", 1000, "A", price_is_inclusive=False)
+# item.taxblAmt == Decimal("1000.00")
+# item.taxAmt   == Decimal("160.00")
+# item.totAmt   == Decimal("1160.00")
+```
+
+---
+
 ## Idempotency & Resilience
 
 The SDK maps every failure mode to a precise, actionable exception.
 
-### Preventing Double Taxation (Schrödinger's Invoice)
+### Preventing Double Taxation — Schrödinger's Invoice
+
+When a network timeout interrupts a POST in-flight, the invoice state is unknown: it may have been signed by KRA or it may not. `TIaaSAmbiguousStateError` carries the `idempotency_key` that was in-flight so the caller can retry the exact same transaction without storing the key externally:
 
 ```python
+import time
+from kra_etims import TIaaSAmbiguousStateError, KRADuplicateInvoiceError
+
+IDEMPOTENCY_KEY = "INV-2026-001"
+
 try:
-    result = client.submit_sale(invoice, idempotency_key="INV-2026-001")
-except TIaaSAmbiguousStateError:
-    # Request was sent; connection dropped before response.
-    # Safe to retry with the exact same idempotency_key —
-    # the middleware deduplicates it automatically.
-    result = client.submit_sale(invoice, idempotency_key="INV-2026-001")
+    result = client.submit_sale(invoice, idempotency_key=IDEMPOTENCY_KEY)
+
+except TIaaSAmbiguousStateError as exc:
+    # Request was sent; connection dropped before response arrived.
+    # exc.idempotency_key is guaranteed to equal IDEMPOTENCY_KEY —
+    # use it directly to retry without relying on outer scope.
+    time.sleep(2)  # brief back-off before retry
+    try:
+        result = client.submit_sale(invoice, idempotency_key=exc.idempotency_key)
+    except KRADuplicateInvoiceError:
+        # The first attempt succeeded after all — middleware deduplicated it.
+        # The fiscal record exists on KRA; this is a confirmed safe state.
+        print(f"Invoice {exc.idempotency_key} was already processed. Retrieve original receipt.")
+
+except KRADuplicateInvoiceError:
+    # Explicit duplicate on first attempt — already on KRA. Do not re-submit.
+    print("Already processed — retrieve original receipt instead of retrying.")
+```
+
+### Async Pattern (FastAPI / Celery)
+
+```python
+from kra_etims import AsyncKRAeTIMSClient, TIaaSAmbiguousStateError
+
+async def submit_with_retry(invoice, idempotency_key: str):
+    async with AsyncKRAeTIMSClient("ID", "SEC") as client:
+        try:
+            return await client.submit_sale(invoice, idempotency_key=idempotency_key)
+        except TIaaSAmbiguousStateError as exc:
+            await asyncio.sleep(2)
+            return await client.submit_sale(invoice, idempotency_key=exc.idempotency_key)
 ```
 
 ### Exception Taxonomy
@@ -127,7 +237,7 @@ except TIaaSAmbiguousStateError:
 | `KRAeTIMSAuthError` | Bad credentials or token refresh failure |
 | `KRAConnectivityTimeoutError` | 24-hour VSCU offline ceiling breached (HTTP 503) |
 | `TIaaSUnavailableError` | Railway instance unreachable |
-| `TIaaSAmbiguousStateError` | Network dropped mid-POST; state unknown |
+| `TIaaSAmbiguousStateError` | Network dropped mid-POST; state unknown — carries `idempotency_key` |
 | `KRAInvalidPINError` | Invalid TIN format — expected `A123456789B` (code 10) |
 | `KRAVSCUMemoryFullError` | VSCU storage at capacity — sync before invoicing (code 11) |
 | `KRADuplicateInvoiceError` | Already processed; retrieve original receipt (code 12) |
@@ -135,13 +245,48 @@ except TIaaSAmbiguousStateError:
 | `KRAInvalidBranchError` | Branch not registered for this TIN (code 14) |
 | `KRAServerError` | Transient KRA server error (codes 20/96/99) |
 
-```python
-from kra_etims import KRAInvalidPINError, KRAVSCUMemoryFullError
+---
 
-try:
-    client.check_compliance("bad pin")
-except KRAInvalidPINError as e:
-    print(e)  # "Invalid PIN Format: Expected A123456789B"
+## Thread Safety & Concurrency
+
+The sync client (`KRAeTIMSClient`) is safe to share across Celery workers and FastAPI request handlers without any external locking. The async client (`AsyncKRAeTIMSClient`) is safe for concurrent `asyncio` tasks.
+
+### What is protected
+
+| Concern | Mechanism |
+|---|---|
+| OAuth token refresh | `threading.Lock` (sync) / `asyncio.Lock` (async) with double-checked locking — only one thread/task refreshes at a time |
+| Sub-interface init (`client.reports`, `client.gateway`) | Double-checked locking prevents duplicate initialisation under concurrent first-access |
+| `requests.Session` connection pool | One session per client instance; safe for multi-threaded use per `urllib3` guarantees |
+
+### Celery worker pattern
+
+```python
+# One client instance per worker process — not per task.
+# Initialise at module level so the connection pool is reused across tasks.
+from kra_etims import KRAeTIMSClient
+
+etims_client = KRAeTIMSClient(
+    client_id=os.environ["TIIMS_CLIENT_ID"],
+    client_secret=os.environ["TIIMS_CLIENT_SECRET"],
+)
+
+@celery_app.task
+def submit_invoice_task(invoice_data: dict):
+    invoice = SaleInvoice(**invoice_data)
+    return etims_client.submit_sale(invoice, idempotency_key=invoice.invcNo)
+```
+
+### Credential sanitization
+
+`client_secret` and `api_key` are never emitted by `__repr__`, `__str__`, or exception messages. The client is safe to log or include in error reports:
+
+```python
+client = KRAeTIMSClient("TIaaS_ID", "super_secret_key", api_key="ak_live_xxxx")
+
+print(client)
+# KRAeTIMSClient(client_id='TIaaS_ID', base_url='https://taxid-production.up.railway.app', auth_mode='api_key')
+# ↑ client_secret and api_key are never printed
 ```
 
 ---
@@ -165,46 +310,9 @@ When connectivity is restored, the SDK flushes queued invoices concurrently (up 
 ```python
 async with AsyncKRAeTIMSClient("ID", "SEC") as client:
     results = await client.flush_offline_queue(offline_invoices)
-    # Returns list of {"invoice_no": ..., "status": "success"|"error", ...}
+    # Returns list of {"invoice_no": ..., "status": "success"|"already_processed"|"error", ...}
     failed = [r for r in results if r["status"] == "error"]
 ```
-
----
-
-## Tax Calculator
-
-The `calculate_item()` function abstracts all KRA tax math. Pass a retail price and a tax band; receive a validated `ItemDetail` ready for insertion into any invoice.
-
-```python
-from kra_etims import calculate_item, build_invoice_totals
-
-# Inclusive pricing (default) — retail price already includes VAT
-item = calculate_item(
-    name="Maize",
-    item_code="HS110100",
-    total_price=5000,
-    tax_band="A",     # 16% VAT
-)
-# item.taxblAmt == Decimal("4310.34")
-# item.taxAmt   == Decimal("689.66")
-# item.totAmt   == Decimal("5000.00")
-
-# Exclusive pricing — net price, SDK adds VAT on top
-item = calculate_item("Service Fee", "SRV001", 1000, "A", price_is_inclusive=False)
-# item.taxblAmt == Decimal("1000.00")
-# item.taxAmt   == Decimal("160.00")
-# item.totAmt   == Decimal("1160.00")
-```
-
-**Tax Band Reference**
-
-| Band | Rate | Description |
-|---|---|---|
-| `A` | 16% | Standard VAT (most goods & services) |
-| `B` | 8% | Petroleum products |
-| `C` | 0% | Exempt (basic foodstuffs — no VAT credit) |
-| `D` | 0% | Zero-rated (exports — VAT credit allowed) |
-| `E` | 0% | Non-VAT (outside VAT scope) |
 
 ---
 
