@@ -58,9 +58,12 @@ class KRAeTIMSClient:
         self._access_token: Optional[str] = None
         self._token_expiry: float = 0
 
-        self._session = requests.Session()
-        self._session.headers.update({"X-TIaaS-Service": "Handshake"})
-        self._lock = threading.Lock()
+        # Thread-local storage: each thread gets its own requests.Session.
+        # A single shared Session corrupts the connection pool under concurrent
+        # Celery workers — connections are not returned cleanly when multiple
+        # threads call session.request() simultaneously.
+        self._session_local = threading.local()
+        self._lock = threading.Lock()  # guards token refresh only
 
         # Sub-interfaces (lazy initialised on first access)
         self._reports = None
@@ -81,6 +84,26 @@ class KRAeTIMSClient:
 
     def __str__(self) -> str:
         return self.__repr__()
+
+    # ------------------------------------------------------------------
+    # Session management — one Session per thread
+    # ------------------------------------------------------------------
+
+    def _get_session(self) -> requests.Session:
+        """
+        Return the requests.Session for the current thread, creating one if needed.
+
+        requests.Session is not thread-safe: concurrent threads sharing a single
+        Session instance can corrupt the urllib3 connection pool (connections not
+        returned, duplicate headers mutated mid-flight). Using threading.local()
+        gives each Celery worker its own Session with its own connection pool,
+        eliminating contention without sacrificing connection reuse within a thread.
+        """
+        if not hasattr(self._session_local, "session"):
+            session = requests.Session()
+            session.headers.update({"X-TIaaS-Service": "Handshake"})
+            self._session_local.session = session
+        return self._session_local.session
 
     # ------------------------------------------------------------------
     # Sub-interface accessors
@@ -130,7 +153,7 @@ class KRAeTIMSClient:
         with self._lock:
             now = time.time()  # re-read: time elapsed while waiting for lock
             if not self._access_token or (self._token_expiry - now) < 60:
-                resp = self._session.post(
+                resp = self._get_session().post(
                     f"{self.base_url}/oauth/token",
                     auth=(self.client_id, self._client_secret),
                     data={"grant_type": "client_credentials"},
@@ -206,7 +229,7 @@ class KRAeTIMSClient:
             headers["X-TIaaS-Idempotency-Key"] = idempotency_key
 
         try:
-            resp = self._session.request(
+            resp = self._get_session().request(
                 method, url, json=json, headers=headers, timeout=30
             )
 
