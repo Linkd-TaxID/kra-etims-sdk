@@ -11,11 +11,11 @@ class ItemType(str, Enum):
     SERVICE = "2"
 
 class TaxType(str, Enum):
-    A = "A"  # 16%
-    B = "B"  # 8%
-    C = "C"  # 0% (Exempt)
-    D = "D"  # 0% (Zero Rated)
-    E = "E"  # 0% (Non-VAT)
+    A = "A"  # 16%  Standard VAT
+    B = "B"  #  0%  Zero-Rated (petroleum, exports — VAT credit allowed)
+    C = "C"  #  8%  Special Rate (hotel accommodation, specific scheduled goods)
+    D = "D"  #  0%  Exempt (basic foodstuffs, medicine — no VAT credit)
+    E = "E"  #  8%  Non-VAT scope levy
 
 class ReceiptLabel(str, Enum):
     NORMAL = "NS"  # Normal Sale
