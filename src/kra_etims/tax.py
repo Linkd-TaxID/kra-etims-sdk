@@ -6,11 +6,11 @@ This module produces a fully-validated, KRA-compliant ItemDetail with
 all exclusive amounts, VAT splits, and totals computed to cent precision.
 
 KRA Tax Band Reference (eTIMS v2.0):
-  A  Standard Rate — 16% VAT (inclusive)
-  B  Petroleum Products — 8% VAT (inclusive)
-  C  Exempt — 0% (no VAT credit; e.g., basic foodstuffs)
-  D  Zero-Rated — 0% (VAT credit allowed; e.g., exports)
-  E  Non-VAT — outside the scope of VAT (e.g., salary deductions)
+  A  Standard Rate  — 16% VAT (most goods & services)
+  B  Zero-Rated     —  0% VAT (petroleum, exports — VAT credit allowed)
+  C  Special Rate   —  8% VAT (hotel accommodation, specific scheduled goods)
+  D  Exempt         —  0% (basic foodstuffs, medicine — no VAT credit)
+  E  Non-VAT scope  —  8% levy (outside VAT scope)
 """
 
 from decimal import Decimal, ROUND_HALF_UP
