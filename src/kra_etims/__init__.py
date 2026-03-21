@@ -87,8 +87,10 @@ from .qr import render_kra_qr_string, generate_qr_bytes, save_qr_image
 from .gateway import (
     TaxIDSupplierGateway,
     AsyncTaxIDSupplierGateway,
-    GatewayReverseInvoiceResponse,
-    GatewayStatusResponse,
+    SupplierEntry,
+    SupplierOnboardingResponse,
+    BulkOnboardingResponse,
+    SupplierGatewayStatus,
 )
 
 # Reports
@@ -145,8 +147,10 @@ __all__ = [
     # Gateway
     "TaxIDSupplierGateway",
     "AsyncTaxIDSupplierGateway",
-    "GatewayReverseInvoiceResponse",
-    "GatewayStatusResponse",
+    "SupplierEntry",
+    "SupplierOnboardingResponse",
+    "BulkOnboardingResponse",
+    "SupplierGatewayStatus",
     # Reports
     "ReportsInterface",
     "AsyncReportsInterface",
