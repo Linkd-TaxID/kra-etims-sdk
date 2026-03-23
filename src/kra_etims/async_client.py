@@ -253,7 +253,9 @@ class AsyncKRAeTIMSClient:
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 503:
                 raise KRAConnectivityTimeoutError()
-            raise
+            raise KRAeTIMSError(
+                f"TIaaS returned HTTP {exc.response.status_code}"
+            ) from exc
 
     # ------------------------------------------------------------------
     # Category 1 — Device Initialisation

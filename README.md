@@ -88,6 +88,8 @@ client = KRAeTIMSClient(client_id="ID", client_secret="SEC")
 
 # Custom middleware URL (defaults to https://taxid-production.up.railway.app)
 client = KRAeTIMSClient("ID", "SEC", base_url="https://your-instance.railway.app")
+# Or via environment variable (takes priority over constructor base_url):
+# export TAXID_API_URL=https://your-instance.railway.app
 ```
 
 ---
@@ -185,6 +187,7 @@ except KRADuplicateInvoiceError:
 | `KRAInvalidItemCodeError` | Item not registered on eTIMS (code 13) |
 | `KRAInvalidBranchError` | Branch not registered for this TIN (code 14) |
 | `KRAServerError` | Transient KRA server error (codes 20/96/99) |
+| `KRAeTIMSError` | Base class for all SDK exceptions; also raised directly for unexpected HTTP 4xx/5xx responses from the middleware (message contains only the status code — no request URLs or PII) |
 
 ---
 
