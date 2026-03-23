@@ -265,7 +265,14 @@ class KRAeTIMSClient:
                 and exc.response.status_code == 503
             ):
                 raise KRAConnectivityTimeoutError()
-            raise
+            status = (
+                exc.response.status_code
+                if hasattr(exc, "response") and exc.response is not None
+                else "unknown"
+            )
+            raise KRAeTIMSError(
+                f"TIaaS returned HTTP {status}"
+            ) from exc
 
     # ------------------------------------------------------------------
     # Category 1 — Device Initialisation
