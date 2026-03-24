@@ -1,8 +1,15 @@
-from datetime import datetime
+import re
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional
 from decimal import Decimal, ROUND_HALF_UP
-from pydantic import BaseModel, Field, model_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+
+# ---------------------------------------------------------------------------
+# Single source-of-truth for KRA PIN format.
+# Mirrors KraTinConstraintValidator.PATTERN in the TIaaS middleware.
+# Pattern: one uppercase letter + 9 digits + one uppercase letter (e.g. A000123456B)
+# ---------------------------------------------------------------------------
+KRA_TIN_PATTERN = re.compile(r'^[A-Z]\d{9}[A-Z]$')
 
 # --- Consumable Enums ---
 
@@ -11,11 +18,14 @@ class ItemType(str, Enum):
     SERVICE = "2"
 
 class TaxType(str, Enum):
-    A = "A"  # 16%  Standard VAT
-    B = "B"  #  0%  Zero-Rated (petroleum, exports — VAT credit allowed)
-    C = "C"  #  8%  Special Rate (hotel accommodation, specific scheduled goods)
-    D = "D"  #  0%  Exempt (basic foodstuffs, medicine — no VAT credit)
-    E = "E"  #  8%  Non-VAT scope levy
+    # Source: KRA VSCU/OSCU Specification v2.0 §4.1 (both documents identical).
+    # Confirmed by TIS Spec v2.0 §14 receipt sample: Band B prints "TOTAL B-16.00%".
+    # A≠16% standard. B is the 16% standard rate band.
+    A = "A"  #  0%  Exempt (supplies exempt from VAT; no input credit)
+    B = "B"  # 16%  Standard VAT (most goods and services)
+    C = "C"  #  0%  Zero-Rated (exports, certain food; input credit allowed)
+    D = "D"  #  0%  Non-VAT (outside the VAT Act entirely)
+    E = "E"  #  8%  Special Rate (petroleum products, LPG per Kenya VAT Act)
 
 class ReceiptLabel(str, Enum):
     NORMAL = "NS"  # Normal Sale
@@ -121,6 +131,16 @@ class InvoiceBase(BaseSchema):
     totAmt: Decimal
     itemList: List[ItemDetail]
 
+    @field_validator('custPin', mode='before')
+    @classmethod
+    def validate_cust_pin(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not KRA_TIN_PATTERN.match(v):
+            raise ValueError(
+                f"custPin '{v}' is not a valid KRA PIN. "
+                "Expected format: A000000000B (1 uppercase letter + 9 digits + 1 uppercase letter)."
+            )
+        return v
+
     @model_validator(mode='after')
     def validate_invoice_totals(self) -> 'InvoiceBase':
         # sum of items
@@ -141,6 +161,11 @@ class ReverseInvoice(InvoiceBase):
 # --- Category 8: Stock Management ---
 
 class StockItem(BaseSchema):
+    """
+    .. deprecated::
+        Use :class:`StockAdjustmentLine` with :meth:`KRAeTIMSClient.submit_stock_adjustment`.
+        This model targets the legacy ``/v2/etims/stock`` endpoint.
+    """
     tin: str
     bhfId: str
     itemCd: str
@@ -148,6 +173,58 @@ class StockItem(BaseSchema):
     qty: Decimal
     tin2: Optional[str] = None # For transfer
     bhfId2: Optional[str] = None
+
+
+class StockAdjustmentLine(BaseSchema):
+    """
+    One line item in a stock adjustment batch.
+
+    ``ioType`` must be one of:
+    - ``M`` — Import / Goods Received (IN)
+    - ``A`` — Adjustment (OUT, e.g. write-off, spoilage)
+    - ``I`` — Issue / Transfer (OUT)
+
+    Financial totals (``splyAmt``, ``taxblAmt``, ``taxAmt``, ``totAmt``) are
+    computed server-side by the middleware.  Do not supply them — the server
+    will reject any client-supplied totals to prevent tax manipulation.
+    """
+    itemCd: str = Field(..., description="Item code registered on eTIMS")
+    itemNm: str = Field(..., description="Item name")
+    ioType: str = Field(..., pattern=r'^[MAI]$', description="I/O type: M=Import, A=Adjustment, I=Issue")
+    pkgUnitCd: Optional[str] = None
+    pkgQty: Decimal = Field(default=Decimal("1"), description="Package quantity")
+    qtyUnitCd: Optional[str] = None
+    qty: Decimal = Field(..., description="Quantity", gt=Decimal("0"))
+    prc: Decimal = Field(..., description="Unit price (KES)")
+    totDcAmt: Decimal = Field(default=Decimal("0"), description="Total discount amount")
+    taxTyCd: TaxType = Field(..., description="Tax type code (A/B/C/D/E)")
+    barcode: Optional[str] = None
+
+
+class StockAdjustmentRequest(BaseSchema):
+    """
+    Request body for ``POST /v2/etims/stock/adjustment``.
+
+    The middleware assigns the ``sarNo`` (monotonic per-tenant sequence number),
+    computes all financial totals, calls the VSCU JAR, and persists the signed
+    record.  The client supplies only line-level facts (item, quantity, price).
+    """
+    lines: List[StockAdjustmentLine] = Field(..., min_length=1, description="At least one line required")
+    custTin: Optional[str] = Field(None, description="Customer KRA TIN (optional — for B2B movements)")
+    custNm: Optional[str] = Field(None, description="Customer name")
+    remark: Optional[str] = Field(None, description="Free-text remark (max 400 chars)")
+    orgSarNo: int = Field(default=0, description="Original SAR number (0 for new adjustments)")
+
+    @field_validator('custTin', mode='before')
+    @classmethod
+    def validate_cust_tin(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not KRA_TIN_PATTERN.match(v):
+            raise ValueError(
+                f"custTin '{v}' is not a valid KRA PIN. "
+                "Expected format: A000000000B (1 uppercase letter + 9 digits + 1 uppercase letter)."
+            )
+        return v
+
 
 ETIMS_MODELS = {
     "1": DeviceInit,
