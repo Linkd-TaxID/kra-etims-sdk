@@ -5,40 +5,51 @@ Enterprise developers pass retail prices and a tax band.
 This module produces a fully-validated, KRA-compliant ItemDetail with
 all exclusive amounts, VAT splits, and totals computed to cent precision.
 
-KRA Tax Band Reference (eTIMS v2.0):
-  A  Standard Rate  — 16% VAT (most goods & services)
-  B  Zero-Rated     —  0% VAT (petroleum, exports — VAT credit allowed)
-  C  Special Rate   —  8% VAT (hotel accommodation, specific scheduled goods)
-  D  Exempt         —  0% (basic foodstuffs, medicine — no VAT credit)
-  E  Non-VAT scope  —  8% levy (outside VAT scope)
+KRA Tax Band Reference — VSCU/OSCU Specification v2.0 §4.1
+(confirmed by TIS Spec v2.0 §14 receipt printout sample)
+
+  A  Exempt        —  0%  Supplies exempt from VAT (no input credit)
+  B  Standard VAT  — 16%  Standard-rated goods and services
+  C  Zero-Rated    —  0%  Exports, zero-rated supplies (input credit allowed)
+  D  Non-VAT       —  0%  Supplies outside the VAT Act entirely
+  E  Special Rate  —  8%  Petroleum products, LPG per Kenya VAT Act
+
+IMPORTANT: A is NOT 16% standard. B is the 16% standard rate band.
+This is counterintuitive but is explicit in §4.1 of both official specs.
 """
 
+import os
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Union
 
 from .models import ItemDetail, TaxType
 
-# KRA eTIMS Technical Specification v2.0 — Tax Band Rate Table
-# Source: KRA eTIMS Integration Guide v2.0 (official)
-#   A — Standard Rate:  16% VAT
-#   B — Zero-Rated:      0% VAT (Petroleum / Exports)
-#   C — Special Rate:    8% VAT
-#   D — Exempt:          0% (no VAT credit)
-#   E — Special Rate:    8% VAT (Non-VAT scope items at 8%)
-_INCLUSIVE_DIVISOR: dict[str, Decimal] = {
-    "A": Decimal("1.16"),
-    "B": Decimal("1.00"),
-    "C": Decimal("1.08"),
-    "D": Decimal("1.00"),
-    "E": Decimal("1.08"),
-}
+# KRA eTIMS VSCU/OSCU Specification v2.0 §4.1 — authoritative rate table.
+#
+# Rates are loaded from environment variables at module import time.
+# Override via ETIMS_TAX_RATE_{A-E} env vars when KRA's live selectCodes
+# response (userDfnCd1 field) returns a value that differs from these defaults.
+#
+# A=0% Exempt, B=16% Standard, C=0% Zero-Rated, D=0% Non-VAT, E=8% Special
+
+
+def _rate(band: str, default: str) -> Decimal:
+    """Read rate from env var ETIMS_TAX_RATE_{BAND}, fall back to default."""
+    raw = os.getenv(f"ETIMS_TAX_RATE_{band.upper()}", default).strip()
+    return Decimal(raw)
+
 
 _EXCLUSIVE_RATE: dict[str, Decimal] = {
-    "A": Decimal("0.16"),
-    "B": Decimal("0.00"),
-    "C": Decimal("0.08"),
-    "D": Decimal("0.00"),
-    "E": Decimal("0.08"),
+    "A": _rate("A", "0.00"),   # Exempt — 0%
+    "B": _rate("B", "0.16"),   # Standard VAT — 16%
+    "C": _rate("C", "0.00"),   # Zero-Rated — 0%
+    "D": _rate("D", "0.00"),   # Non-VAT — 0%
+    "E": _rate("E", "0.08"),   # Special Rate — 8%
+}
+
+_INCLUSIVE_DIVISOR: dict[str, Decimal] = {
+    band: Decimal("1") + rate
+    for band, rate in _EXCLUSIVE_RATE.items()
 }
 
 

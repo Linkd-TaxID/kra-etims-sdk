@@ -16,6 +16,7 @@ KRA Result Code Reference (eTIMS v2.0 spec):
   96  KRA system error (transient)
   99  Unknown / catch-all KRA error
 """
+from typing import Optional
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +153,29 @@ class KRAInvalidBranchError(KRAValidationError):
 
 class KRAServerError(KRAeTIMSError):
     """Transient KRA server-side processing failure (result codes 20, 96, 99)."""
+
+
+class CreditNoteConflictError(KRAeTIMSError):
+    """
+    A credit note has already been issued for this sale (HTTP 409).
+
+    KRA prohibits issuing more than one credit note per original invoice.
+    Retrieve the existing credit note receipt instead of retrying.
+
+    ``original_purchase_id`` carries the ID of the sale that already has a
+    credit note attached, so callers can look it up without parsing the message.
+    """
+    def __init__(
+        self,
+        message: str = (
+            "Credit Note Conflict (HTTP 409): A credit note has already been "
+            "issued for this sale. Retrieve the existing credit note receipt — "
+            "KRA prohibits duplicate credit notes per original invoice."
+        ),
+        original_purchase_id: Optional[int] = None,
+    ):
+        super().__init__(message)
+        self.original_purchase_id = original_purchase_id
 
 
 # ---------------------------------------------------------------------------
