@@ -19,6 +19,9 @@ const BASE_URL   = 'https://linkd-taxid.github.io/kra-etims-sdk';
 const DOCS_DIR   = path.join(__dirname, '..', 'docs');
 const FAVICON    = `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>`;
 
+// Build a lookup map for resolving related error titles
+const ERROR_MAP = Object.fromEntries(ERRORS.map(e => [e.code, e]));
+
 function escapeHtml(text) {
   if (!text) return '';
   return String(text)
@@ -53,17 +56,47 @@ function buildPage(e) {
        <div class="gotcha-box">${escapeHtml(e.gotcha)}</div>`
     : '';
 
+  const relatedHtml = e.related && e.related.length
+    ? `<div class="section-label">Related Errors</div>
+       <div class="related-list">${e.related.map(code => {
+         const rel = ERROR_MAP[code];
+         if (!rel) return '';
+         return `<a class="related-link" href="./${escapeHtml(code)}.html">${escapeHtml(code)} — ${escapeHtml(rel.title)}</a>`;
+       }).filter(Boolean).join('')}</div>`
+    : '';
+
   // JSON-LD: TechArticle for each error page
-  const jsonLd = JSON.stringify({
+  const techArticleJsonLd = JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'TechArticle',
     'name': `KRA eTIMS resultCd ${e.code} — ${e.title}`,
     'description': e.description,
     'url': `${BASE_URL}/${e.code}.html`,
+    'dateModified': '2026-03-24',
     'author': { '@type': 'Organization', 'name': 'Linkd TaxID', 'url': 'https://github.com/Linkd-TaxID' },
     'about': [
       { '@type': 'Thing', 'name': 'KRA eTIMS' },
       { '@type': 'Thing', 'name': `resultCd ${e.code}` },
+    ],
+  }, null, 2);
+
+  // JSON-LD: BreadcrumbList — produces visible breadcrumb trail in Google SERPs
+  const breadcrumbJsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    'itemListElement': [
+      {
+        '@type': 'ListItem',
+        'position': 1,
+        'name': 'KRA eTIMS Error Codes',
+        'item': `${BASE_URL}/`,
+      },
+      {
+        '@type': 'ListItem',
+        'position': 2,
+        'name': `Error ${e.code}: ${e.title}`,
+        'item': `${BASE_URL}/${e.code}.html`,
+      },
     ],
   }, null, 2);
 
@@ -72,10 +105,13 @@ function buildPage(e) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>resultCd ${escapeHtml(e.code)} — ${escapeHtml(e.title)} | KRA eTIMS Error Reference</title>
+  <title>Error ${escapeHtml(e.code)}: ${escapeHtml(e.title)} | KRA eTIMS Error Reference</title>
   <meta name="description" content="${escapeHtml(e.description)}">
+  <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="${FAVICON}">
-  <script type="application/ld+json">${jsonLd}</script>
+  <link rel="canonical" href="${BASE_URL}/${escapeHtml(e.code)}.html">
+  <script type="application/ld+json">${techArticleJsonLd}</script>
+  <script type="application/ld+json">${breadcrumbJsonLd}</script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #222; line-height: 1.6; }
@@ -93,6 +129,9 @@ function buildPage(e) {
     .gotcha-box { background: #fff8e1; border-left: 3px solid #f59e0b; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 13px; color: #555; }
     ul { padding-left: 20px; font-size: 14px; }
     li { margin-bottom: 4px; }
+    .related-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .related-link { font-size: 13px; color: #0050c8; text-decoration: none; background: #f0f4ff; border: 1px solid #d0d9f0; padding: 4px 10px; border-radius: 4px; }
+    .related-link:hover { text-decoration: underline; background: #e0e8ff; }
     footer { margin-top: 32px; font-size: 13px; color: #666; }
     footer a { color: #0050c8; text-decoration: none; }
     footer a:hover { text-decoration: underline; }
@@ -111,6 +150,7 @@ function buildPage(e) {
       ${causesHtml}
       ${fixHtml}
       ${gotchaHtml}
+      ${relatedHtml}
     </div>
     <footer>
       <p>Part of the <a href="${BASE_URL}/">KRA eTIMS Error Code Reference</a> · Maintained by <a href="https://github.com/Linkd-TaxID">Linkd TaxID</a></p>
