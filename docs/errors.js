@@ -296,3 +296,6 @@ const ERRORS = [
     gotcha: "Letter-prefixed code absent from all official spec documents. Only confirmed through live GavaConnect response observation."
   }
 ];
+
+// Allow require() in Node (generate-pages.js) without breaking browser <script> usage
+if (typeof module !== 'undefined') module.exports = { ERRORS };
