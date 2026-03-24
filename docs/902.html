@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>resultCd 902 — Device Already Installed | KRA eTIMS Error Reference</title>
+  <meta name="description" content="The device serial has already been initialized and an active cmcKey exists.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "name": "KRA eTIMS resultCd 902 — Device Already Installed",
+  "description": "The device serial has already been initialized and an active cmcKey exists.",
+  "url": "https://linkd-taxid.github.io/kra-etims-sdk/902.html",
+  "author": {
+    "@type": "Organization",
+    "name": "Linkd TaxID",
+    "url": "https://github.com/Linkd-TaxID"
+  },
+  "about": [
+    {
+      "@type": "Thing",
+      "name": "KRA eTIMS"
+    },
+    {
+      "@type": "Thing",
+      "name": "resultCd 902"
+    }
+  ]
+}</script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #222; line-height: 1.6; }
+    .container { max-width: 760px; margin: 0 auto; padding: 32px 20px; }
+    .back { font-size: 14px; color: #0050c8; text-decoration: none; display: inline-block; margin-bottom: 24px; }
+    .back:hover { text-decoration: underline; }
+    .card { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 28px; }
+    .card-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .code { font-family: monospace; font-size: 28px; font-weight: 700; color: #0050c8; }
+    .badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 12px; }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 12px; }
+    p { font-size: 15px; color: #444; margin-bottom: 12px; }
+    .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #666; margin-bottom: 6px; margin-top: 16px; }
+    .fix-box { background: #f0fff4; border-left: 3px solid #28a745; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 14px; }
+    .gotcha-box { background: #fff8e1; border-left: 3px solid #f59e0b; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 13px; color: #555; }
+    ul { padding-left: 20px; font-size: 14px; }
+    li { margin-bottom: 4px; }
+    footer { margin-top: 32px; font-size: 13px; color: #666; }
+    footer a { color: #0050c8; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a class="back" href="./">← All KRA eTIMS Error Codes</a>
+    <div class="card">
+      <div class="card-top">
+        <span class="code">902</span>
+        <span class="badge" style="background:#d1ecf1;color:#0c5460">Official</span>
+      </div>
+      <h1>Device Already Installed</h1>
+      <p>The device serial has already been initialized and an active cmcKey exists.</p>
+      <div class="section-label">Likely Causes</div>
+       <ul><li>Re-running initialization on an already-active device</li>
+<li>Redeploying without persisting the original cmcKey</li></ul>
+      <div class="section-label">Fix</div>
+       <div class="fix-box">This is idempotent — not a hard failure. Extract the existing cmcKey from the response body and use it. Do not re-initialize. If the original cmcKey is lost, contact KRA to regenerate.</div>
+      <div class="section-label">Gotcha</div>
+       <div class="gotcha-box">The cmcKey is issued once with no rotation mechanism. Any log line recording the full init response permanently leaks this key. Redact cmcKey before any logging.</div>
+    </div>
+    <footer>
+      <p>Part of the <a href="https://linkd-taxid.github.io/kra-etims-sdk/">KRA eTIMS Error Code Reference</a> · Maintained by <a href="https://github.com/Linkd-TaxID">Linkd TaxID</a></p>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KRA eTIMS FAQ — Common Integration Questions Answered</title>
+  <meta name="description" content="Answers to the most common KRA eTIMS OSCU/VSCU integration questions: resultCd 901, 921, 994, cmcKey, VSCU 24-hour ceiling, tax bands, duplicate invoices, and more.">
+  <meta name="keywords" content="KRA eTIMS FAQ, eTIMS integration questions, OSCU VSCU setup, KRA resultCd 901 fix, eTIMS 921 error, Kenya eTIMS developer guide">
+  <meta name="robots" content="index, follow">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
+  <link rel="canonical" href="https://linkd-taxid.github.io/kra-etims-sdk/faq.html">
+  <meta property="og:title" content="KRA eTIMS FAQ — Common Integration Questions Answered">
+  <meta property="og:description" content="Answers to the most common KRA eTIMS OSCU/VSCU integration questions including resultCd errors, cmcKey handling, VSCU 24-hour ceiling, and tax band codes.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://linkd-taxid.github.io/kra-etims-sdk/faq.html">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="KRA eTIMS FAQ — Common Integration Questions Answered">
+  <meta name="twitter:description" content="Developer FAQ for KRA eTIMS: resultCd errors, VSCU vs OSCU differences, cmcKey, tax bands, offline queueing, and more.">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "name": "KRA eTIMS Integration FAQ",
+    "description": "Frequently asked questions about KRA eTIMS OSCU and VSCU API integration.",
+    "url": "https://linkd-taxid.github.io/kra-etims-sdk/faq.html",
+    "author": {
+      "@type": "Organization",
+      "name": "Linkd TaxID",
+      "url": "https://github.com/Linkd-TaxID"
+    },
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What does KRA eTIMS resultCd 901 mean?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "resultCd 901 means 'Not a Valid Device'. The device serial number (dvcSrlNo) you submitted is not registered or approved in KRA's system. This is unrecoverable without KRA intervention — you cannot self-register. In sandbox, try the pre-provisioned serial dvcv1130. In production, email timsupport@kra.go.ke with subject 'Request for OSCU Device Registration — [Company Name] — PIN: [Your PIN]'. Budget several business days for a response."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does my eTIMS integration return error 921?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "resultCd 921 means 'Sales Invoice Sequence Violation'. You called saveInvoice before saveSales on the VSCU path. VSCU requires exactly two sequential calls: (1) POST /trnsSales/saveSales with transaction metadata, then (2) POST /trnsSales/saveInvoice with invoice detail and receipt signature. If you built from OSCU documentation, OSCU uses a single combined call (POST /saveTrnsSalesOsdc) — these paths cannot be mixed."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What does resultCd 994 mean on retry?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "resultCd 994 means 'Duplicate Record'. On retry and offline queue replay, treat 994 as an idempotent success — the invoice was already registered. Do not raise an exception. Invoice numbers are sequential integers that can never be reused even after cancellation. If your system retries a failed submission and receives 994, the original submission likely succeeded; verify via the corresponding select endpoint."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What are the KRA eTIMS success codes? Is '000' the only one?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. KRA emits three different success codes depending on your integration path: '000' from the OSCU spec (§4.18), '00' from the VSCU JAR, and '0000' from GavaConnect. Never hardcode a single string. Always check membership in the set {\"0\", \"00\", \"000\", \"0000\"}. Any check like if resultCd == '000' will silently treat VSCU success responses as failures."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the VSCU 24-hour connectivity ceiling?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The VSCU JAR stops issuing receipt numbers exactly 24 hours after the last successful connection to KRA servers, with no warning signal. When this ceiling is reached, the error surfaces as a TCP connection refusal or HTTP 503 — indistinguishable from a JAR crash (resultCd 894). Track your last successful connectivity timestamp at the application layer. The fix is to ensure the JAR reconnects to KRA at least once every 24 hours."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is cmcKey and how should I store it?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "cmcKey is the Communication Certificate Key issued by KRA during device initialization. It is issued exactly once with no rotation mechanism. You must persist it immediately after the init response. Store it AES-256-GCM encrypted at rest — never in plaintext. Redact it before any logging, as any log line containing the full init response permanently leaks this key. If the original cmcKey is lost, you must contact KRA to regenerate it."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between OSCU and VSCU?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "OSCU (Online Sales Control Unit) communicates directly with KRA servers. VSCU (Virtual Sales Control Unit) is a local JAR process that signs receipts offline and syncs with KRA. Key differences: OSCU uses a single POST /saveTrnsSalesOsdc call for sales; VSCU requires two sequential calls (saveSales then saveInvoice). VSCU has a 24-hour connectivity ceiling after which it stops issuing receipt numbers. VSCU also has local storage limits (resultCd E11). OSCU and VSCU serials cannot be cross-used — doing so causes resultCd 903 or 905."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What are the KRA eTIMS tax band codes?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "KRA eTIMS uses five tax band codes: A = Exempt (0%, no input VAT credit), B = Standard VAT (16%), C = Zero-Rated (0%, input credit allowed), D = Non-VAT (0%, outside the VAT Act entirely), E = Special Rate (8%, petroleum products and LPG). Warning: the official §4.1 Tax Type table contains a known error — it states B=16.00% but some spec samples show B=18.00%. Always fetch live rates from selectCodes at runtime and never hardcode tax rates."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "All 15 tax fields are required even if I only use one tax band?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. All 15 tax fields — taxblAmtA, taxblAmtB, taxblAmtC, taxblAmtD, taxblAmtE, taxRtA, taxRtB, taxRtC, taxRtD, taxRtE, taxAmtA, taxAmtB, taxAmtC, taxAmtD, taxAmtE — are required in every transaction request, even for businesses that operate in a single tax category. Set unused fields to zero rather than omitting them. Omitting any of these fields causes resultCd 910."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "My initialization keeps returning resultCd 902. Is my device broken?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. resultCd 902 means 'Device Already Installed' — the device serial has already been initialized and an active cmcKey exists. This is idempotent, not a hard failure. Extract the existing cmcKey from the response body and use it. Do not re-initialize. If you redeployed and lost the original cmcKey, contact KRA to regenerate it."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does my eTIMS integration return resultCd 001 on the first day?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "resultCd 001 means 'No Search Result'. It is not a failure — it means no records exist matching your query. New integrations querying for purchases or stock on day one hit this constantly. Most public SDKs check if resultCd != '000' and raise an exception here, which is wrong. Treat 001 as an empty list [], not an error. Only raise if your business logic requires at least one result."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is resultCd E04?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "resultCd E04 means 'Device / Branch Not Found'. The device or branch ID (bhfId) in the request does not exist in KRA's system. Verify your bhfId against what was assigned during OSCU/VSCU registration — the default sandbox bhfId is '00'. Check that your tin + bhfId combination matches your registration. This is a letter-prefixed code absent from all official spec documents; it is only confirmed through live GavaConnect response observation."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the KRA eTIMS date format?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "KRA eTIMS uses two date formats depending on the field. Use YYYYMMDD for date-only fields: salesDt (sale date) and pchsDt (purchase date). Use YYYYMMDDHHmmss for datetime fields: cfmDt (confirmation datetime) and stockRlsDt (stock release datetime). Sending a date in the wrong format causes resultCd 910."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I use the same invoice number after cancelling an invoice?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Invoice numbers are sequential integers and can never be reused, even after cancellation. They must be strictly monotonically increasing (1, 2, 3...) — not string identifiers like INV001. Reusing an invoice number causes resultCd 994 (Duplicate Record)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I handle eTIMS rate limiting (resultCd 990)?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "resultCd 990 means 'Rate Limit Exceeded'. The fix is to cache code list and item classification responses — call selectCodes and selectItems once at initialization and refresh on a scheduled interval, not on every transaction. When you do hit a 990, back off and retry with exponential delay. Never poll these endpoints in a tight loop."
+        }
+      }
+    ]
+  }
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #222; line-height: 1.6; }
+    .container { max-width: 820px; margin: 0 auto; padding: 32px 20px; }
+    .back { font-size: 14px; color: #0050c8; text-decoration: none; display: inline-block; margin-bottom: 28px; }
+    .back:hover { text-decoration: underline; }
+    h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
+    .subtitle { color: #555; font-size: 15px; margin-bottom: 32px; }
+    .faq-item { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 22px 24px; margin-bottom: 16px; }
+    .faq-item h2 { font-size: 16px; font-weight: 600; margin-bottom: 10px; color: #111; }
+    .faq-item p { font-size: 14px; color: #444; }
+    .faq-item code { font-family: monospace; font-size: 13px; background: #f0f0f0; padding: 1px 5px; border-radius: 3px; color: #c0392b; }
+    .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-bottom: 8px; }
+    .tag-vscu { background: #e8f4fd; color: #1a6ea8; }
+    .tag-oscu { background: #d1ecf1; color: #0c5460; }
+    .tag-both { background: #f3e8fd; color: #6b21a8; }
+    .tag-gotcha { background: #fff3cd; color: #856404; }
+    footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #e0e0e0; font-size: 13px; color: #666; }
+    footer a { color: #0050c8; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    @media (max-width: 600px) { h1 { font-size: 22px; } .faq-item { padding: 16px; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a class="back" href="./">← All KRA eTIMS Error Codes</a>
+    <header>
+      <h1>KRA eTIMS Integration FAQ</h1>
+      <p class="subtitle">Answers to the most common questions from developers building on the KRA eTIMS OSCU and VSCU APIs.</p>
+    </header>
+
+    <div class="faq-item">
+      <span class="tag tag-both">OSCU · VSCU</span>
+      <h2>What does KRA eTIMS resultCd 901 mean?</h2>
+      <p>resultCd 901 means <strong>Not a Valid Device</strong>. The device serial number (<code>dvcSrlNo</code>) you submitted is not registered or approved in KRA's system. This is unrecoverable without KRA intervention — you cannot self-register a serial.</p>
+      <p style="margin-top:10px;">In sandbox, try the pre-provisioned serial <code>dvcv1130</code>. In production, email <code>timsupport@kra.go.ke</code> with subject: <em>"Request for OSCU Device Registration — [Company Name] — PIN: [Your PIN]"</em>. Budget several business days for a response.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-vscu">VSCU</span>
+      <h2>Why does my eTIMS integration return error 921?</h2>
+      <p>resultCd 921 means <strong>Sales Invoice Sequence Violation</strong>. You called <code>saveInvoice</code> before <code>saveSales</code> on the VSCU path. VSCU requires two sequential calls in this exact order:</p>
+      <p style="margin-top:10px;">1. <code>POST /trnsSales/saveSales</code> — transaction metadata<br>2. <code>POST /trnsSales/saveInvoice</code> — invoice detail + receipt signature</p>
+      <p style="margin-top:10px;">OSCU combines both into a single <code>POST /saveTrnsSalesOsdc</code> call. These paths cannot be mixed. Every developer who builds from OSCU documentation and switches to VSCU hits this.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-gotcha">Gotcha</span>
+      <h2>What does resultCd 994 mean on retry?</h2>
+      <p>resultCd 994 means <strong>Duplicate Record</strong>. On retry and offline queue replay, treat 994 as an <strong>idempotent success</strong> — the invoice was already registered. Do not raise an exception.</p>
+      <p style="margin-top:10px;">If your system retries a timed-out submission and receives 994, the original submission likely succeeded. Verify the invoice status via the corresponding <code>selectTrnsSales</code> endpoint before treating this as a hard failure. Invoice numbers can never be reused even after cancellation.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-gotcha">Gotcha</span>
+      <h2>What are the KRA eTIMS success codes? Is "000" the only one?</h2>
+      <p>No. KRA emits <strong>three different success codes</strong> depending on your integration path: <code>"000"</code> from the OSCU spec (§4.18), <code>"00"</code> from the VSCU JAR, and <code>"0000"</code> from GavaConnect.</p>
+      <p style="margin-top:10px;">Never hardcode a single string. Always check membership in <code>{"0", "00", "000", "0000"}</code>. Any check like <code>if resultCd == "000"</code> will silently treat every VSCU success response as a failure, with no exception raised.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-vscu">VSCU</span>
+      <h2>What is the VSCU 24-hour connectivity ceiling?</h2>
+      <p>The VSCU JAR stops issuing receipt numbers exactly <strong>24 hours after the last successful connection</strong> to KRA servers, with no warning signal. When this ceiling is reached, the failure surfaces as a TCP connection refusal or HTTP 503 — indistinguishable from a JAR crash (resultCd 894).</p>
+      <p style="margin-top:10px;">Track your last successful connectivity timestamp at the application layer. Ensure the JAR reconnects to KRA at least once every 24 hours.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-both">OSCU · VSCU</span>
+      <h2>What is cmcKey and how should I store it?</h2>
+      <p><code>cmcKey</code> is the Communication Certificate Key issued by KRA during device initialization. It is <strong>issued exactly once</strong> with no rotation mechanism. You must persist it immediately after the init response.</p>
+      <p style="margin-top:10px;">Store it AES-256-GCM encrypted at rest — never in plaintext. Redact it before any logging, as any log line containing the full init response permanently leaks this key. If lost, you must contact KRA to regenerate it. There is no self-service reset path.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-both">OSCU · VSCU</span>
+      <h2>What is the difference between OSCU and VSCU?</h2>
+      <p><strong>OSCU</strong> (Online Sales Control Unit) communicates directly with KRA servers via a single combined API call per sale (<code>POST /saveTrnsSalesOsdc</code>). <strong>VSCU</strong> (Virtual Sales Control Unit) is a local JAR process that signs receipts offline and syncs with KRA, requiring two sequential calls per sale (<code>saveSales</code> then <code>saveInvoice</code>).</p>
+      <p style="margin-top:10px;">VSCU-specific constraints: 24-hour connectivity ceiling, local storage limit (resultCd E11), and separate device serials. OSCU and VSCU serials cannot be cross-used — doing so causes resultCd 903 or 905.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-both">OSCU · VSCU</span>
+      <h2>What are the KRA eTIMS tax band codes?</h2>
+      <p>KRA eTIMS uses five tax band codes:</p>
+      <p style="margin-top:10px;">
+        <code>A</code> — Exempt, 0% (no input VAT credit)<br>
+        <code>B</code> — Standard VAT, 16%<br>
+        <code>C</code> — Zero-Rated, 0% (input credit allowed)<br>
+        <code>D</code> — Non-VAT, 0% (outside the VAT Act entirely)<br>
+        <code>E</code> — Special Rate, 8% (petroleum products, LPG)
+      </p>
+      <p style="margin-top:10px;"><strong>Warning:</strong> the official §4.1 Tax Type table contains a known error — some spec versions state B=16.00% while live API samples have returned B=18.00%. Always fetch rates from <code>selectCodes</code> at runtime. Never hardcode tax rates.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-both">OSCU · VSCU</span>
+      <h2>Are all 15 tax fields required even if I only use one tax band?</h2>
+      <p>Yes. All 15 fields — <code>taxblAmtA/B/C/D/E</code>, <code>taxRtA/B/C/D/E</code>, <code>taxAmtA/B/C/D/E</code> — are required in every transaction request, even for single-category businesses. Set unused fields to <code>0</code> rather than omitting them. Omitting any of these fields causes resultCd 910.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-both">OSCU · VSCU</span>
+      <h2>My initialization keeps returning resultCd 902. Is my device broken?</h2>
+      <p>No. resultCd 902 means <strong>Device Already Installed</strong> — the device serial has already been initialized and an active <code>cmcKey</code> exists. This is idempotent, not a hard failure.</p>
+      <p style="margin-top:10px;">Extract the existing <code>cmcKey</code> from the response body and use it. Do not re-initialize. If you redeployed and lost the original key, contact KRA to regenerate it.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-both">OSCU · VSCU</span>
+      <h2>Why does my eTIMS integration return resultCd 001 on the first day?</h2>
+      <p>resultCd 001 means <strong>No Search Result</strong>. It is not a failure — no records exist matching your query yet. New integrations querying for purchases or stock on day one hit this constantly.</p>
+      <p style="margin-top:10px;">Most public SDKs check <code>if resultCd != "000"</code> and raise an exception here — that is wrong. Treat 001 as an empty list <code>[]</code>, not an error. Only raise if your business logic requires at least one result.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-both">OSCU · VSCU</span>
+      <h2>What is the KRA eTIMS date format?</h2>
+      <p>KRA eTIMS uses two formats depending on the field:</p>
+      <p style="margin-top:10px;"><code>YYYYMMDD</code> — date-only fields: <code>salesDt</code>, <code>pchsDt</code><br><code>YYYYMMDDHHmmss</code> — datetime fields: <code>cfmDt</code>, <code>stockRlsDt</code></p>
+      <p style="margin-top:10px;">Sending a date in the wrong format causes resultCd 910.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-both">OSCU · VSCU</span>
+      <h2>Can I reuse an invoice number after cancelling an invoice?</h2>
+      <p>No. Invoice numbers are sequential integers and can never be reused, even after cancellation. They must be strictly monotonically increasing (1, 2, 3…) — not string identifiers like <code>INV001</code>. Reusing an invoice number causes resultCd 994 (Duplicate Record).</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-both">OSCU · VSCU</span>
+      <h2>How do I handle eTIMS rate limiting (resultCd 990)?</h2>
+      <p>Cache code list and item classification responses — call <code>selectCodes</code> and <code>selectItems</code> once at initialization and refresh on a schedule, not on every transaction. When you hit a 990, back off and retry with exponential delay. Never poll these endpoints in a tight loop.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-gotcha">Gotcha</span>
+      <h2>What is resultCd E04?</h2>
+      <p>resultCd E04 means <strong>Device / Branch Not Found</strong>. The <code>bhfId</code> in your request does not exist in KRA's system for your TIN. Verify your <code>bhfId</code> against what was assigned during registration — the default sandbox <code>bhfId</code> is <code>"00"</code>.</p>
+      <p style="margin-top:10px;">This is a letter-prefixed code <strong>absent from all official spec documents</strong>. It is only confirmed through live GavaConnect production observation.</p>
+    </div>
+
+    <footer>
+      <p>Part of the <a href="./">KRA eTIMS Error Code Reference</a> · Maintained by <a href="https://github.com/Linkd-TaxID">Linkd TaxID</a> · <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new">Add a missing question</a></p>
+      <p style="margin-top:8px;">Data sourced from KRA OSCU Specification v2.0 §4.18 and verified production reports.</p>
+    </footer>
+  </div>
+</body>
+</html>

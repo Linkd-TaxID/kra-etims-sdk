@@ -4,6 +4,33 @@ KRA eTIMS SDK — Exception Taxonomy
 Every exception maps 1-to-1 to an actionable failure mode.
 The developer must never have to guess what went wrong or read raw JSON.
 
+Full KRA result code reference (all 30 codes, including production-only codes
+absent from the official spec): https://linkd-taxid.github.io/kra-etims-sdk/
+
+Critical integration facts
+--------------------------
+- Success codes: "00" (VSCU JAR), "000" (OSCU spec), "0000" (GavaConnect).
+  Never check ``resultCd == "000"`` alone — always test membership in
+  ``{"0", "00", "000", "0000"}``.
+
+- resultCd 001 is NOT an error. It means no records match the query (empty
+  list). Most public SDKs mistakenly raise here on day-one queries.
+
+- resultCd 994 on retry is idempotent success. The invoice is already on KRA.
+  Do not re-raise; do not re-submit with a new invoice number.
+
+- resultCd 921: VSCU requires saveSales → saveInvoice in sequence. OSCU
+  uses a single combined call. These paths cannot be mixed.
+
+- resultCd 901: device serial not approved. Unrecoverable without KRA
+  intervention. Email timsupport@kra.go.ke to register.
+
+- resultCd 902: device already initialized. Extract the existing cmcKey from
+  the response body — do not re-initialize.
+
+- cmcKey is issued exactly once. Store AES-256-GCM encrypted. Redact before
+  any logging. No self-service rotation path exists.
+
 KRA Result Code Reference (eTIMS v2.0 spec):
   00  Success
   01  Authentication / credential failure
@@ -24,7 +51,11 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 
 class KRAeTIMSError(Exception):
-    """Root exception for all KRA eTIMS SDK errors."""
+    """
+    Root exception for all KRA eTIMS SDK errors.
+
+    Full result code reference: https://linkd-taxid.github.io/kra-etims-sdk/
+    """
 
 
 # ---------------------------------------------------------------------------
