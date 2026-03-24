@@ -47,10 +47,15 @@
     .warning-banner { background: #fff3cd; border-left: 4px solid #f59e0b; padding: 14px 18px; border-radius: 0 6px 6px 0; margin-bottom: 24px; font-size: 14px; }
     .warning-banner strong { display: block; margin-bottom: 4px; font-size: 15px; }
     .controls { margin-bottom: 24px; }
+    .search-wrap { position: relative; }
     #search { width: 100%; padding: 14px 16px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
     #search:focus { box-shadow: 0 0 0 3px rgba(0, 80, 200, 0.15); border-color: #0050c8; }
+    .search-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; min-height: 20px; }
+    #result-count { font-size: 13px; color: #666; }
+    .search-hint { font-size: 12px; color: #999; }
+    .search-hint kbd { display: inline-block; padding: 1px 5px; font-size: 11px; font-family: monospace; background: #f0f0f0; border: 1px solid #ccc; border-radius: 3px; color: #555; }
     .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .filter-btn { padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 20px; border: 1px solid #ccc; background: white; cursor: pointer; }
+    .filter-btn { padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 20px; border: 1px solid #ccc; background: white; cursor: pointer; transition: background 0.1s, color 0.1s; }
     .filter-btn.active { background: #0050c8; color: white; border-color: #0050c8; }
     #results { margin-top: 8px; }
     .card { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
@@ -70,7 +75,8 @@
     #empty-state { display: none; text-align: center; padding: 40px 20px; color: #666; font-size: 15px; }
     footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #e0e0e0; font-size: 13px; color: #666; }
     footer a { color: #0050c8; text-decoration: none; }
-    @media (max-width: 600px) { .code { font-size: 18px; } h1 { font-size: 22px; } }
+    mark { background: #fef3c7; color: inherit; border-radius: 2px; padding: 0 2px; }
+    @media (max-width: 600px) { .code { font-size: 18px; } h1 { font-size: 22px; } .search-hint { display: none; } }
   </style>
 </head>
 <body>
@@ -84,13 +90,19 @@
       </div>
     </header>
     <div class="controls">
-      <input type="text" id="search" placeholder="Search by code, message, or description..." autofocus>
+      <div class="search-wrap">
+        <input type="text" id="search" placeholder="Search by code, message, cause, or fix..." autofocus autocomplete="off" spellcheck="false">
+      </div>
+      <div class="search-meta">
+        <span id="result-count" class="result-count"></span>
+        <span class="search-hint">Press <kbd>/</kbd> to focus &nbsp;·&nbsp; <kbd>Esc</kbd> to clear</span>
+      </div>
       <div class="filters">
         <button class="filter-btn active" data-filter="All">All</button>
         <button class="filter-btn" data-filter="Official">Official Spec</button>
         <button class="filter-btn" data-filter="Production">Production Only</button>
         <button class="filter-btn" data-filter="Client">Client-Side</button>
-        <button class="filter-btn" data-filter="Gotcha">Gotchas</button>
+        <button class="filter-btn" data-filter="Gotcha">Has Gotcha</button>
       </div>
     </div>
     <div id="results"></div>
@@ -100,20 +112,55 @@
       <p style="margin-top:8px;">Data sourced from KRA OSCU Specification v2.0 §4.18 and verified production reports.</p>
     </footer>
   </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/7.0.0/fuse.min.js"></script>
   <script src="errors.js"></script>
   <script>
-    const resultsEl = document.getElementById('results');
-    const emptyEl = document.getElementById('empty-state');
-    const searchEl = document.getElementById('search');
+    const resultsEl  = document.getElementById('results');
+    const emptyEl    = document.getElementById('empty-state');
+    const searchEl   = document.getElementById('search');
+    const countEl    = document.getElementById('result-count');
     const filterBtns = document.querySelectorAll('.filter-btn');
-    let currentQuery = '';
+
+    let currentQuery  = '';
     let currentFilter = 'All';
+
+    const fuse = new Fuse(ERRORS, {
+      threshold: 0.35,
+      ignoreLocation: true,
+      minMatchCharLength: 2,
+      keys: [
+        { name: 'code',        weight: 3.0 },
+        { name: 'title',       weight: 2.0 },
+        { name: 'description', weight: 1.5 },
+        { name: 'causes',      weight: 1.0 },
+        { name: 'fix',         weight: 1.0 },
+        { name: 'gotcha',      weight: 0.8 },
+      ]
+    });
+
+    // Restore query from URL on load (?q=901 or ?q=duplicate)
+    const params = new URLSearchParams(location.search);
+    if (params.has('q')) {
+      currentQuery = params.get('q');
+      searchEl.value = currentQuery;
+      document.title = 'resultCd ' + currentQuery + ' — KRA eTIMS Error Reference';
+    }
 
     searchEl.addEventListener('input', () => {
       currentQuery = searchEl.value.trim();
+
+      // Keep URL in sync so devs can copy/share the current search
+      history.replaceState(null, '',
+        currentQuery
+          ? location.pathname + '?q=' + encodeURIComponent(currentQuery)
+          : location.pathname
+      );
+
       document.title = currentQuery
         ? 'resultCd ' + currentQuery + ' — KRA eTIMS Error Reference'
         : 'KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference';
+
       filterAndRender();
     });
 
@@ -126,27 +173,58 @@
       });
     });
 
+    // '/' focuses the search from anywhere on the page (standard dev-tool convention)
+    // 'Escape' clears and unfocuses
+    document.addEventListener('keydown', e => {
+      if (e.key === '/' && document.activeElement !== searchEl) {
+        e.preventDefault();
+        searchEl.focus();
+        searchEl.select();
+      }
+      if (e.key === 'Escape' && document.activeElement === searchEl) {
+        searchEl.value = '';
+        currentQuery = '';
+        history.replaceState(null, '', location.pathname);
+        document.title = 'KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference';
+        searchEl.blur();
+        filterAndRender();
+      }
+    });
+
     function filterAndRender() {
-      let entries = ERRORS;
-      if (currentFilter !== 'All') {
+      let entries = currentQuery
+        ? fuse.search(currentQuery).map(r => r.item)
+        : ERRORS;
+
+      // "Has Gotcha" filters on the gotcha field being present, regardless of category
+      if (currentFilter === 'Gotcha') {
+        entries = entries.filter(e => !!e.gotcha);
+      } else if (currentFilter !== 'All') {
         entries = entries.filter(e => e.category === currentFilter);
       }
-      if (currentQuery) {
-        const q = currentQuery.toLowerCase();
-        entries = entries.filter(e =>
-          e.code.toLowerCase().includes(q) ||
-          e.title.toLowerCase().includes(q) ||
-          e.description.toLowerCase().includes(q) ||
-          (e.causes || []).join(' ').toLowerCase().includes(q) ||
-          (e.fix || '').toLowerCase().includes(q)
-        );
+
+      const total = ERRORS.length;
+      if (!currentQuery && currentFilter === 'All') {
+        countEl.textContent = total + ' codes';
+      } else {
+        countEl.textContent = entries.length
+          ? entries.length + ' result' + (entries.length !== 1 ? 's' : '')
+          : '';
       }
+
       renderCards(entries);
     }
 
-    function badgeClass(category) {
-      const map = { Official: 'badge-official', Production: 'badge-production', Client: 'badge-client', Gotcha: 'badge-production' };
-      return map[category] || 'badge-official';
+    // Wrap each search term in <mark> so devs can see exactly what matched.
+    // Applied to text content only — code badges are never highlighted.
+    function hl(text, query) {
+      if (!query || !text) return text || '';
+      const words = query.trim().split(/\s+/).filter(w => w.length >= 2);
+      if (!words.length) return text;
+      const pattern = words
+        .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|');
+      return text.replace(new RegExp('(' + pattern + ')', 'gi'), '<mark>$1</mark>');
     }
 
     function renderCards(entries) {
@@ -156,28 +234,34 @@
         return;
       }
       emptyEl.style.display = 'none';
+      const q = currentQuery;
       resultsEl.innerHTML = entries.map(e => `
         <div class="card">
           <div class="card-top">
             <span class="code">${e.code}</span>
             <span class="badge ${badgeClass(e.category)}">${e.category}</span>
           </div>
-          <div class="card-title">${e.title}</div>
-          <p class="description">${e.description}</p>
+          <div class="card-title">${hl(e.title, q)}</div>
+          <p class="description">${hl(e.description, q)}</p>
           ${e.causes && e.causes.length ? `
             <div class="section-label">Likely Causes</div>
-            <ul>${e.causes.map(c => `<li>${c}</li>`).join('')}</ul>
+            <ul>${e.causes.map(c => `<li>${hl(c, q)}</li>`).join('')}</ul>
           ` : ''}
           ${e.fix ? `
             <div class="section-label">Fix</div>
-            <div class="fix-box">${e.fix}</div>
+            <div class="fix-box">${hl(e.fix, q)}</div>
           ` : ''}
           ${e.gotcha ? `
             <div class="section-label">Gotcha</div>
-            <div class="gotcha-box">${e.gotcha}</div>
+            <div class="gotcha-box">${hl(e.gotcha, q)}</div>
           ` : ''}
         </div>
       `).join('');
+    }
+
+    function badgeClass(category) {
+      const map = { Official: 'badge-official', Production: 'badge-production', Client: 'badge-client' };
+      return map[category] || 'badge-official';
     }
 
     filterAndRender();
