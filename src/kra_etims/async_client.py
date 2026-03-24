@@ -1,6 +1,7 @@
 import time
 import os
 import asyncio
+import warnings
 import httpx
 from typing import Optional, Dict, Any, List
 
@@ -13,11 +14,35 @@ from .exceptions import (
     KRAeTIMSError,
     TIaaSUnavailableError,
     TIaaSAmbiguousStateError,
+    CreditNoteConflictError,
 )
 from .models import (
     DeviceInit, DataSyncRequest, BranchInfo, ItemSave,
     ImportItem, SaleInvoice, ReverseInvoice, StockItem,
+    StockAdjustmentLine, StockAdjustmentRequest,
 )
+
+# KRA result codes that indicate success.
+# "000" — GavaConnect JSON API spec (§6.1 response envelope).
+# "00"  — VSCU JAR HTTP endpoint (derived from TIS XML serial protocol §21.6.3).
+# Absent resultCd — TIaaS-native response; HTTP errors already handled by
+# raise_for_status(), so an absent key means no KRA application error.
+_KRA_SUCCESS_CODES: frozenset = frozenset({"00", "000"})
+
+
+def _is_kra_success(result: dict) -> bool:
+    """
+    Return True when the KRA result code indicates success.
+
+    Handles two officially documented success code variants — "000" (JSON API spec)
+    and "00" (VSCU JAR HTTP endpoint, derived from the TIS XML serial protocol).
+    An absent resultCd key means this is a TIaaS-native response; HTTP errors
+    are already handled by raise_for_status() so absent == no KRA error.
+    """
+    if "resultCd" not in result:
+        return True  # TIaaS-native response; no KRA result code to check
+    return str(result["resultCd"]).strip() in _KRA_SUCCESS_CODES
+
 
 # Maximum concurrent in-flight requests during offline-queue flush.
 # Chosen to respect typical rate limits without stalling the event loop.
@@ -177,10 +202,10 @@ class AsyncKRAeTIMSClient:
                 f"got {type(response_json).__name__}"
             )
 
-        result_cd = str(response_json.get("resultCd", "00")).strip()
-        if result_cd == "00":
+        if _is_kra_success(response_json):
             return
 
+        result_cd = str(response_json.get("resultCd", "")).strip()
         result_msg = response_json.get("resultMsg", "Unknown KRA error")
 
         if result_cd in KRA_ERROR_MAP:
@@ -251,10 +276,22 @@ class AsyncKRAeTIMSClient:
                 raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
             raise TIaaSUnavailableError()
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 503:
+            status_code = exc.response.status_code
+            if status_code == 503:
                 raise KRAConnectivityTimeoutError()
+            if status_code == 409:
+                try:
+                    body = exc.response.json()
+                    msg = body.get("message") or body.get("error") or exc.response.text[:200]
+                except Exception:
+                    msg = exc.response.text[:200]
+                raise CreditNoteConflictError(msg) from exc
+            if status_code == 404:
+                raise KRAeTIMSError(
+                    f"Resource not found (HTTP 404): {exc.response.text[:200]}"
+                ) from exc
             raise KRAeTIMSError(
-                f"TIaaS returned HTTP {exc.response.status_code}"
+                f"TIaaS returned HTTP {status_code}"
             ) from exc
 
     # ------------------------------------------------------------------
@@ -317,13 +354,51 @@ class AsyncKRAeTIMSClient:
         )
 
     # ------------------------------------------------------------------
-    # Category 7 — Reverse Invoices
+    # Category 7 — Credit Notes
     # ------------------------------------------------------------------
+
+    async def issue_credit_note(
+        self,
+        original_purchase_id: int,
+        reason: Optional[str] = None,
+        items: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Issue a credit note against a previously signed sale.
+
+        Posts to ``POST /v2/etims/sale/{id}/credit-note``.
+
+        :param original_purchase_id: TIaaS database ID of the original sale.
+        :param reason: Human-readable reversal reason (optional).
+        :param items: Partial line items to reverse; ``None`` reverses the full invoice.
+        :raises CreditNoteConflictError: HTTP 409 — credit note already exists.
+        :raises KRAeTIMSError: HTTP 404 — original sale not found.
+        :raises KRAConnectivityTimeoutError: VSCU offline ceiling breached (HTTP 503).
+        """
+        body: Dict[str, Any] = {}
+        if reason is not None:
+            body["reason"] = reason
+        if items is not None:
+            body["items"] = items
+        return await self._request(
+            "POST", f"/v2/etims/sale/{original_purchase_id}/credit-note",
+            json=body if body else None,
+        )
 
     async def submit_reverse_invoice(
         self, invoice: ReverseInvoice
     ) -> Dict[str, Any]:
-        """Category 7: Submit a Reverse / Credit Note Invoice."""
+        """
+        .. deprecated::
+            ``/v2/etims/reverse`` is no longer active.  Use
+            :meth:`issue_credit_note` instead.
+        """
+        warnings.warn(
+            "submit_reverse_invoice() is deprecated and targets a removed endpoint. "
+            "Use issue_credit_note(original_purchase_id, reason, items) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return await self._request(
             "POST", "/v2/etims/reverse",
             json=invoice.model_dump(mode="json", exclude_none=True),
@@ -340,29 +415,52 @@ class AsyncKRAeTIMSClient:
             json=data.model_dump(mode="json", exclude_none=True),
         )
 
+    async def submit_stock_adjustment(
+        self,
+        lines: List[StockAdjustmentLine],
+        cust_tin: Optional[str] = None,
+        cust_nm: Optional[str] = None,
+        remark: Optional[str] = None,
+        org_sar_no: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Submit a stock adjustment to ``POST /v2/etims/stock/adjustment``.
+
+        A 201 response means the VSCU signed synchronously (``status=SYNCED``).
+        A 202 response means the movement is queued for retry (``status=FAILED``);
+        issue a new request — do not retry with the same data.
+
+        :param lines: At least one :class:`StockAdjustmentLine`.
+        :param cust_tin: Customer KRA TIN (B2B movements only).
+        :param cust_nm: Customer name.
+        :param remark: Free-text remark (max 400 chars).
+        :param org_sar_no: Original SAR number for amendments (default 0).
+        :raises KRAConnectivityTimeoutError: VSCU offline ceiling breached (HTTP 503).
+        """
+        request = StockAdjustmentRequest(
+            lines=lines,
+            custTin=cust_tin,
+            custNm=cust_nm,
+            remark=remark,
+            orgSarNo=org_sar_no,
+        )
+        return await self._request(
+            "POST", "/v2/etims/stock/adjustment",
+            json=request.model_dump(mode="json", exclude_none=True),
+        )
+
     async def batch_update_stock(
         self, items: List[StockItem]
     ) -> List[Dict[str, Any]]:
-        """Category 8: High-volume batch update with 500-item chunking (async)."""
-        results = []
-        for i in range(0, len(items), 500):
-            chunk = items[i : i + 500]
-            try:
-                payload = [
-                    item.model_dump(mode="json", exclude_none=True)
-                    for item in chunk
-                ]
-                await self._request(
-                    "POST", "/v2/etims/stock/batch", json={"items": payload}
-                )
-                results.append(
-                    {"chunk": i // 500, "status": "success", "count": len(chunk)}
-                )
-            except Exception as exc:
-                results.append(
-                    {"chunk": i // 500, "status": "error", "message": str(exc)}
-                )
-        return results
+        """
+        .. deprecated::
+            ``/v2/etims/stock/batch`` has been removed (returns HTTP 501).
+            Use :meth:`submit_stock_adjustment` instead.
+        """
+        raise NotImplementedError(
+            "batch_update_stock() targets /v2/etims/stock/batch which has been removed. "
+            "Use submit_stock_adjustment(lines=[StockAdjustmentLine(...)]) instead."
+        )
 
     # ------------------------------------------------------------------
     # Offline Queue — concurrent flush with rate-limit guard

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference</title>
+  <meta name="description" content="Complete reference for KRA eTIMS OSCU and VSCU API result codes. Covers resultCd 000, 001, 901, 902, 903, 910, 921, 922, 990, 994, E04, E11 with causes and fixes. Includes undocumented production codes absent from the official KRA spec.">
+  <meta name="keywords" content="KRA eTIMS error codes, OSCU resultCd, VSCU error codes, eTIMS 901, eTIMS 910, eTIMS 921, KRA API errors, GavaConnect errors, kenya revenue authority API, eTIMS integration Kenya">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://linkd-taxid.github.io/kra-etims-sdk/">
+  <meta property="og:title" content="KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference">
+  <meta property="og:description" content="The most complete public reference for KRA eTIMS OSCU/VSCU result codes, including production codes absent from the official KRA spec.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://linkd-taxid.github.io/kra-etims-sdk/">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference">
+  <meta name="twitter:description" content="Complete reference for KRA eTIMS OSCU/VSCU resultCd values including production codes absent from the official spec.">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "name": "KRA eTIMS OSCU/VSCU API Error Code Reference",
+    "description": "Complete reference for KRA eTIMS result codes including official OSCU/VSCU spec codes and production-observed codes absent from official documentation.",
+    "url": "https://linkd-taxid.github.io/kra-etims-sdk/",
+    "author": {
+      "@type": "Organization",
+      "name": "Linkd TaxID",
+      "url": "https://github.com/Linkd-TaxID"
+    },
+    "about": [
+      {"@type": "Thing", "name": "KRA eTIMS"},
+      {"@type": "Thing", "name": "OSCU API"},
+      {"@type": "Thing", "name": "VSCU API"},
+      {"@type": "Thing", "name": "Kenya Revenue Authority"},
+      {"@type": "Thing", "name": "GavaConnect"}
+    ],
+    "keywords": "KRA eTIMS, OSCU, VSCU, resultCd, error codes, Kenya tax API"
+  }
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #222; line-height: 1.6; }
+    .container { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+    header { margin-bottom: 32px; }
+    h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
+    .subtitle { color: #555; font-size: 15px; margin-bottom: 16px; }
+    .warning-banner { background: #fff3cd; border-left: 4px solid #f59e0b; padding: 14px 18px; border-radius: 0 6px 6px 0; margin-bottom: 24px; font-size: 14px; }
+    .warning-banner strong { display: block; margin-bottom: 4px; font-size: 15px; }
+    .controls { margin-bottom: 24px; }
+    #search { width: 100%; padding: 14px 16px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
+    #search:focus { box-shadow: 0 0 0 3px rgba(0, 80, 200, 0.15); border-color: #0050c8; }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .filter-btn { padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 20px; border: 1px solid #ccc; background: white; cursor: pointer; }
+    .filter-btn.active { background: #0050c8; color: white; border-color: #0050c8; }
+    #results { margin-top: 8px; }
+    .card { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .card-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .code { font-family: monospace; font-size: 22px; font-weight: 700; color: #0050c8; }
+    .badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 12px; }
+    .badge-official { background: #d1ecf1; color: #0c5460; }
+    .badge-production { background: #f8d7da; color: #721c24; }
+    .badge-client { background: #fff3cd; color: #856404; }
+    .card-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .description { font-size: 14px; color: #444; margin-bottom: 12px; }
+    .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #666; margin-bottom: 6px; margin-top: 12px; }
+    .fix-box { background: #f0fff4; border-left: 3px solid #28a745; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 14px; }
+    .gotcha-box { background: #fff8e1; border-left: 3px solid #f59e0b; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 13px; color: #555; }
+    ul { padding-left: 20px; font-size: 14px; }
+    li { margin-bottom: 4px; }
+    #empty-state { display: none; text-align: center; padding: 40px 20px; color: #666; font-size: 15px; }
+    footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #e0e0e0; font-size: 13px; color: #666; }
+    footer a { color: #0050c8; text-decoration: none; }
+    @media (max-width: 600px) { .code { font-size: 18px; } h1 { font-size: 22px; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>KRA eTIMS Error Codes</h1>
+      <p class="subtitle">Complete OSCU/VSCU <code>resultCd</code> reference — including production codes absent from the official KRA spec.</p>
+      <div class="warning-banner">
+        <strong>⚠️ Critical: Three different success codes exist</strong>
+        KRA emits <code>"000"</code> (OSCU spec), <code>"00"</code> (VSCU JAR), and <code>"0000"</code> (GavaConnect). Never hardcode a single string. Always check membership in <code>{"0", "00", "000", "0000"}</code>.
+      </div>
+    </header>
+    <div class="controls">
+      <input type="text" id="search" placeholder="Search by code, message, or description..." autofocus>
+      <div class="filters">
+        <button class="filter-btn active" data-filter="All">All</button>
+        <button class="filter-btn" data-filter="Official">Official Spec</button>
+        <button class="filter-btn" data-filter="Production">Production Only</button>
+        <button class="filter-btn" data-filter="Client">Client-Side</button>
+        <button class="filter-btn" data-filter="Gotcha">Gotchas</button>
+      </div>
+    </div>
+    <div id="results"></div>
+    <div id="empty-state">No matching codes found. <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new" target="_blank">Open an issue</a> to add this code.</div>
+    <footer>
+      <p>Maintained by <a href="https://github.com/Linkd-TaxID" target="_blank">TaxID</a> · <a href="https://github.com/Linkd-TaxID/kra-etims-sdk" target="_blank">GitHub</a> · <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new" target="_blank">Add a missing code</a></p>
+      <p style="margin-top:8px;">Data sourced from KRA OSCU Specification v2.0 §4.18 and verified production reports.</p>
+    </footer>
+  </div>
+  <script src="errors.js"></script>
+  <script>
+    const resultsEl = document.getElementById('results');
+    const emptyEl = document.getElementById('empty-state');
+    const searchEl = document.getElementById('search');
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    let currentQuery = '';
+    let currentFilter = 'All';
+
+    searchEl.addEventListener('input', () => {
+      currentQuery = searchEl.value.trim();
+      document.title = currentQuery
+        ? 'resultCd ' + currentQuery + ' — KRA eTIMS Error Reference'
+        : 'KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference';
+      filterAndRender();
+    });
+
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        filterAndRender();
+      });
+    });
+
+    function filterAndRender() {
+      let entries = ERRORS;
+      if (currentFilter !== 'All') {
+        entries = entries.filter(e => e.category === currentFilter);
+      }
+      if (currentQuery) {
+        const q = currentQuery.toLowerCase();
+        entries = entries.filter(e =>
+          e.code.toLowerCase().includes(q) ||
+          e.title.toLowerCase().includes(q) ||
+          e.description.toLowerCase().includes(q) ||
+          (e.causes || []).join(' ').toLowerCase().includes(q) ||
+          (e.fix || '').toLowerCase().includes(q)
+        );
+      }
+      renderCards(entries);
+    }
+
+    function badgeClass(category) {
+      const map = { Official: 'badge-official', Production: 'badge-production', Client: 'badge-client', Gotcha: 'badge-production' };
+      return map[category] || 'badge-official';
+    }
+
+    function renderCards(entries) {
+      if (!entries.length) {
+        resultsEl.innerHTML = '';
+        emptyEl.style.display = 'block';
+        return;
+      }
+      emptyEl.style.display = 'none';
+      resultsEl.innerHTML = entries.map(e => `
+        <div class="card">
+          <div class="card-top">
+            <span class="code">${e.code}</span>
+            <span class="badge ${badgeClass(e.category)}">${e.category}</span>
+          </div>
+          <div class="card-title">${e.title}</div>
+          <p class="description">${e.description}</p>
+          ${e.causes && e.causes.length ? `
+            <div class="section-label">Likely Causes</div>
+            <ul>${e.causes.map(c => `<li>${c}</li>`).join('')}</ul>
+          ` : ''}
+          ${e.fix ? `
+            <div class="section-label">Fix</div>
+            <div class="fix-box">${e.fix}</div>
+          ` : ''}
+          ${e.gotcha ? `
+            <div class="section-label">Gotcha</div>
+            <div class="gotcha-box">${e.gotcha}</div>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    filterAndRender();
+  </script>
+</body>
+</html>

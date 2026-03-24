@@ -10,6 +10,18 @@ Requires **Python 3.10+**.
 
 ---
 
+## Error Code Reference
+
+Hitting a `resultCd` you don't recognize?
+
+→ **[Complete KRA eTIMS Error Code Reference](https://linkd-taxid.github.io/kra-etims-sdk/)**
+
+Covers all official OSCU/VSCU spec codes plus production-observed codes absent
+from the official KRA documentation — including the critical success code
+normalization issue (`"00"` vs `"000"` vs `"0000"`).
+
+---
+
 ## Two ways to use this SDK
 
 ### Track 1 — Tax Calculator (no account required)
@@ -20,9 +32,9 @@ Requires **Python 3.10+**.
 from kra_etims import calculate_item, build_invoice_totals
 
 items = [
-    calculate_item("MacBook Pro M3",  "HS847130", 5800, "A"),  # 16% VAT
-    calculate_item("Maize Flour 2kg", "HS110100",  200, "D"),  # Exempt
-    calculate_item("Diesel 1L",       "HS270900",  216, "B"),  # Zero-Rated
+    calculate_item("MacBook Pro M3",  "HS847130", 5800, "B"),  # 16% Standard VAT
+    calculate_item("Maize Flour 2kg", "HS110100",  200, "A"),  # 0% Exempt
+    calculate_item("Diesel 1L",       "HS270900",  216, "E"),  # 8% Special Rate (petroleum)
 ]
 totals = build_invoice_totals(items)
 
@@ -98,35 +110,38 @@ client = KRAeTIMSClient("ID", "SEC", base_url="https://your-instance.railway.app
 
 | Band | Rate | Description |
 |---|---|---|
-| `A` | 16% | Standard VAT (most goods & services) |
-| `B` |  0% | Zero-Rated (petroleum products, exports — VAT credit allowed) |
-| `C` |  8% | Special Rate (hotel accommodation, specific scheduled goods) |
-| `D` |  0% | Exempt (basic foodstuffs, medicine — no VAT credit) |
-| `E` |  8% | Non-VAT scope levy |
+| `A` |  0% | Exempt (basic foodstuffs, medicine — no input VAT credit) |
+| `B` | 16% | Standard VAT (most goods & services) |
+| `C` |  0% | Zero-Rated (exports, certain food — input credit allowed) |
+| `D` |  0% | Non-VAT (outside VAT Act entirely) |
+| `E` |  8% | Special Rate (petroleum products, LPG per Kenya VAT Act) |
+
+> **Warning:** A≠16% and B≠0%. This ordering is counterintuitive but is explicit in KRA VSCU/OSCU Specification v2.0 §4.1. Swapping A and B is the single most common integration error and results in incorrect Z-Report aggregation.
 
 ```python
 from kra_etims import calculate_item
 
 # Inclusive pricing (default) — SDK back-calculates net from retail
-laptop  = calculate_item("MacBook Pro M3",    "HS847130", 5800,  "A")
-# taxblAmt=5000.00, taxAmt=800.00, totAmt=5800.00
+laptop  = calculate_item("MacBook Pro M3",    "HS847130", 5800,  "B")
+# B=16% Standard VAT: taxblAmt=5000.00, taxAmt=800.00, totAmt=5800.00
 
-service = calculate_item("Hotel Accommodation", "SRV910",  10800, "C")
-# taxblAmt=10000.00, taxAmt=800.00, totAmt=10800.00
+diesel  = calculate_item("Diesel 1L",         "HS270900",  216,  "E")
+# E=8% Special Rate: taxblAmt=200.00, taxAmt=16.00, totAmt=216.00
 
-maize   = calculate_item("Maize Flour 2kg",    "HS110100",  200, "D")
-# taxblAmt=200.00, taxAmt=0.00, totAmt=200.00
+maize   = calculate_item("Maize Flour 2kg",   "HS110100",  200,  "A")
+# A=0% Exempt: taxblAmt=200.00, taxAmt=0.00, totAmt=200.00
 
 # Exclusive pricing — net price supplied, SDK adds VAT on top
-fee = calculate_item("Consulting Fee", "SRV001", 1000, "A", price_is_inclusive=False)
-# taxblAmt=1000.00, taxAmt=160.00, totAmt=1160.00
+fee = calculate_item("Consulting Fee", "SRV001", 1000, "B", price_is_inclusive=False)
+# B=16% exclusive: taxblAmt=1000.00, taxAmt=160.00, totAmt=1160.00
 ```
 
 ### Quantity Precision — Fuel, Weight, Pharmaceuticals
 
 ```python
 # Fuel: 15.456L — truncating to 2dp would understate the taxable amount
-diesel = calculate_item("Diesel", "HS270900", 3236.57, "B", qty=15.456)
+diesel = calculate_item("Diesel", "HS270900", 3236.57, "E", qty=15.456)
+# Band E (8% Special Rate — petroleum products)
 # qty stored as Decimal("15.4560") — transmitted to KRA exactly
 ```
 
@@ -187,6 +202,7 @@ except KRADuplicateInvoiceError:
 | `KRAInvalidItemCodeError` | Item not registered on eTIMS (code 13) |
 | `KRAInvalidBranchError` | Branch not registered for this TIN (code 14) |
 | `KRAServerError` | Transient KRA server error (codes 20/96/99) |
+| `CreditNoteConflictError` | Credit note already issued for this sale (HTTP 409); carries `original_purchase_id` |
 | `KRAeTIMSError` | Base class for all SDK exceptions; also raised directly for unexpected HTTP 4xx/5xx responses from the middleware (message contains only the status code — no request URLs or PII) |
 
 ---
@@ -353,16 +369,72 @@ z = await client.reports.get_daily_z("2026-03-11")
 
 ---
 
-## Bulk Inventory Synchronisation
+## Credit Notes (Category 7)
 
-Automatically chunks thousands of SKUs into safe 500-item requests.
+Issue a credit note against a previously signed sale. The middleware sources the original amount from the signed receipt — callers cannot supply amounts, preventing manipulation.
 
 ```python
-from kra_etims import StockItem
+from kra_etims import CreditNoteConflictError
 
-items = [StockItem(tin="P051234567X", bhfId="00", itemCd=f"SKU-{i}", rsonCd="01", qty=100)
-         for i in range(5000)]
-client.batch_update_stock(items)   # 10 sequential POSTs of 500 items each
+# Full reversal
+result = client.issue_credit_note(original_purchase_id=42, reason="Customer return")
+print(result["cuInvoiceNumber"])   # Signed credit note CU number
+
+# Partial reversal — supply specific line items to reverse
+result = client.issue_credit_note(
+    original_purchase_id=42,
+    reason="Partial return",
+    items=[{"itemCd": "SKU-001", "qty": 1}],
+)
+
+# Async
+result = await client.issue_credit_note(original_purchase_id=42, reason="Return")
+```
+
+```python
+try:
+    client.issue_credit_note(original_purchase_id=42)
+except CreditNoteConflictError as exc:
+    # HTTP 409 — a credit note already exists for this sale.
+    print(f"Already reversed: purchase {exc.original_purchase_id}")
+```
+
+> `submit_reverse_invoice()` is deprecated and targets a removed endpoint. Use `issue_credit_note()` instead.
+
+---
+
+## Stock Adjustments (Category 8)
+
+Submit stock movements (imports, write-offs, transfers) to `POST /v2/etims/stock/adjustment`. Financial totals are computed server-side from `qty` and `prc` — do not supply them.
+
+```python
+from kra_etims import StockAdjustmentLine
+
+lines = [
+    StockAdjustmentLine(
+        itemCd="HS847130",
+        itemNm="MacBook Pro M3",
+        ioType="M",          # M=Import/IN, A=Adjustment/OUT, I=Issue/OUT
+        qty=10,
+        prc=5000,            # unit price excl. VAT
+        totDcAmt=0,
+        taxTyCd="B",         # 16% Standard VAT
+    ),
+]
+
+# 201 = VSCU signed synchronously; 202 = queued for retry
+result = client.submit_stock_adjustment(lines, remark="March stock receive")
+print(result["sarNo"])       # KRA Stock Adjustment Receipt number
+
+# B2B movement — include counterparty TIN
+result = client.submit_stock_adjustment(
+    lines,
+    cust_tin="A000123456B",
+    cust_nm="Supplier Ltd",
+)
+
+# Async
+result = await client.submit_stock_adjustment(lines)
 ```
 
 ---

@@ -20,6 +20,7 @@ tests/test_api_key_auth.py
 tests/test_async.py
 tests/test_concurrency.py
 tests/test_decorators.py
+tests/test_e2e.py
 tests/test_environment.py
 tests/test_idempotency.py
 tests/test_math_precision.py
