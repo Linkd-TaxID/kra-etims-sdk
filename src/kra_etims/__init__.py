@@ -47,6 +47,7 @@ Exceptions
 - ``KRAInvalidItemCodeError`` — item not registered on eTIMS (code 13)
 - ``KRAInvalidBranchError``   — branch not registered for this TIN (code 14)
 - ``KRAServerError``          — transient KRA server error (codes 20/96/99)
+- ``CreditNoteConflictError`` — credit note already issued for this sale (HTTP 409)
 """
 
 # Clients
@@ -75,6 +76,10 @@ from .models import (
     ReverseInvoice,
     # Category 8
     StockItem,
+    StockAdjustmentLine,
+    StockAdjustmentRequest,
+    # Validation constant
+    KRA_TIN_PATTERN,
 )
 
 # Tax calculator
@@ -116,6 +121,7 @@ from .exceptions import (
     KRAInvalidItemCodeError,
     KRAInvalidBranchError,
     KRAServerError,
+    CreditNoteConflictError,
 )
 
 __version__ = "0.2.0"
@@ -137,6 +143,9 @@ __all__ = [
     "SaleInvoice",
     "ReverseInvoice",
     "StockItem",
+    "StockAdjustmentLine",
+    "StockAdjustmentRequest",
+    "KRA_TIN_PATTERN",
     # Tax
     "calculate_item",
     "build_invoice_totals",
@@ -170,4 +179,5 @@ __all__ = [
     "KRAInvalidItemCodeError",
     "KRAInvalidBranchError",
     "KRAServerError",
+    "CreditNoteConflictError",
 ]

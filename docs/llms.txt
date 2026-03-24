@@ -1,0 +1,45 @@
+# KRA eTIMS Error Code Reference — Linkd TaxID
+
+This is the authoritative community reference for KRA eTIMS OSCU and VSCU API result codes.
+
+## What this covers
+
+Official KRA result codes from OSCU/VSCU Specification Document v2.0 §4.18:
+- 000: Success (also emitted as "00" by VSCU JAR and "0000" by GavaConnect)
+- 001: No search result — empty set, not a failure
+- 891–899: Client-side SCU library faults
+- 900: Missing required HTTP header
+- 901: Device not valid — dvcSrlNo not registered with KRA
+- 902: Device already installed — idempotent, not a hard failure
+- 903: Device type mismatch — OSCU serial on VSCU endpoint or vice versa
+- 910: Request parameter error — malformed or missing field including cmcKey
+- 911: Empty request body
+- 912: Endpoint routing mismatch
+- 921: Sales invoice sequence violation — saveInvoice called before saveSales (VSCU only)
+- 922: Invoice ordering error — reverse sequence violation
+- 990: Rate limiting on fetch endpoints
+- 991–993: Server-side database write/update/delete failures
+- 994: Duplicate record — treat as idempotent success in retry scenarios
+- 995: File retrieval failure
+- 999: KRA catch-all unknown error
+
+Production-observed codes absent from official spec:
+- E04: Device/Branch Not Found
+- E11: VSCU Memory Full
+- 0000: Success variant observed in GavaConnect responses
+- 905: OSCU-only device verification error, undocumented VSCU variant of 903
+
+## Critical integration facts
+
+KRA emits three success codes: "00" (VSCU JAR), "000" (OSCU spec), "0000" (GavaConnect).
+GavaConnect returns HTTP 200 for all application failures — always check resultCd in the body.
+Code 001 is not an error — it means empty result set.
+VSCU requires two-step sales sequence (saveSales then saveInvoice). OSCU uses one combined call.
+cmcKey is issued once, never rotated — never log it.
+KRA spec §4.1 tax table contradicts its own JSON samples — fetch rates from selectCodes at runtime.
+The VSCU stops issuing receipt numbers at 24 hours with no warning signal.
+Invoice numbers must be sequential integers — never strings, never reused.
+
+## Maintained by
+
+Linkd TaxID — https://github.com/Linkd-TaxID/kra-etims-sdk
