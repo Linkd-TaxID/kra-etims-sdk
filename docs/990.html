@@ -3,15 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>resultCd 990 — Rate Limit Exceeded | KRA eTIMS Error Reference</title>
+  <title>Error 990: Rate Limit Exceeded | KRA eTIMS Error Reference</title>
   <meta name="description" content="Too many requests to a fetch or search endpoint within the allowed window.">
+  <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
+  <link rel="canonical" href="https://linkd-taxid.github.io/kra-etims-sdk/990.html">
   <script type="application/ld+json">{
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 990 — Rate Limit Exceeded",
   "description": "Too many requests to a fetch or search endpoint within the allowed window.",
   "url": "https://linkd-taxid.github.io/kra-etims-sdk/990.html",
+  "dateModified": "2026-03-24",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -25,6 +28,24 @@
     {
       "@type": "Thing",
       "name": "resultCd 990"
+    }
+  ]
+}</script>
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "KRA eTIMS Error Codes",
+      "item": "https://linkd-taxid.github.io/kra-etims-sdk/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Error 990: Rate Limit Exceeded",
+      "item": "https://linkd-taxid.github.io/kra-etims-sdk/990.html"
     }
   ]
 }</script>
@@ -45,6 +66,9 @@
     .gotcha-box { background: #fff8e1; border-left: 3px solid #f59e0b; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 13px; color: #555; }
     ul { padding-left: 20px; font-size: 14px; }
     li { margin-bottom: 4px; }
+    .related-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .related-link { font-size: 13px; color: #0050c8; text-decoration: none; background: #f0f4ff; border: 1px solid #d0d9f0; padding: 4px 10px; border-radius: 4px; }
+    .related-link:hover { text-decoration: underline; background: #e0e8ff; }
     footer { margin-top: 32px; font-size: 13px; color: #666; }
     footer a { color: #0050c8; text-decoration: none; }
     footer a:hover { text-decoration: underline; }
@@ -66,6 +90,8 @@
       <div class="section-label">Fix</div>
        <div class="fix-box">Back off and retry with exponential delay. Cache code list and item classification responses — fetch them once at initialization and refresh on a schedule, not on every transaction.</div>
       
+      <div class="section-label">Related Errors</div>
+       <div class="related-list"><a class="related-link" href="./894.html">894 — Server Communication Error</a><a class="related-link" href="./999.html">999 — Unknown Error</a><a class="related-link" href="./001.html">001 — No Search Result</a></div>
     </div>
     <footer>
       <p>Part of the <a href="https://linkd-taxid.github.io/kra-etims-sdk/">KRA eTIMS Error Code Reference</a> · Maintained by <a href="https://github.com/Linkd-TaxID">Linkd TaxID</a></p>
