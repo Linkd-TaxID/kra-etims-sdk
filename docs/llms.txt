@@ -1,45 +1,90 @@
-# KRA eTIMS Error Code Reference — Linkd TaxID
+# KRA eTIMS OSCU/VSCU API Response Codes — Complete Reference
+# Source: KRA OSCU Specification Document v2.0, April 2023, §4.18
+# Maintained by: Linkd TaxID — https://github.com/Linkd-TaxID/kra-etims-sdk
+# Live reference: https://linkd-taxid.github.io/kra-etims-sdk/
+# Machine-readable data: https://linkd-taxid.github.io/kra-etims-sdk/errors.json
+# Last updated: 2026-03-24
 
-This is the authoritative community reference for KRA eTIMS OSCU and VSCU API result codes.
+## CRITICAL: Three success codes exist
 
-## What this covers
+resultCd "000"  = success (OSCU spec §4.18)
+resultCd "00"   = success (VSCU JAR only — not in spec, confirmed production)
+resultCd "0000" = success (GavaConnect only — not in spec, confirmed production)
 
-Official KRA result codes from OSCU/VSCU Specification Document v2.0 §4.18:
-- 000: Success (also emitted as "00" by VSCU JAR and "0000" by GavaConnect)
-- 001: No search result — empty set, not a failure
-- 891–899: Client-side SCU library faults
-- 900: Missing required HTTP header
-- 901: Device not valid — dvcSrlNo not registered with KRA
-- 902: Device already installed — idempotent, not a hard failure
-- 903: Device type mismatch — OSCU serial on VSCU endpoint or vice versa
-- 910: Request parameter error — malformed or missing field including cmcKey
-- 911: Empty request body
-- 912: Endpoint routing mismatch
-- 921: Sales invoice sequence violation — saveInvoice called before saveSales (VSCU only)
-- 922: Invoice ordering error — reverse sequence violation
-- 990: Rate limiting on fetch endpoints
-- 991–993: Server-side database write/update/delete failures
-- 994: Duplicate record — treat as idempotent success in retry scenarios
-- 995: File retrieval failure
-- 999: KRA catch-all unknown error
+Never hardcode equality to "000". Always check membership in {"00", "000", "0000"}.
+Any hardcoded `if resultCd == "000"` check will silently treat VSCU success as failure.
 
-Production-observed codes absent from official spec:
-- E04: Device/Branch Not Found
-- E11: VSCU Memory Full
-- 0000: Success variant observed in GavaConnect responses
-- 905: OSCU-only device verification error, undocumented VSCU variant of 903
+## CRITICAL: KRA always returns HTTP 200, even for errors
 
-## Critical integration facts
+The KRA GavaConnect API returns HTTP 200 for all responses — including failures.
+Always check the resultCd field in the response body. Never trust the HTTP status alone.
 
-KRA emits three success codes: "00" (VSCU JAR), "000" (OSCU spec), "0000" (GavaConnect).
-GavaConnect returns HTTP 200 for all application failures — always check resultCd in the body.
-Code 001 is not an error — it means empty result set.
-VSCU requires two-step sales sequence (saveSales then saveInvoice). OSCU uses one combined call.
-cmcKey is issued once, never rotated — never log it.
-KRA spec §4.1 tax table contradicts its own JSON samples — fetch rates from selectCodes at runtime.
-The VSCU stops issuing receipt numbers at 24 hours with no warning signal.
-Invoice numbers must be sequential integers — never strings, never reused.
+## Official Codes (KRA OSCU Spec v2.0 §4.18)
 
-## Maintained by
+resultCd 000  | Success — request processed
+resultCd 001  | No search result — NOT an error. Treat as empty list []. Never raise an exception.
+resultCd 891  | Client | URL construction error — whitespace in endpoint path
+resultCd 892  | Client | Header construction error — cmcKey null or missing
+resultCd 893  | Client | Request body serialization error — invoice number sent as string not integer
+resultCd 894  | Client | Server communication error — check connectivity, VSCU 24hr ceiling
+resultCd 895  | Client | Unallowed request method — wrong HTTP verb
+resultCd 896  | Client | Request status error — unexpected HTTP status from proxy/backend
+resultCd 899  | Client | Generic client error — inspect resultMsg for detail
+resultCd 900  | Server | No header information — tin/bhfId/cmcKey missing from request
+resultCd 901  | Server | Not a valid device — dvcSrlNo not registered with KRA. Unrecoverable without KRA intervention. Contact timsupport@kra.go.ke.
+resultCd 902  | Server | Device already installed — idempotent. Extract cmcKey from response, do not re-initialize.
+resultCd 903  | Server | Device type mismatch — VSCU serial on OSCU endpoint or vice versa. Unrecoverable without KRA.
+resultCd 910  | Server | Request parameter error — missing/malformed field. Common: cmcKey absent, invoice number as string, tax fields missing.
+resultCd 911  | Server | Empty request body
+resultCd 912  | Server | Request method error — wrong endpoint path. OSCU: /saveTrnsSalesOsdc. VSCU: /trnsSales/saveSales then /trnsSales/saveInvoice.
+resultCd 921  | Server | Sales invoice sequence violation — call saveSales before saveInvoice (VSCU only). OSCU uses a single combined call.
+resultCd 922  | Server | Invoice ordering error — same as 921 from opposite direction. Race condition in concurrent sales.
+resultCd 990  | Server | Rate limit exceeded — back off, cache selectCodes responses
+resultCd 991  | Server | Error during registration — retry once, escalate to KRA if persistent
+resultCd 992  | Server | Error during modification — retry once
+resultCd 993  | Server | Error during deletion — retry once
+resultCd 994  | Server | Duplicate record — treat as IDEMPOTENT SUCCESS on retry. The invoice was already registered.
+resultCd 995  | Server | No downloaded file — re-fetch notice list to verify document exists
+resultCd 999  | Server | Unknown error — log full request/response with resultDt, contact timsupport@kra.go.ke
 
-Linkd TaxID — https://github.com/Linkd-TaxID/kra-etims-sdk
+## Production-Only Codes (confirmed in production, absent from official spec)
+
+resultCd "00"   | VSCU JAR success variant — functionally identical to 000
+resultCd "0000" | GavaConnect success variant — functionally identical to 000
+resultCd E04    | Device/Branch not found — bhfId not registered for this TIN. Sandbox bhfId: 00.
+resultCd E11    | VSCU memory full — restart VSCU JAR after ensuring connectivity and sync
+resultCd 905    | OSCU-only device on VSCU endpoint — contact KRA, no self-service path
+
+## Key integration facts
+
+- KRA API always returns HTTP 200. Always inspect resultCd in the response body.
+- resultCd 001 is NOT an error. It means no records exist yet. Treat as empty list.
+- VSCU requires two sequential calls: POST /trnsSales/saveSales then POST /trnsSales/saveInvoice.
+- OSCU uses one combined call: POST /saveTrnsSalesOsdc.
+- Mixing OSCU and VSCU paths causes resultCd 921 or 922.
+- cmcKey is issued once at device initialization. Never log it. Never rotate it.
+- cmcKey must appear in every OSCU transaction request body after initialization.
+- Invoice numbers must be sequential integers (1, 2, 3...). Never strings. Never reused after cancellation.
+- All 15 tax fields are required: taxblAmtA/B/C/D/E, taxRtA/B/C/D/E, taxAmtA/B/C/D/E. Set to 0 if unused.
+- VSCU stops issuing receipt numbers exactly 24 hours after last successful KRA connection. No warning signal.
+- resultCd 994 on retry = the original submission succeeded. Treat as idempotent success.
+- resultCd 902 on re-initialization = device already active. Extract cmcKey from response, do not fail.
+- Sandbox device serial: dvcv1130. Sandbox bhfId: 00.
+- KRA support: timsupport@kra.go.ke — include full request payload and resultDt timestamp.
+
+## Tax band codes (KRA eTIMS v2.0 §4.1)
+
+Band A = 0%  Exempt (no input VAT credit)
+Band B = 16% Standard VAT
+Band C = 0%  Zero-Rated (input credit allowed)
+Band D = 0%  Non-VAT (outside VAT Act)
+Band E = 8%  Special Rate (petroleum products, LPG)
+
+WARNING: A is NOT 16% and B is NOT 0%. This ordering is counterintuitive but is
+explicit in KRA VSCU/OSCU Specification v2.0 §4.1. Swapping A and B is the most
+common tax integration error and produces incorrect Z-Report aggregation.
+
+## SDK
+
+Python SDK: https://github.com/Linkd-TaxID/kra-etims-sdk
+pip install kra-etims-sdk
