@@ -1,0 +1,32 @@
+User-agent: *
+Allow: /
+
+# OpenAI — training crawler, search indexer, user-initiated fetch
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+# Anthropic — training crawler, search product, user-initiated fetch
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+# Perplexity
+User-agent: PerplexityBot
+Allow: /
+
+# Google
+User-agent: Googlebot
+Allow: /
+
+Sitemap: https://linkd-taxid.github.io/kra-etims-sdk/sitemap.xml
