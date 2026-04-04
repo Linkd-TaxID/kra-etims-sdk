@@ -5,6 +5,16 @@ All notable changes to kra-etims-sdk are documented here.
 ## [Unreleased]
 
 ### Added
+- **Optional OpenTelemetry instrumentation** (`pip install "kra-etims-sdk[otel]"`) — adds
+  `opentelemetry-api` as an optional dep. When installed, `submit_sale`,
+  `issue_credit_note`, `flush_offline_queue`, and the core `_request` dispatcher emit
+  named spans (`kra_etims.*`) compatible with any OTLP-capable backend (Jaeger, Tempo,
+  Honeycomb, etc.). Without the extra the SDK is unchanged — every span call is a no-op
+  context manager. Follows the [OTel library instrumentation spec](https://opentelemetry.io/docs/specs/otel/library-guidelines/):
+  libraries depend only on the API, never the SDK.
+- CI workflow (`.github/workflows/ci.yml`) — runs `pytest` across Python 3.10, 3.11, and
+  3.12 on every push and PR to `main`
+- PR template (`.github/pull_request_template.md`)
 - `issue_credit_note()` — Category 7 credit note submission with `CreditNoteConflictError`
   raised on HTTP 409 (KRA prohibits duplicate credit notes per original invoice)
 - `submit_stock_adjustment()` — Category 8 stock adjustment with typed

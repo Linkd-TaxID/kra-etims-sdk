@@ -1,9 +1,10 @@
 # KRA eTIMS SDK (Python) `v0.2.0`
 
 ```bash
-pip install kra-etims-sdk          # core
-pip install "kra-etims-sdk[qr]"    # + offline QR code image generation
-pip install "kra-etims-sdk[dev]"   # + pytest, pytest-asyncio, pytest-httpx
+pip install kra-etims-sdk               # core
+pip install "kra-etims-sdk[qr]"         # + offline QR code image generation
+pip install "kra-etims-sdk[otel]"       # + OpenTelemetry spans
+pip install "kra-etims-sdk[dev]"        # + pytest, pytest-asyncio, pytest-httpx
 ```
 
 Requires **Python 3.10+**.
@@ -242,6 +243,53 @@ def submit_invoice_task(invoice_data: dict):
 print(client)
 # KRAeTIMSClient(client_id='TIaaS_ID', base_url='https://...', auth_mode='api_key')
 ```
+
+---
+
+## Observability
+
+```bash
+pip install "kra-etims-sdk[otel]"
+```
+
+The SDK emits [OpenTelemetry](https://opentelemetry.io/) spans when `opentelemetry-api` is installed. Without it, every span call is a no-op — existing integrations are unaffected.
+
+### Spans emitted
+
+| Span name | Emitted by | Key attributes |
+|---|---|---|
+| `kra_etims.submit_sale` | `submit_sale()` | `invoice.no`, `invoice.tin` |
+| `kra_etims.issue_credit_note` | `issue_credit_note()` | `sale.id` |
+| `kra_etims.flush_offline_queue` | `flush_offline_queue()` | `queue.size` |
+| `kra_etims.request` | `_request()` (internal) | `http.method`, `http.path`, `idempotency_key` |
+
+On exception, the span is marked `ERROR` and the exception recorded before re-raising — failures always appear in traces regardless of how the caller handles them.
+
+### Wiring spans to an exporter
+
+The SDK only depends on `opentelemetry-api`. To see spans in a backend (Jaeger, Grafana Tempo, Honeycomb, etc.) your application configures the SDK and exporter — the SDK never touches that layer.
+
+```python
+# Minimal setup — add this once at application startup, before any SDK calls.
+# Example uses the OTLP exporter; swap for your backend's exporter package.
+#
+#   pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-grpc
+
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+provider = TracerProvider()
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+trace.set_tracer_provider(provider)
+
+# From here, all kra_etims.* spans flow to your backend automatically.
+from kra_etims import KRAeTIMSClient
+client = KRAeTIMSClient(client_id="...", client_secret="...")
+```
+
+The same setup works for the async client — `opentelemetry-api` is context-propagation-aware and works across `asyncio` task boundaries without any changes.
 
 ---
 
