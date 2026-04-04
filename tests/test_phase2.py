@@ -164,30 +164,40 @@ class TestHandleErrorResponse:
 # ---------------------------------------------------------------------------
 
 class TestCalculateItem:
-    def test_band_a_inclusive_math(self):
+    def test_band_b_standard_vat_inclusive_math(self):
+        # Band B = Standard VAT (16%) — KRA eTIMS Technical Specification v2.0 §4.1.
+        # 5000.00 inclusive → taxable = 5000 / 1.16 = 4310.34, tax = 689.66
         from kra_etims.tax import calculate_item
-        item = calculate_item("Maize", "HS110100", 5000, "A")
+        item = calculate_item("Maize", "HS110100", 5000, "B")
         assert item.totAmt == Decimal("5000.00")
-        # VAT-inclusive: taxable = 5000 / 1.16 = 4310.34 (rounded)
         assert item.taxblAmt == Decimal("4310.34")
         assert item.taxAmt == Decimal("689.66")
         # Core invariant: taxable + tax == total
         assert item.taxblAmt + item.taxAmt == item.totAmt
 
-    def test_band_b_zero_rated(self):
-        # Band B = Zero-Rated (0% VAT) — KRA eTIMS Technical Specification v2.0.
-        # Full retail price is the taxable amount; no VAT charged.
+    def test_band_a_exempt(self):
+        # Band A = Exempt (0% VAT, no input credit) — KRA eTIMS TIS v2.0 §4.1.
+        # Exempt items: taxblAmt == totAmt, taxAmt == 0.
         from kra_etims.tax import calculate_item
-        item = calculate_item("Diesel", "HS270900", 1080, "B")
+        item = calculate_item("Basic Foodstuff", "HS110100", 5000, "A")
+        assert item.totAmt == Decimal("5000.00")
+        assert item.taxblAmt == Decimal("5000.00")
+        assert item.taxAmt == Decimal("0.00")
+
+    def test_band_c_zero_rated(self):
+        # Band C = Zero-Rated (0% VAT, input credit allowed) — KRA TIS v2.0 §4.1.
+        # Zero-rated exports: taxblAmt == totAmt, taxAmt == 0.
+        from kra_etims.tax import calculate_item
+        item = calculate_item("Export Goods", "HS270900", 1080, "C")
         assert item.totAmt == Decimal("1080.00")
         assert item.taxblAmt == Decimal("1080.00")
         assert item.taxAmt == Decimal("0.00")
 
-    def test_band_c_special_rate_8pct(self):
-        # Band C = Special Rate (8% VAT) — KRA eTIMS Technical Specification v2.0.
+    def test_band_e_special_rate_8pct_inclusive(self):
+        # Band E = Special Rate (8% VAT) — Kenya VAT Act, petroleum/LPG.
         # 200.00 inclusive → taxable = 200/1.08 = 185.19, tax = 14.81
         from kra_etims.tax import calculate_item
-        item = calculate_item("Unga", "HS110100", 200, "C")
+        item = calculate_item("LPG Cylinder", "HS271111", 200, "E")
         assert item.totAmt == Decimal("200.00")
         assert item.taxblAmt == Decimal("185.19")
         assert item.taxAmt == Decimal("14.81")
@@ -218,8 +228,8 @@ class TestCalculateItem:
 
     def test_exclusive_pricing_mode(self):
         from kra_etims.tax import calculate_item
-        # NET price 1000, Band A (16%) → totAmt = 1160
-        item = calculate_item("Service", "SRV002", 1000, "A", price_is_inclusive=False)
+        # NET price 1000, Band B (16% standard) → totAmt = 1160
+        item = calculate_item("Service", "SRV002", 1000, "B", price_is_inclusive=False)
         assert item.taxblAmt == Decimal("1000.00")
         assert item.taxAmt == Decimal("160.00")
         assert item.totAmt == Decimal("1160.00")

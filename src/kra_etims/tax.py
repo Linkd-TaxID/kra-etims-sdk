@@ -115,7 +115,7 @@ def calculate_item(
 
     Example
     -------
-    >>> item = calculate_item("Maize", "HS110100", 5000, "A")
+    >>> item = calculate_item("Maize", "HS110100", 5000, "B")  # Band B = 16%
     >>> item.taxblAmt   # 4310.34
     >>> item.taxAmt     # 689.66
     >>> item.totAmt     # 5000.00
