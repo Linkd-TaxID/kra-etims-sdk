@@ -6,6 +6,7 @@ import httpx
 from typing import Optional, Dict, Any, List
 
 from .middleware import sanitize_kra_url
+from ._telemetry import span as _span
 from .exceptions import (
     KRA_ERROR_MAP,
     KRAConnectivityTimeoutError,
@@ -232,67 +233,71 @@ class AsyncKRAeTIMSClient:
         The ``@sanitize_kra_url`` decorator is async-aware (returns
         ``async def wrapper``) — no event-loop deadlocks.
         """
-        await self._authenticate()
-        url = f"{self.base_url}/{path.lstrip('/')}"
-
-        if self._api_key:
-            headers: Dict[str, str] = {"X-API-Key": self._api_key}
-        else:
-            headers = {"Authorization": f"Bearer {self._access_token}"}
-
+        _attrs: Dict[str, Any] = {"http.method": method, "http.path": path}
         if idempotency_key:
-            headers["X-TIaaS-Idempotency-Key"] = idempotency_key
+            _attrs["idempotency_key"] = idempotency_key
+        with _span("kra_etims.request", _attrs):
+            await self._authenticate()
+            url = f"{self.base_url}/{path.lstrip('/')}"
 
-        try:
-            resp = await self._client.request(
-                method, url, json=json, headers=headers
-            )
+            if self._api_key:
+                headers: Dict[str, str] = {"X-API-Key": self._api_key}
+            else:
+                headers = {"Authorization": f"Bearer {self._access_token}"}
 
-            if resp.status_code == 503:
-                raise KRAConnectivityTimeoutError()
+            if idempotency_key:
+                headers["X-TIaaS-Idempotency-Key"] = idempotency_key
 
-            resp.raise_for_status()
             try:
-                response_data = resp.json()
-            except (ValueError, httpx.DecodingError):
-                raise KRAeTIMSError(
-                    f"Non-JSON response from TIaaS [{resp.status_code}]: "
-                    f"{resp.text[:200]}"
+                resp = await self._client.request(
+                    method, url, json=json, headers=headers
                 )
-            self._handle_error_response(response_data)
-            return response_data
 
-        except (httpx.ConnectError, httpx.ConnectTimeout):
-            # TCP handshake never completed — request was never sent.
-            raise TIaaSUnavailableError()
-        except (
-            httpx.ReadTimeout,
-            httpx.WriteTimeout,
-            httpx.PoolTimeout,
-            httpx.RequestError,
-        ):
-            # Request was sent; response never arrived — state is ambiguous.
-            if method.upper() in {"POST", "PUT", "DELETE", "PATCH"}:
-                raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
-            raise TIaaSUnavailableError()
-        except httpx.HTTPStatusError as exc:
-            status_code = exc.response.status_code
-            if status_code == 503:
-                raise KRAConnectivityTimeoutError()
-            if status_code == 409:
+                if resp.status_code == 503:
+                    raise KRAConnectivityTimeoutError()
+
+                resp.raise_for_status()
                 try:
-                    body = exc.response.json()
-                    msg = body.get("message") or body.get("error") or exc.response.text[:200]
-                except Exception:
-                    msg = exc.response.text[:200]
-                raise CreditNoteConflictError(msg) from exc
-            if status_code == 404:
+                    response_data = resp.json()
+                except (ValueError, httpx.DecodingError):
+                    raise KRAeTIMSError(
+                        f"Non-JSON response from TIaaS [{resp.status_code}]: "
+                        f"{resp.text[:200]}"
+                    )
+                self._handle_error_response(response_data)
+                return response_data
+
+            except (httpx.ConnectError, httpx.ConnectTimeout):
+                # TCP handshake never completed — request was never sent.
+                raise TIaaSUnavailableError()
+            except (
+                httpx.ReadTimeout,
+                httpx.WriteTimeout,
+                httpx.PoolTimeout,
+                httpx.RequestError,
+            ):
+                # Request was sent; response never arrived — state is ambiguous.
+                if method.upper() in {"POST", "PUT", "DELETE", "PATCH"}:
+                    raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
+                raise TIaaSUnavailableError()
+            except httpx.HTTPStatusError as exc:
+                status_code = exc.response.status_code
+                if status_code == 503:
+                    raise KRAConnectivityTimeoutError()
+                if status_code == 409:
+                    try:
+                        body = exc.response.json()
+                        msg = body.get("message") or body.get("error") or exc.response.text[:200]
+                    except Exception:
+                        msg = exc.response.text[:200]
+                    raise CreditNoteConflictError(msg) from exc
+                if status_code == 404:
+                    raise KRAeTIMSError(
+                        f"Resource not found (HTTP 404): {exc.response.text[:200]}"
+                    ) from exc
                 raise KRAeTIMSError(
-                    f"Resource not found (HTTP 404): {exc.response.text[:200]}"
+                    f"TIaaS returned HTTP {status_code}"
                 ) from exc
-            raise KRAeTIMSError(
-                f"TIaaS returned HTTP {status_code}"
-            ) from exc
 
     # ------------------------------------------------------------------
     # Category 1 — Device Initialisation
@@ -347,11 +352,15 @@ class AsyncKRAeTIMSClient:
         idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Category 6: Submit a Sales Invoice (Normal / Copy / Training)."""
-        return await self._request(
-            "POST", "/v2/etims/sale",
-            json=invoice.model_dump(mode="json", exclude_none=True),
-            idempotency_key=idempotency_key,
-        )
+        with _span("kra_etims.submit_sale", {
+            "invoice.no": str(invoice.invcNo),
+            "invoice.tin": invoice.tin,
+        }):
+            return await self._request(
+                "POST", "/v2/etims/sale",
+                json=invoice.model_dump(mode="json", exclude_none=True),
+                idempotency_key=idempotency_key,
+            )
 
     # ------------------------------------------------------------------
     # Category 7 — Credit Notes
@@ -375,15 +384,16 @@ class AsyncKRAeTIMSClient:
         :raises KRAeTIMSError: HTTP 404 — original sale not found.
         :raises KRAConnectivityTimeoutError: VSCU offline ceiling breached (HTTP 503).
         """
-        body: Dict[str, Any] = {}
-        if reason is not None:
-            body["reason"] = reason
-        if items is not None:
-            body["items"] = items
-        return await self._request(
-            "POST", f"/v2/etims/sale/{original_purchase_id}/credit-note",
-            json=body if body else None,
-        )
+        with _span("kra_etims.issue_credit_note", {"sale.id": str(original_purchase_id)}):
+            body: Dict[str, Any] = {}
+            if reason is not None:
+                body["reason"] = reason
+            if items is not None:
+                body["items"] = items
+            return await self._request(
+                "POST", f"/v2/etims/sale/{original_purchase_id}/credit-note",
+                json=body if body else None,
+            )
 
     async def submit_reverse_invoice(
         self, invoice: ReverseInvoice
@@ -480,38 +490,39 @@ class AsyncKRAeTIMSClient:
         Returns a list of per-invoice result dicts in the same order as the
         input list.
         """
-        semaphore = asyncio.Semaphore(_FLUSH_CONCURRENCY)
+        with _span("kra_etims.flush_offline_queue", {"queue.size": len(invoices)}):
+            semaphore = asyncio.Semaphore(_FLUSH_CONCURRENCY)
 
-        async def _submit_one(invoice: SaleInvoice) -> Dict[str, Any]:
-            async with semaphore:
-                idem_key = f"{invoice.tin}:{invoice.invcNo}"
-                return await self.submit_sale(invoice, idempotency_key=idem_key)
+            async def _submit_one(invoice: SaleInvoice) -> Dict[str, Any]:
+                async with semaphore:
+                    idem_key = f"{invoice.tin}:{invoice.invcNo}"
+                    return await self.submit_sale(invoice, idempotency_key=idem_key)
 
-        tasks = [_submit_one(inv) for inv in invoices]
-        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+            tasks = [_submit_one(inv) for inv in invoices]
+            raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        results: List[Dict[str, Any]] = []
-        for invoice, outcome in zip(invoices, raw_results):
-            if isinstance(outcome, KRADuplicateInvoiceError):
-                # Code 12 = already processed on a prior attempt.  The fiscal
-                # record exists on KRA — this is a safe idempotent success.
-                results.append({
-                    "invoice_no": invoice.invcNo,
-                    "status":     "already_processed",
-                })
-            elif isinstance(outcome, Exception):
-                results.append({
-                    "invoice_no": invoice.invcNo,
-                    "status":     "error",
-                    "message":    str(outcome),
-                })
-            else:
-                results.append({
-                    "invoice_no": invoice.invcNo,
-                    "status":     "success",
-                    "data":       outcome,
-                })
-        return results
+            results: List[Dict[str, Any]] = []
+            for invoice, outcome in zip(invoices, raw_results):
+                if isinstance(outcome, KRADuplicateInvoiceError):
+                    # Code 12 = already processed on a prior attempt.  The fiscal
+                    # record exists on KRA — this is a safe idempotent success.
+                    results.append({
+                        "invoice_no": invoice.invcNo,
+                        "status":     "already_processed",
+                    })
+                elif isinstance(outcome, Exception):
+                    results.append({
+                        "invoice_no": invoice.invcNo,
+                        "status":     "error",
+                        "message":    str(outcome),
+                    })
+                else:
+                    results.append({
+                        "invoice_no": invoice.invcNo,
+                        "status":     "success",
+                        "data":       outcome,
+                    })
+            return results
 
     # ------------------------------------------------------------------
     # Compliance
