@@ -4,6 +4,12 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **PyPI package renamed from `kra-etims-sdk` to `taxid-etims`** — the name
+  `kra-etims-sdk` was registered by a third party before this project published.
+  Install command is now `pip install taxid-etims`. The Python import is
+  unchanged: `from kra_etims import ...` still works exactly as before.
+
 ### Added
 - **Optional OpenTelemetry instrumentation** (`pip install "kra-etims-sdk[otel]"`) — adds
   `opentelemetry-api` as an optional dep. When installed, `submit_sale`,

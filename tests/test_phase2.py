@@ -295,7 +295,7 @@ class TestRenderKraQrString:
             from kra_etims import qr as qr_module
             import importlib
             importlib.reload(qr_module)
-            with pytest.raises(ImportError, match="kra-etims-sdk\\[qr\\]"):
+            with pytest.raises(ImportError, match="taxid-etims\\[qr\\]"):
                 qr_module.generate_qr_bytes("test")
         finally:
             sys.modules.clear()
