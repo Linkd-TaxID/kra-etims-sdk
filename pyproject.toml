@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Proprietary"}
 authors = [
-    {name = "TaxID Engineering", email = "engineering@taxid.co.ke"},
+    {name = "TaxID Engineering", email = "support@taxid.co.ke"},
 ]
 keywords = ["kra", "etims", "kenya", "tax", "invoicing", "vscu", "tiims"]
 classifiers = [

@@ -500,4 +500,4 @@ This SDK and the TIaaS Middleware comply with the **Kenya Data Protection Act (2
 
 ## Support
 
-For architectural escalations or middleware orchestration support: `ronnyabuto@icloud.com`
+For architectural escalations or middleware orchestration support: `support@taxid.co.ke`
