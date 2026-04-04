@@ -1,10 +1,10 @@
 # KRA eTIMS SDK (Python) `v0.2.0`
 
 ```bash
-pip install kra-etims-sdk               # core
-pip install "kra-etims-sdk[qr]"         # + offline QR code image generation
-pip install "kra-etims-sdk[otel]"       # + OpenTelemetry spans
-pip install "kra-etims-sdk[dev]"        # + pytest, pytest-asyncio, pytest-httpx
+pip install taxid-etims               # core
+pip install "taxid-etims[qr]"         # + offline QR code image generation
+pip install "taxid-etims[otel]"       # + OpenTelemetry spans
+pip install "taxid-etims[dev]"        # + pytest, pytest-asyncio, pytest-httpx
 ```
 
 Requires **Python 3.10+**.
@@ -15,7 +15,7 @@ Requires **Python 3.10+**.
 
 Hitting a `resultCd` you don't recognize?
 
-→ **[Complete KRA eTIMS Error Code Reference](https://linkd-taxid.github.io/kra-etims-sdk/)**
+→ **[Complete KRA eTIMS Error Code Reference](https://linkd-taxid.github.io/taxid-etims/)**
 
 Covers all official OSCU/VSCU spec codes plus production-observed codes absent
 from the official KRA documentation — including the critical success code
@@ -249,7 +249,7 @@ print(client)
 ## Observability
 
 ```bash
-pip install "kra-etims-sdk[otel]"
+pip install "taxid-etims[otel]"
 ```
 
 The SDK emits [OpenTelemetry](https://opentelemetry.io/) spans when `opentelemetry-api` is installed. Without it, every span call is a no-op — existing integrations are unaffected.
@@ -330,7 +330,7 @@ png_bytes  = generate_qr_bytes(qr_string)
 thermal_printer.write(png_bytes)
 ```
 
-> Requires `pip install "kra-etims-sdk[qr]"`
+> Requires `pip install "taxid-etims[qr]"`
 
 ---
 

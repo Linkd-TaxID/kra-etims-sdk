@@ -1,5 +1,5 @@
 """
-kra-etims-sdk
+taxid-etims
 ==============
 Python SDK for the KRA eTIMS TIaaS (Tax Identity as a Service) middleware.
 

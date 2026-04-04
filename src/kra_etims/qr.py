@@ -16,7 +16,7 @@ The ``qrcode`` and ``Pillow`` packages are optional.  String generation
 always works; image generation raises ``ImportError`` with a clear message
 if the packages are absent.  Install with:
 
-    pip install "kra-etims-sdk[qr]"
+    pip install "taxid-etims[qr]"
 """
 
 from __future__ import annotations
@@ -134,7 +134,7 @@ def generate_qr_bytes(
     except ImportError as exc:
         raise ImportError(
             "QR image generation requires the 'qrcode[pil]' package. "
-            "Install it with:  pip install 'kra-etims-sdk[qr]'"
+            "Install it with:  pip install 'taxid-etims[qr]'"
         ) from exc
 
     _ec_map = {
