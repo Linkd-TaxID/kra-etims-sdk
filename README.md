@@ -15,7 +15,7 @@ Requires **Python 3.10+**.
 
 Hitting a `resultCd` you don't recognize?
 
-→ **[Complete KRA eTIMS Error Code Reference](https://linkd-taxid.github.io/taxid-etims/)**
+→ **[Complete KRA eTIMS Error Code Reference](https://linkd-taxid.github.io/kra-etims-sdk/)**
 
 Covers all official OSCU/VSCU spec codes plus production-observed codes absent
 from the official KRA documentation — including the critical success code
