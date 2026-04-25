@@ -12,14 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        # 3.13 added to match pyproject.toml classifiers — must be tested, not just claimed.
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
       fail-fast: false
 
     steps:
-      - uses: actions/checkout@v4
+      # actions/checkout v4.2.2 — pinned to commit SHA for supply chain integrity.
+      # Mutable tags (v4) were the attack vector in the March 2025 tj-actions incident.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
+      # actions/setup-python v5.3.0
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -29,3 +33,29 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
+
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package and security tools
+        run: pip install -e ".[dev]" pip-audit bandit
+
+      - name: pip-audit — dependency CVE check
+        # Audits all installed packages in the current environment against the
+        # Python Advisory Database (PyPA). Fails on any known CVE.
+        run: pip-audit
+
+      - name: bandit — SAST scan
+        # -r src/: recursive scan of the SDK source tree.
+        # -ll: flag medium and high severity findings (skips low).
+        # -x tests/: exclude test files from SAST (test code patterns trigger false positives).
+        run: bandit -r src/ -ll -x tests/
