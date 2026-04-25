@@ -46,14 +46,13 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install security tools
-        run: pip install pip-audit bandit
+      - name: Install package and security tools
+        run: pip install -e ".[dev]" pip-audit bandit
 
       - name: pip-audit — dependency CVE check
-        # Audits all installed packages against the Python Advisory Database (PyPA).
-        # Fails the job if any known vulnerability is found. Use --ignore-vuln
-        # sparingly and only with a documented justification.
-        run: pip-audit --require-hashes -r <(pip-compile pyproject.toml --output-file /dev/stdout 2>/dev/null || pip install -e . && pip freeze) || pip-audit
+        # Audits all installed packages in the current environment against the
+        # Python Advisory Database (PyPA). Fails on any known CVE.
+        run: pip-audit
 
       - name: bandit — SAST scan
         # -r src/: recursive scan of the SDK source tree.
