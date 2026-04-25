@@ -111,6 +111,7 @@ from .reports import (
 from .exceptions import (
     KRAeTIMSError,
     KRAeTIMSAuthError,
+    KRAAuthorizationError,
     KRAConnectivityTimeoutError,
     TIaaSUnavailableError,
     TIaaSAmbiguousStateError,
@@ -169,6 +170,7 @@ __all__ = [
     # Exceptions
     "KRAeTIMSError",
     "KRAeTIMSAuthError",
+    "KRAAuthorizationError",
     "KRAConnectivityTimeoutError",
     "TIaaSUnavailableError",
     "TIaaSAmbiguousStateError",

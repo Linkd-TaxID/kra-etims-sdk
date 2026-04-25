@@ -1,56 +1,45 @@
-import time
-import os
-import asyncio
-import warnings
-import httpx
-from typing import Optional, Dict, Any, List
+"""
+AsyncKRAeTIMSClient — async SDK for TIaaS (Tax Identity as a Service).
 
-from .middleware import sanitize_kra_url
+Transport: httpx.AsyncClient.
+Auth:      API key (preferred) or OAuth2 client_credentials with asyncio.Lock.
+"""
+
+import asyncio
+import time
+import warnings
+from typing import Any, Dict, List, Optional
+
+import httpx
+
+from ._base_client import _BaseKRAeTIMSClient
 from ._telemetry import span as _span
+from .middleware import sanitize_kra_url
 from .exceptions import (
-    KRA_ERROR_MAP,
     KRAConnectivityTimeoutError,
     KRADuplicateInvoiceError,
     KRAeTIMSAuthError,
     KRAeTIMSError,
-    TIaaSUnavailableError,
     TIaaSAmbiguousStateError,
-    CreditNoteConflictError,
+    TIaaSUnavailableError,
 )
 from .models import (
-    DeviceInit, DataSyncRequest, BranchInfo, ItemSave,
-    ImportItem, SaleInvoice, ReverseInvoice, StockItem,
-    StockAdjustmentLine, StockAdjustmentRequest,
+    DeviceInit,
+    DataSyncRequest,
+    ItemSave,
+    SaleInvoice,
+    ReverseInvoice,
+    StockItem,
+    StockAdjustmentLine,
+    StockAdjustmentRequest,
 )
-
-# KRA result codes that indicate success.
-# "000" — GavaConnect JSON API spec (§6.1 response envelope).
-# "00"  — VSCU JAR HTTP endpoint (derived from TIS XML serial protocol §21.6.3).
-# Absent resultCd — TIaaS-native response; HTTP errors already handled by
-# raise_for_status(), so an absent key means no KRA application error.
-_KRA_SUCCESS_CODES: frozenset = frozenset({"00", "000"})
-
-
-def _is_kra_success(result: dict) -> bool:
-    """
-    Return True when the KRA result code indicates success.
-
-    Handles two officially documented success code variants — "000" (JSON API spec)
-    and "00" (VSCU JAR HTTP endpoint, derived from the TIS XML serial protocol).
-    An absent resultCd key means this is a TIaaS-native response; HTTP errors
-    are already handled by raise_for_status() so absent == no KRA error.
-    """
-    if "resultCd" not in result:
-        return True  # TIaaS-native response; no KRA result code to check
-    return str(result["resultCd"]).strip() in _KRA_SUCCESS_CODES
-
 
 # Maximum concurrent in-flight requests during offline-queue flush.
 # Chosen to respect typical rate limits without stalling the event loop.
 _FLUSH_CONCURRENCY = 50
 
 
-class AsyncKRAeTIMSClient:
+class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     """
     Async SDK for TIaaS (Tax Identity as a Service).
     Optimised for non-blocking I/O in frameworks like FastAPI and Starlette.
@@ -74,60 +63,29 @@ class AsyncKRAeTIMSClient:
         client_secret: str,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-    ):
-        self.client_id = client_id
-        self._client_secret = client_secret
-
-        env_url = (os.getenv("TAXID_API_URL") or "").strip()
-        default_url = "https://taxid-production.up.railway.app"
-        raw_url = env_url or base_url or default_url
-        self.base_url = raw_url.strip().rstrip("/")
-
-        # Full API key parity with sync client
-        self._api_key: Optional[str] = os.getenv("TAXID_API_KEY") or api_key
-
-        self._access_token: Optional[str] = None
-        self._token_expiry: float = 0
-
-        self._client = httpx.AsyncClient(
+    ) -> None:
+        super().__init__(client_id, client_secret, api_key, base_url)
+        self._http = httpx.AsyncClient(
             headers={"X-TIaaS-Service": "Handshake"},
             timeout=30.0,
         )
-        self._lock = asyncio.Lock()
-
-        # Sub-interfaces (lazy initialised on first access)
+        self._lock = asyncio.Lock()     # guards OAuth2 token refresh only
         self._reports = None
         self._gateway = None
-
-    # ------------------------------------------------------------------
-    # Representation — never echo secrets
-    # ------------------------------------------------------------------
-
-    def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}("
-            f"client_id={self.client_id!r}, "
-            f"base_url={self.base_url!r}, "
-            f"auth_mode={'api_key' if self._api_key else 'oauth2'}"
-            f")"
-        )
-
-    def __str__(self) -> str:
-        return self.__repr__()
 
     # ------------------------------------------------------------------
     # Context manager
     # ------------------------------------------------------------------
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "AsyncKRAeTIMSClient":
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self._client.aclose()
+    async def __aexit__(self, *_: Any) -> None:
+        await self._http.aclose()
 
     async def aclose(self) -> None:
         """Manually close the underlying httpx client."""
-        await self._client.aclose()
+        await self._http.aclose()
 
     # ------------------------------------------------------------------
     # Sub-interface accessors
@@ -150,7 +108,7 @@ class AsyncKRAeTIMSClient:
         return self._gateway
 
     # ------------------------------------------------------------------
-    # Authentication
+    # Authentication (concrete async — asyncio.Lock)
     # ------------------------------------------------------------------
 
     async def _authenticate(self) -> None:
@@ -159,64 +117,58 @@ class AsyncKRAeTIMSClient:
         double-checked locking and a 60-second refresh buffer.
 
         Skipped entirely when an API key is configured.
+
+        Pattern mirrors the sync client (TIaaS Engineering Spec §2.1, §2.2):
+        outer pre-lock validity check → skip lock acquisition on the hot path
+        when the token is valid. Without this check every coroutine serialises
+        on ``async with self._lock`` even with a fresh token, creating a
+        bottleneck under concurrent ``flush_offline_queue`` loads.
+
+        asyncio is cooperatively scheduled: no coroutine switch occurs between
+        the outer ``time.time()`` call and ``async with self._lock`` because
+        there is no ``await`` between them — making the outer check safe.
         """
         if self._api_key:
+            return
+
+        # Outer pre-lock check: skip lock acquisition entirely on the hot path.
+        # Equivalent to the sync client's pattern (client.py) that prevents all
+        # concurrent coroutines bottlenecking on self._lock for a token validity test.
+        now = time.time()
+        if self._access_token and (self._token_expiry - now) >= 60:
             return
 
         async with self._lock:
             now = time.time()  # re-read: time elapsed while waiting for lock
             if not self._access_token or (self._token_expiry - now) < 60:
                 try:
-                    resp = await self._client.post(
+                    resp = await self._http.post(
                         f"{self.base_url}/oauth/token",
                         auth=(self.client_id, self._client_secret),
                         data={"grant_type": "client_credentials"},
                     )
-                    if resp.status_code != 200:
-                        try:
-                            body = resp.json()
-                            detail = body.get("error_description") or body.get("error") or f"HTTP {resp.status_code}"
-                        except Exception:
-                            detail = f"HTTP {resp.status_code}"
-                        raise KRAeTIMSAuthError(f"TIaaS Authentication failed: {detail}")
-                    data = resp.json()
-                    self._access_token = data.get("access_token")
-                    expires_in = int(data.get("expires_in", 3600))
-                    self._token_expiry = now + (expires_in if expires_in > 0 else 3600)
                 except httpx.RequestError as exc:
                     raise KRAeTIMSAuthError(
                         f"TIaaS Authentication unreachable: {type(exc).__name__}"
                     ) from exc
 
-    # ------------------------------------------------------------------
-    # Error handling
-    # ------------------------------------------------------------------
+                if resp.status_code != 200:
+                    try:
+                        body   = resp.json()
+                        detail = (body.get("error_description")
+                                  or body.get("error")
+                                  or f"HTTP {resp.status_code}")
+                    except Exception:
+                        detail = f"HTTP {resp.status_code}"
+                    raise KRAeTIMSAuthError(f"TIaaS Authentication failed: {detail}")
 
-    def _handle_error_response(self, response_json: Any) -> None:
-        """
-        Intercept opaque KRA application errors embedded in HTTP 200 bodies.
-        Maps KRA result codes to precise, actionable exceptions.
-        """
-        if not isinstance(response_json, dict):
-            raise KRAeTIMSError(
-                f"Unexpected response format: expected JSON object, "
-                f"got {type(response_json).__name__}"
-            )
-
-        if _is_kra_success(response_json):
-            return
-
-        result_cd = str(response_json.get("resultCd", "")).strip()
-        result_msg = response_json.get("resultMsg", "Unknown KRA error")
-
-        if result_cd in KRA_ERROR_MAP:
-            exc_class, default_msg = KRA_ERROR_MAP[result_cd]
-            raise exc_class(f"{default_msg}: {result_msg}")
-
-        raise KRAeTIMSError(f"KRA Error [{result_cd}]: {result_msg}")
+                data               = resp.json()
+                self._access_token = data.get("access_token")
+                expires_in         = int(data.get("expires_in", 3600))
+                self._token_expiry = now + (expires_in if expires_in > 0 else 3600)
 
     # ------------------------------------------------------------------
-    # Core request dispatcher
+    # Core request dispatcher (concrete async)
     # ------------------------------------------------------------------
 
     @sanitize_kra_url
@@ -236,36 +188,15 @@ class AsyncKRAeTIMSClient:
         _attrs: Dict[str, Any] = {"http.method": method, "http.path": path}
         if idempotency_key:
             _attrs["idempotency_key"] = idempotency_key
+
         with _span("kra_etims.request", _attrs):
             await self._authenticate()
-            url = f"{self.base_url}/{path.lstrip('/')}"
-
-            if self._api_key:
-                headers: Dict[str, str] = {"X-API-Key": self._api_key}
-            else:
-                headers = {"Authorization": f"Bearer {self._access_token}"}
-
-            if idempotency_key:
-                headers["X-TIaaS-Idempotency-Key"] = idempotency_key
+            url     = self._build_url(path)
+            headers = self._build_auth_headers(idempotency_key)
 
             try:
-                resp = await self._client.request(
-                    method, url, json=json, headers=headers
-                )
-
-                if resp.status_code == 503:
-                    raise KRAConnectivityTimeoutError()
-
-                resp.raise_for_status()
-                try:
-                    response_data = resp.json()
-                except (ValueError, httpx.DecodingError):
-                    raise KRAeTIMSError(
-                        f"Non-JSON response from TIaaS [{resp.status_code}]: "
-                        f"{resp.text[:200]}"
-                    )
-                self._handle_error_response(response_data)
-                return response_data
+                resp = await self._http.request(method, url, json=json, headers=headers)
+                return self._parse_response(resp, method, idempotency_key)
 
             except (httpx.ConnectError, httpx.ConnectTimeout):
                 # TCP handshake never completed — request was never sent.
@@ -280,24 +211,6 @@ class AsyncKRAeTIMSClient:
                 if method.upper() in {"POST", "PUT", "DELETE", "PATCH"}:
                     raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
                 raise TIaaSUnavailableError()
-            except httpx.HTTPStatusError as exc:
-                status_code = exc.response.status_code
-                if status_code == 503:
-                    raise KRAConnectivityTimeoutError()
-                if status_code == 409:
-                    try:
-                        body = exc.response.json()
-                        msg = body.get("message") or body.get("error") or exc.response.text[:200]
-                    except Exception:
-                        msg = exc.response.text[:200]
-                    raise CreditNoteConflictError(msg) from exc
-                if status_code == 404:
-                    raise KRAeTIMSError(
-                        f"Resource not found (HTTP 404): {exc.response.text[:200]}"
-                    ) from exc
-                raise KRAeTIMSError(
-                    f"TIaaS returned HTTP {status_code}"
-                ) from exc
 
     # ------------------------------------------------------------------
     # Category 1 — Device Initialisation
@@ -498,7 +411,7 @@ class AsyncKRAeTIMSClient:
                     idem_key = f"{invoice.tin}:{invoice.invcNo}"
                     return await self.submit_sale(invoice, idempotency_key=idem_key)
 
-            tasks = [_submit_one(inv) for inv in invoices]
+            tasks      = [_submit_one(inv) for inv in invoices]
             raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
             results: List[Dict[str, Any]] = []
