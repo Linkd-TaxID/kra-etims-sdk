@@ -51,15 +51,28 @@ SDK usage (async):
 
 from __future__ import annotations
 
+import asyncio
+import time
+import random
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Union
 
+import httpx
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from .client import KRAeTIMSClient
     from .async_client import AsyncKRAeTIMSClient
+
+# HTTP status codes that indicate a transient upstream failure — safe to retry.
+_TRANSIENT_STATUS_CODES = frozenset({503, 504})
+
+# Maximum number of retry attempts (3 retries = 4 total attempts).
+_MAX_RETRIES = 3
+
+# Base delay in seconds; doubles per attempt: 0.5s, 1.0s, 2.0s.
+_BASE_DELAY = 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +204,61 @@ class TaxIDSupplierGateway:
     def __init__(self, client: "KRAeTIMSClient") -> None:
         self._client = client
 
+    def _execute(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Optional[Dict[str, Any]] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Wraps ``_client._request`` with exponential-backoff retry for transient
+        failures (connection errors, HTTP 503, HTTP 504).
+
+        Retry policy:
+        - Up to ``_MAX_RETRIES`` retries (3); total of 4 attempts.
+        - Delays: ``_BASE_DELAY × 2^attempt`` ± 10 % jitter → 0.5 s, 1.0 s, 2.0 s.
+        - Retries: ``requests.ConnectionError``, ``requests.Timeout``, HTTP 503/504.
+        - Never retried: HTTP 4xx (client errors), HTTP 409 (already processed),
+          ``TIaaSAmbiguousStateError`` (Schrodinger receipt — unknown state).
+
+        Thread-safe: no shared mutable state; each call is self-contained.
+        """
+        from .exceptions import KRAConnectivityTimeoutError, TIaaSAmbiguousStateError, KRAeTIMSError
+
+        last_exc: Optional[Exception] = None
+
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                return self._client._request(method, path, json=json, idempotency_key=idempotency_key)
+
+            except TIaaSAmbiguousStateError:
+                # Network dropped after bytes left the socket — receipt may or may
+                # not have been issued. Never retry; surface to caller immediately.
+                raise
+
+            except KRAConnectivityTimeoutError as exc:
+                # HTTP 503 — VSCU offline ceiling. Transient; retry.
+                last_exc = exc
+
+            except KRAeTIMSError as exc:
+                # HTTP 4xx or non-503 error — client error or permanent rejection.
+                # Do not retry; re-raise immediately.
+                raise
+
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                # TCP-level transient failure — retry.
+                last_exc = exc
+
+            if attempt < _MAX_RETRIES:
+                delay = _BASE_DELAY * (2 ** attempt)
+                jitter = delay * random.uniform(-0.1, 0.1)
+                time.sleep(delay + jitter)
+
+        # All attempts exhausted — re-raise the last transient exception.
+        raise last_exc  # type: ignore[misc]
+
     def onboard_supplier(
         self,
         phone: str,
@@ -232,7 +300,7 @@ class TaxIDSupplierGateway:
         if item_description:
             payload["itemDescription"] = item_description
 
-        raw = self._client._request(
+        raw = self._execute(
             "POST",
             "/v2/gateway/supplier-onboarding/single",
             json=payload,
@@ -276,7 +344,7 @@ class TaxIDSupplierGateway:
                 for s in suppliers
             ],
         }
-        raw = self._client._request(
+        raw = self._execute(
             "POST", "/v2/gateway/supplier-onboarding", json=payload
         )
         return BulkOnboardingResponse.from_api(raw)
@@ -293,7 +361,7 @@ class TaxIDSupplierGateway:
         request_id:
             The ``request_id`` from ``onboard_supplier()`` or ``onboard_suppliers()``.
         """
-        raw = self._client._request(
+        raw = self._execute(
             "GET", f"/v2/gateway/supplier-onboarding/{request_id}/status"
         )
         return SupplierGatewayStatus.from_api(raw)
@@ -308,6 +376,49 @@ class AsyncTaxIDSupplierGateway:
 
     def __init__(self, client: "AsyncKRAeTIMSClient") -> None:
         self._client = client
+
+    async def _execute(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Optional[Dict[str, Any]] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Async equivalent of ``TaxIDSupplierGateway._execute``.
+
+        Same retry policy: up to 3 retries on transient errors (503, 504,
+        connection/timeout). 4xx and ``TIaaSAmbiguousStateError`` are never
+        retried. Backoff delays use ``asyncio.sleep`` — non-blocking.
+        """
+        from .exceptions import KRAConnectivityTimeoutError, TIaaSAmbiguousStateError, KRAeTIMSError
+        import httpx
+
+        last_exc: Optional[Exception] = None
+
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                return await self._client._request(method, path, json=json, idempotency_key=idempotency_key)
+
+            except TIaaSAmbiguousStateError:
+                raise
+
+            except KRAConnectivityTimeoutError as exc:
+                last_exc = exc
+
+            except KRAeTIMSError:
+                raise
+
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                last_exc = exc
+
+            if attempt < _MAX_RETRIES:
+                delay = _BASE_DELAY * (2 ** attempt)
+                jitter = delay * random.uniform(-0.1, 0.1)
+                await asyncio.sleep(delay + jitter)
+
+        raise last_exc  # type: ignore[misc]
 
     async def onboard_supplier(
         self,
@@ -329,7 +440,7 @@ class AsyncTaxIDSupplierGateway:
         if item_description:
             payload["itemDescription"] = item_description
 
-        raw = await self._client._request(
+        raw = await self._execute(
             "POST",
             "/v2/gateway/supplier-onboarding/single",
             json=payload,
@@ -358,14 +469,14 @@ class AsyncTaxIDSupplierGateway:
                 for s in suppliers
             ],
         }
-        raw = await self._client._request(
+        raw = await self._execute(
             "POST", "/v2/gateway/supplier-onboarding", json=payload
         )
         return BulkOnboardingResponse.from_api(raw)
 
     async def get_status(self, request_id: int) -> SupplierGatewayStatus:
         """Async: poll a supplier onboarding request status."""
-        raw = await self._client._request(
+        raw = await self._execute(
             "GET", f"/v2/gateway/supplier-onboarding/{request_id}/status"
         )
         return SupplierGatewayStatus.from_api(raw)

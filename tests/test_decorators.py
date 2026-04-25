@@ -1,33 +1,28 @@
-import pytest
-import responses
+"""
+Middleware / transport hygiene tests.
+
+sanitize_kra_url was removed — trailing-space handling is done server-side
+by TIaaS TrailingSpaceInterceptor. This file now covers the SDK-level
+base_url normalization that replaced it.
+"""
 from kra_etims.client import KRAeTIMSClient
 
-@responses.activate
-def test_sanitize_kra_url_strips_parameter_whitespace():
-    """
-    Scenario: Pass a URL/Parameter with trailing spaces to a decorated method.
-    Assertion: The outgoing HTTP request must have the spaces stripped.
-    """
-    client = KRAeTIMSClient(
-        client_id="test_id",
-        client_secret="test_secret",
-        base_url="https://api.test  " # Trailing spaces in base_url
+
+def test_base_url_strips_trailing_whitespace_and_slash():
+    """Constructor must normalise base_url regardless of input formatting."""
+    client = KRAeTIMSClient("id", "secret", base_url="https://api.test.co.ke  /  ")
+    assert client.base_url == "https://api.test.co.ke", (
+        f"Expected 'https://api.test.co.ke', got {client.base_url!r}"
     )
-    client._access_token = "mock"
-    client._token_expiry = 9999999999
-    
-    # Mock endpoint
-    responses.add(
-        responses.GET,
-        "https://api.test/v2/etims/compliance/P001",
-        status=200,
-        json={"status": "compliant"}
-    )
-    
-    # We pass " P001 " with spaces
-    client.check_compliance("  P001  ")
-    
-    # Verify the intercepted request URL
-    # It should be https://api.test/v2/etims/compliance/P001
-    assert responses.calls[0].request.url == "https://api.test/v2/etims/compliance/P001"
-    print("\n✅ Middleware: Systematic whitespace stripping verified.")
+
+
+def test_build_url_joins_path_correctly():
+    client = KRAeTIMSClient("id", "secret", base_url="https://api.test.co.ke")
+    url = client._build_url("/v2/etims/compliance/P001")
+    assert url == "https://api.test.co.ke/v2/etims/compliance/P001"
+
+
+def test_build_url_handles_path_without_leading_slash():
+    client = KRAeTIMSClient("id", "secret", base_url="https://api.test.co.ke")
+    url = client._build_url("v2/etims/compliance/P001")
+    assert url == "https://api.test.co.ke/v2/etims/compliance/P001"

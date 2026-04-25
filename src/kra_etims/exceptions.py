@@ -76,7 +76,18 @@ class KRAConnectivityTimeoutError(KRAeTIMSError):
 
 
 class KRAeTIMSAuthError(KRAeTIMSError):
-    """Authentication failed — bad credentials or expired token."""
+    """
+    Authentication failed (HTTP 401) — invalid API key, missing key,
+    or expired/invalid OAuth2 token.
+    """
+
+
+class KRAAuthorizationError(KRAeTIMSError):
+    """
+    Authorization denied (HTTP 403) — the credential is valid but lacks
+    the required role for this endpoint (e.g. ROLE_SDK_CLIENT attempting
+    an ROLE_ADMIN endpoint such as /v2/etims/init-handshake).
+    """
 
 
 class TIaaSUnavailableError(KRAeTIMSError):
@@ -207,6 +218,33 @@ class CreditNoteConflictError(KRAeTIMSError):
     ):
         super().__init__(message)
         self.original_purchase_id = original_purchase_id
+
+
+class ZReportAlreadyIssuedError(KRAeTIMSError):
+    """
+    The Z-report for the requested date has already been issued (HTTP 409).
+
+    The VSCU day-reset command is irreversible (KRA TIS v2.0 §21.6.1 —
+    ★ RESEARCH-VALIDATED). TIaaS enforces exactly one Z-report per branch
+    per calendar day via a UNIQUE(branch_id, report_date) constraint.
+
+    This exception is NOT retryable. The Z-report was already submitted
+    successfully. Retrieve the existing report if you need the totals.
+
+    ``report_date`` carries the date string from the 409 response body,
+    if present, so callers can log or display it without parsing the message.
+    """
+    def __init__(
+        self,
+        message: str = (
+            "Z-Report Already Issued (HTTP 409): The daily Z-report has already "
+            "been submitted for this date. The VSCU day-reset is irreversible — "
+            "do not retry. Retrieve the existing report for totals."
+        ),
+        report_date: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.report_date = report_date
 
 
 # ---------------------------------------------------------------------------
