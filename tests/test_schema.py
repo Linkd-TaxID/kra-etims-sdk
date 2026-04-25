@@ -1,4 +1,5 @@
 import pytest
+from decimal import Decimal
 from pydantic import ValidationError
 from kra_etims.models import SaleInvoice, ItemDetail, TaxType, ReceiptLabel
 
@@ -16,9 +17,9 @@ def test_schema_forbids_extra_fields():
             custNm="Test Customer",
             confirmDt="20240221120000",
             totItemCnt=0,
-            totTaxblAmt=0.0,
-            totTaxAmt=0.0,
-            totAmt=0.0,
+            totTaxblAmt=Decimal("0.00"),
+            totTaxAmt=Decimal("0.00"),
+            totAmt=Decimal("0.00"),
             itemList=[],
             # Unauthorized fields
             currCd="USD", 

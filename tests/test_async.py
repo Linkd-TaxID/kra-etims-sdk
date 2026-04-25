@@ -1,6 +1,7 @@
 import asyncio
 import pytest
 import httpx
+from decimal import Decimal
 from kra_etims.async_client import AsyncKRAeTIMSClient
 from kra_etims.models import SaleInvoice
 
@@ -69,9 +70,9 @@ async def test_async_idempotency_key_passed(httpx_mock):
         custNm="Async Customer",
         confirmDt="20240221120000",
         totItemCnt=0,
-        totTaxblAmt=0.0,
-        totTaxAmt=0.0,
-        totAmt=0.0,
+        totTaxblAmt=Decimal("0.00"),
+        totTaxAmt=Decimal("0.00"),
+        totAmt=Decimal("0.00"),
         itemList=[],
     )
 
