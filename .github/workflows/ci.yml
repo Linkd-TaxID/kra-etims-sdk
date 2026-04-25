@@ -47,12 +47,14 @@ jobs:
           cache: pip
 
       - name: Install package and security tools
-        run: pip install -e ".[dev]" pip-audit bandit
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]" pip-audit bandit
 
       - name: pip-audit — dependency CVE check
-        # Audits all installed packages in the current environment against the
-        # Python Advisory Database (PyPA). Fails on any known CVE.
-        run: pip-audit
+        # --skip-editable: omit our own package (not on PyPI, cannot be audited).
+        # Dependencies pulled in by pip install -e . are still fully audited.
+        run: pip-audit --skip-editable
 
       - name: bandit — SAST scan
         # -r src/: recursive scan of the SDK source tree.
