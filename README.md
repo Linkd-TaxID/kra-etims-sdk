@@ -1,4 +1,4 @@
-# KRA eTIMS SDK (Python) `v0.2.0`
+# KRA eTIMS SDK (Python) `v0.3.0`
 
 ```bash
 pip install taxid-etims               # core
@@ -8,6 +8,24 @@ pip install "taxid-etims[dev]"        # + pytest, pytest-asyncio, pytest-httpx
 ```
 
 Requires **Python 3.10+**.
+
+---
+
+## Upgrading from v0.2.0
+
+**Breaking changes in v0.3.0:**
+
+**`requests` removed — transport unified on `httpx`.** The sync client (`KRAeTIMSClient`) now uses `httpx.Client` instead of `requests.Session`. If your code catches transport exceptions directly, update the exception types:
+
+| v0.2.0 (`requests`) | v0.3.0 (`httpx`) |
+|---|---|
+| `requests.exceptions.ConnectionError` | `httpx.ConnectError` |
+| `requests.exceptions.Timeout` | `httpx.TimeoutException` (or `httpx.ReadTimeout` / `httpx.ConnectTimeout`) |
+| `requests.exceptions.JSONDecodeError` | `httpx.DecodingError` |
+
+If you only catch SDK-level exceptions (`TIaaSUnavailableError`, `TIaaSAmbiguousStateError`, `KRAeTIMSError`, etc.) — no changes needed. Those exceptions are unchanged and still raised for all transport failures.
+
+**New exception: `KRAAuthorizationError`.** HTTP 403 responses now raise `KRAAuthorizationError` (a subclass of `KRAeTIMSError`) instead of the generic base. If you have a bare `except KRAeTIMSError` handler, it still catches this — no action required unless you want to handle 403 specifically.
 
 ---
 
@@ -55,10 +73,12 @@ from kra_etims import KRAeTIMSClient, SaleInvoice, calculate_item, build_invoice
 
 client = KRAeTIMSClient(client_id="TIaaS_ID", client_secret="TIaaS_SEC")
 
-items   = [calculate_item("MacBook Pro M3", "HS847130", 5800, "A")]
+items   = [calculate_item("MacBook Pro M3", "HS847130", 5800, "B")]  # B = 16% Standard VAT
 invoice = SaleInvoice(
     tin="P051234567X", bhfId="00", invcNo="INV-2026-001",
-    custNm="Acacia Enterprises Ltd", confirmDt="20260311120000",
+    # B2B sale — supply buyer name. For B2C retail, omit custNm; defaults to "N/A".
+    custNm="Acacia Enterprises Ltd",
+    confirmDt="20260311120000",
     itemList=items, **build_invoice_totals(items),
 )
 response = client.submit_sale(invoice, idempotency_key="INV-2026-001")
@@ -146,6 +166,27 @@ diesel = calculate_item("Diesel", "HS270900", 3236.57, "E", qty=15.456)
 # qty stored as Decimal("15.4560") — transmitted to KRA exactly
 ```
 
+### Discounted Items
+
+`ItemDetail` carries `splyAmt` (supply amount), `dcRt` (discount rate %), and `dcAmt` (discount amount in KES) — all default to `Decimal("0.00")` for non-discounted items. Supply them explicitly for line items with negotiated discounts:
+
+```python
+from kra_etims.models import ItemDetail, TaxType
+from decimal import Decimal
+
+item = ItemDetail(
+    itemCd="HS847130", itemNm="MacBook Pro M3",
+    qty=Decimal("2"), uprc=Decimal("2900.00"),
+    totAmt=Decimal("5800.00"),
+    splyAmt=Decimal("5800.00"),   # qty * uprc before discount
+    dcRt=Decimal("10.00"),        # 10% negotiated discount
+    dcAmt=Decimal("580.00"),      # splyAmt * dcRt / 100
+    taxTyCd=TaxType.B,
+    taxblAmt=Decimal("4500.00"),  # (splyAmt - dcAmt) / 1.16
+    taxAmt=Decimal("720.00"),
+)
+```
+
 ### Residual Drift — Invoice Integrity
 
 `ROUND_HALF_UP` applied independently to each line can leave a 1-cent gap at invoice level. The SDK absorbs this residual into `totTaxAmt`, preventing KRA result code 20 rejections.
@@ -193,7 +234,8 @@ except KRADuplicateInvoiceError:
 
 | Exception | Trigger |
 |---|---|
-| `KRAeTIMSAuthError` | Bad credentials or token refresh failure |
+| `KRAeTIMSAuthError` | Bad credentials or token refresh failure (HTTP 401) |
+| `KRAAuthorizationError` | Authenticated but not authorised for this operation (HTTP 403) — key lacks required role |
 | `KRAConnectivityTimeoutError` | 24-hour VSCU offline ceiling breached (HTTP 503) |
 | `TIaaSUnavailableError` | Middleware instance unreachable (TCP failure) |
 | `TIaaSAmbiguousStateError` | Network dropped mid-POST; state unknown — carries `idempotency_key` |
@@ -204,6 +246,7 @@ except KRADuplicateInvoiceError:
 | `KRAInvalidBranchError` | Branch not registered for this TIN (code 14) |
 | `KRAServerError` | Transient KRA server error (codes 20/96/99) |
 | `CreditNoteConflictError` | Credit note already issued for this sale (HTTP 409); carries `original_purchase_id` |
+| `ZReportAlreadyIssuedError` | Z-report already submitted for this date (HTTP 409); the VSCU day-reset is irreversible — do not retry; carries `report_date` |
 | `KRAeTIMSError` | Base class for all SDK exceptions; also raised directly for unexpected HTTP 4xx/5xx responses from the middleware (message contains only the status code — no request URLs or PII) |
 
 ---
@@ -216,7 +259,7 @@ The sync client is safe to share across Celery workers and FastAPI request handl
 |---|---|
 | OAuth token refresh | `threading.Lock` (sync) / `asyncio.Lock` (async) with double-checked locking |
 | Sub-interface init (`client.reports`, `client.gateway`) | Double-checked locking prevents duplicate initialisation under concurrent first-access |
-| `requests.Session` connection pool | One session per thread via `threading.local()` — each Celery worker gets its own pool, preventing urllib3 connection corruption under concurrent access |
+| HTTP connection pool | `httpx.Client` is natively thread-safe — a single instance is shared across all Celery workers with no `threading.local()` required. Each worker reuses connections from the pool concurrently without corruption. |
 
 ### Celery worker pattern
 
@@ -396,19 +439,28 @@ result = await client.gateway.onboard_supplier(
 ## Reports (X/Z)
 
 ```python
+from kra_etims import ZReportAlreadyIssuedError
+
 # X Report — interim read-only snapshot (safe at any time, no VSCU state change)
 x = client.reports.get_x_report("2026-03-11")
-print(x.band_a.taxable_amount)   # Decimal("43103.45")
-print(x.band_a.tax_amount)       # Decimal("6896.55")
+print(x.band_b.taxable_amount)   # Decimal("43103.45")  # Band B = Standard VAT 16%
+print(x.band_b.tax_amount)       # Decimal("6896.55")
+print(x.band_a.taxable_amount)   # Decimal("5000.00")   # Band A = Exempt 0%
 print(x.total_amount)            # Decimal("52340.00")
 
 # Z Report — closes the VSCU fiscal period (POST internally — call once per day)
+# TIaaS submits this automatically at 23:59 Kenya time; call manually only if needed.
 z = client.reports.get_daily_z("2026-03-11")
 print(z.vscu_acknowledged)       # True when VSCU day-reset completed
 print(z.invoice_count)
 print(z.total_vat)
 
-# A second call for the same date raises KRAeTIMSError (middleware returns 409 Conflict).
+# A second call for the same date raises ZReportAlreadyIssuedError (HTTP 409).
+# The VSCU day-reset is irreversible — do not retry on this exception.
+try:
+    z = client.reports.get_daily_z("2026-03-11")
+except ZReportAlreadyIssuedError:
+    pass  # Already submitted — this is expected if the scheduler already ran
 
 # Async
 x = await client.reports.get_x_report("2026-03-11")
@@ -443,7 +495,10 @@ result = await client.issue_credit_note(original_purchase_id=42, reason="Return"
 try:
     client.issue_credit_note(original_purchase_id=42)
 except CreditNoteConflictError as exc:
-    # HTTP 409 — a credit note already exists for this sale.
+    # HTTP 409 — a non-FAILED credit note already exists for this sale.
+    # If a previous attempt failed terminally (VSCU rejection), it does NOT
+    # raise CreditNoteConflictError — the middleware allows re-issuance because
+    # KRA never received the failed attempt. The original receipt is still unreversed.
     print(f"Already reversed: purchase {exc.original_purchase_id}")
 ```
 
