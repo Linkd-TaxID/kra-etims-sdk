@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "taxid-etims"
-version = "0.2.0"
+version = "0.3.0"
 description = "Enterprise Python SDK for KRA eTIMS via TIaaS Middleware — idempotency engine with offline resilience"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,7 +30,8 @@ classifiers = [
 ]
 dependencies = [
     "pydantic>=2.0.0",
-    "requests>=2.32.4",
+    # httpx serves both transports: httpx.Client (sync, thread-safe) and
+    # httpx.AsyncClient (async). requests is no longer a dependency.
     "httpx>=0.25.0",
 ]
 
@@ -38,8 +39,9 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.23.0",
+    # pytest-httpx covers both httpx.Client and httpx.AsyncClient via httpx_mock fixture.
+    # responses was a requests-specific mock library and is no longer needed.
     "pytest-httpx>=0.30.0",
-    "responses>=0.23.0",
 ]
 qr = [
     "qrcode[pil]>=7.4.2",
