@@ -285,21 +285,29 @@ class TestRenderKraQrString:
         with pytest.raises(ValueError, match="No 'qrCode'"):
             render_kra_qr_string({"resultCd": "00", "data": {}})
 
-    def test_generate_qr_bytes_raises_import_error_without_qrcode(self):
-        """generate_qr_bytes must provide a clear install instruction."""
+    def test_generate_qr_bytes_raises_import_error_without_qrcode(self, monkeypatch):
+        """generate_qr_bytes must provide a clear install instruction.
+
+        Uses monkeypatch.setitem() instead of sys.modules.clear().
+        sys.modules.clear() destroys the entire module registry for the process,
+        breaking any test running in parallel (pytest-xdist, concurrent fixtures).
+        monkeypatch.setitem() replaces exactly one key and restores it automatically
+        when the test ends — safe for parallel execution.
+        """
         import sys
-        # Temporarily hide qrcode from imports
-        original_modules = dict(sys.modules)
-        sys.modules["qrcode"] = None  # type: ignore[assignment]
-        try:
-            from kra_etims import qr as qr_module
-            import importlib
-            importlib.reload(qr_module)
-            with pytest.raises(ImportError, match="taxid-etims\\[qr\\]"):
-                qr_module.generate_qr_bytes("test")
-        finally:
-            sys.modules.clear()
-            sys.modules.update(original_modules)
+        import importlib
+        from kra_etims import qr as qr_module
+
+        # Hide only 'qrcode'; monkeypatch restores the original value on test teardown.
+        monkeypatch.setitem(sys.modules, "qrcode", None)  # type: ignore[assignment]
+
+        # Reload the module so it re-evaluates the top-level `import qrcode` with
+        # the patched sys.modules. Without reload(), the already-imported module
+        # holds a reference to the real qrcode object from the previous import.
+        importlib.reload(qr_module)
+
+        with pytest.raises(ImportError, match="taxid-etims\\[qr\\]"):
+            qr_module.generate_qr_bytes("test")
 
 
 # ---------------------------------------------------------------------------

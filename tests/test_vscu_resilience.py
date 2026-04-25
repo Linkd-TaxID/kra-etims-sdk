@@ -1,6 +1,7 @@
 import pytest
 import responses
 import requests
+from decimal import Decimal
 from kra_etims.client import KRAeTIMSClient
 from kra_etims.async_client import AsyncKRAeTIMSClient
 from kra_etims.exceptions import KRAConnectivityTimeoutError, KRAeTIMSError
@@ -61,9 +62,9 @@ def test_flush_offline_queue_sends_exact_requests():
             custNm="Offline Customer",
             confirmDt="20240221120000",
             totItemCnt=0,
-            totTaxblAmt=0.0,
-            totTaxAmt=0.0,
-            totAmt=0.0,
+            totTaxblAmt=Decimal("0.00"),
+            totTaxAmt=Decimal("0.00"),
+            totAmt=Decimal("0.00"),
             itemList=[]
         ))
 
@@ -127,9 +128,9 @@ async def test_async_flush_offline_queue(httpx_mock):
             custNm="Offline Customer",
             confirmDt="20240221120000",
             totItemCnt=0,
-            totTaxblAmt=0.0,
-            totTaxAmt=0.0,
-            totAmt=0.0,
+            totTaxblAmt=Decimal("0.00"),
+            totTaxAmt=Decimal("0.00"),
+            totAmt=Decimal("0.00"),
             itemList=[]
         ) for i in range(50)]
 
