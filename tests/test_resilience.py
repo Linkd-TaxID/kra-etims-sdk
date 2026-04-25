@@ -1,7 +1,7 @@
 import pytest
-import requests
+import httpx
 from decimal import Decimal
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from kra_etims.client import KRAeTIMSClient
 from kra_etims.exceptions import TIaaSAmbiguousStateError
 from kra_etims.models import SaleInvoice, ReceiptLabel, TaxType
@@ -20,11 +20,6 @@ def test_schrodinger_invoice_throws_ambiguous_error():
     )
     client._access_token = "mock_token"
     client._token_expiry = 9999999999
-
-    mock_session = MagicMock()
-    mock_session.request.side_effect = requests.exceptions.ReadTimeout(
-        "response never arrived"
-    )
 
     invoice = SaleInvoice(
         tin="P000000000X",
@@ -51,8 +46,11 @@ def test_schrodinger_invoice_throws_ambiguous_error():
         ],
     )
 
-    with patch.object(client, "_get_session", return_value=mock_session):
+    with patch.object(
+        client._http, "request",
+        side_effect=httpx.ReadTimeout("response never arrived"),
+    ):
         with pytest.raises(TIaaSAmbiguousStateError) as exc_info:
             client.submit_sale(invoice)
 
-    assert "TIaaS Ambiguous State" in str(exc_info.value)
+    assert "Ambiguous" in str(exc_info.value) or "ambiguous" in str(exc_info.value)

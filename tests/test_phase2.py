@@ -2,7 +2,6 @@
 Phase 2 Test Suite
 ==================
 Covers:
-  - middleware.py  : async-aware sanitize_kra_url decorator
   - exceptions.py  : full error taxonomy + _handle_error_response mapping
   - tax.py         : zero-math tax calculator (all 5 bands)
   - qr.py          : render_kra_qr_string
@@ -15,62 +14,6 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-# ---------------------------------------------------------------------------
-# middleware — async-aware decorator
-# ---------------------------------------------------------------------------
-
-class TestSanitizeKraUrl:
-    def test_sync_strips_whitespace(self):
-        from kra_etims.middleware import sanitize_kra_url
-
-        @sanitize_kra_url
-        def my_func(path: str, token: str = "x") -> tuple:
-            return (path, token)
-
-        assert my_func("  /v2/test  ", token="  tok  ") == ("/v2/test", "tok")
-
-    def test_sync_preserves_non_string_args(self):
-        from kra_etims.middleware import sanitize_kra_url
-
-        @sanitize_kra_url
-        def my_func(a, b=None):
-            return (a, b)
-
-        assert my_func(42, b=3.14) == (42, 3.14)
-
-    def test_async_returns_coroutine(self):
-        from kra_etims.middleware import sanitize_kra_url
-
-        @sanitize_kra_url
-        async def my_async_func(path: str) -> str:
-            return path
-
-        result = my_async_func("  /v2/async  ")
-        assert asyncio.iscoroutine(result)
-        result.close()  # clean up unawaited coroutine
-
-    @pytest.mark.asyncio
-    async def test_async_strips_whitespace(self):
-        from kra_etims.middleware import sanitize_kra_url
-
-        @sanitize_kra_url
-        async def my_async_func(path: str, token: str = "x") -> tuple:
-            return (path, token)
-
-        result = await my_async_func("  /v2/etims  ", token="  bearer123  ")
-        assert result == ("/v2/etims", "bearer123")
-
-    @pytest.mark.asyncio
-    async def test_async_preserves_non_string_args(self):
-        from kra_etims.middleware import sanitize_kra_url
-
-        @sanitize_kra_url
-        async def my_async_func(a, b=None):
-            return (a, b)
-
-        assert await my_async_func(99, b=True) == (99, True)
-
 
 # ---------------------------------------------------------------------------
 # exceptions — error taxonomy
@@ -285,21 +228,29 @@ class TestRenderKraQrString:
         with pytest.raises(ValueError, match="No 'qrCode'"):
             render_kra_qr_string({"resultCd": "00", "data": {}})
 
-    def test_generate_qr_bytes_raises_import_error_without_qrcode(self):
-        """generate_qr_bytes must provide a clear install instruction."""
+    def test_generate_qr_bytes_raises_import_error_without_qrcode(self, monkeypatch):
+        """generate_qr_bytes must provide a clear install instruction.
+
+        Uses monkeypatch.setitem() instead of sys.modules.clear().
+        sys.modules.clear() destroys the entire module registry for the process,
+        breaking any test running in parallel (pytest-xdist, concurrent fixtures).
+        monkeypatch.setitem() replaces exactly one key and restores it automatically
+        when the test ends — safe for parallel execution.
+        """
         import sys
-        # Temporarily hide qrcode from imports
-        original_modules = dict(sys.modules)
-        sys.modules["qrcode"] = None  # type: ignore[assignment]
-        try:
-            from kra_etims import qr as qr_module
-            import importlib
-            importlib.reload(qr_module)
-            with pytest.raises(ImportError, match="taxid-etims\\[qr\\]"):
-                qr_module.generate_qr_bytes("test")
-        finally:
-            sys.modules.clear()
-            sys.modules.update(original_modules)
+        import importlib
+        from kra_etims import qr as qr_module
+
+        # Hide only 'qrcode'; monkeypatch restores the original value on test teardown.
+        monkeypatch.setitem(sys.modules, "qrcode", None)  # type: ignore[assignment]
+
+        # Reload the module so it re-evaluates the top-level `import qrcode` with
+        # the patched sys.modules. Without reload(), the already-imported module
+        # holds a reference to the real qrcode object from the previous import.
+        importlib.reload(qr_module)
+
+        with pytest.raises(ImportError, match="taxid-etims\\[qr\\]"):
+            qr_module.generate_qr_bytes("test")
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +274,7 @@ class TestAsyncClientApiKeyParity:
         from kra_etims.async_client import AsyncKRAeTIMSClient
         client = AsyncKRAeTIMSClient("id", "secret", api_key="skip_oauth_key")
         # _authenticate should return immediately without hitting /oauth/token
-        with patch.object(client._client, "post") as mock_post:
+        with patch.object(client._http, "post") as mock_post:
             await client._authenticate()
             mock_post.assert_not_called()
         await client.aclose()

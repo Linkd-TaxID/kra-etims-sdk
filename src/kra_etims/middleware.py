@@ -1,42 +1,19 @@
-import asyncio
-import functools
-from typing import Callable, Any
+"""
+KRA eTIMS SDK — Middleware layer (intentionally minimal)
 
+The KRA GavaConnect trailing-space URL bug (silent failures on URLs with trailing
+whitespace) is handled at the TIaaS middleware tier via TrailingSpaceInterceptor
+(AppConfig.java). The SDK communicates with the TIaaS middleware, not with KRA
+GavaConnect directly — there is no trailing-space concern at the SDK tier.
 
-def sanitize_kra_url(func: Callable[..., Any]) -> Callable[..., Any]:
-    """
-    Async-aware middleware decorator that strips whitespace from all string
-    arguments before dispatch.
+The previous ``sanitize_kra_url`` decorator that stripped whitespace from all
+string arguments was removed because:
+  1. Wrong tier — TIaaS already handles the KRA quirk server-side.
+  2. Over-broad — stripping all string arguments mutated business data fields
+     (``buyer_name``, ``item_description``) as a side-effect of a URL fix.
+  3. Dead code — ``gateway.py`` never imported it.
 
-    KRA GavaConnect silently fails on URL segments with leading/trailing
-    spaces — this decorator is the surgical fix applied at the boundary.
-
-    Branches on asyncio.iscoroutinefunction so it returns the correct
-    wrapper type, preventing event-loop deadlocks in async frameworks
-    (FastAPI, Starlette, etc.).
-    """
-    if asyncio.iscoroutinefunction(func):
-        @functools.wraps(func)
-        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-            new_args = tuple(
-                arg.strip() if isinstance(arg, str) else arg for arg in args
-            )
-            new_kwargs = {
-                k: v.strip() if isinstance(v, str) else v
-                for k, v in kwargs.items()
-            }
-            return await func(*new_args, **new_kwargs)
-        return async_wrapper
-
-    @functools.wraps(func)
-    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-        new_args = tuple(
-            arg.strip() if isinstance(arg, str) else arg for arg in args
-        )
-        new_kwargs = {
-            k: v.strip() if isinstance(v, str) else v
-            for k, v in kwargs.items()
-        }
-        return func(*new_args, **new_kwargs)
-
-    return sync_wrapper
+If a future SDK method needs to call KRA GavaConnect directly (bypassing TIaaS),
+re-introduce a narrowly scoped URL-segment sanitiser at that specific call site,
+not as a blanket decorator over business data parameters.
+"""

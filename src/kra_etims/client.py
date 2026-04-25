@@ -1,58 +1,45 @@
-import time
-import os
+"""
+KRAeTIMSClient — synchronous SDK for TIaaS (Tax Identity as a Service).
+
+Transport: httpx.Client (thread-safe; replaces requests.Session + threading.local).
+Auth:      API key (preferred) or OAuth2 client_credentials with threading.Lock.
+"""
+
 import threading
+import time
 import warnings
-import requests
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
-# KRA eTIMS success result codes — only two variants are documented:
-#   "000"  per KRA VSCU/OSCU Specification v2.0 §4.14/§4.18 (JSON HTTP API)
-#   "00"   per KRA TIS Specification v2.0 §21.6.3 (VSCU JAR XML serial protocol,
-#          but also emitted by the VSCU JAR's HTTP endpoint in observed deployments)
-# "0" and "0000" appear in no official KRA document and are excluded.
-_KRA_SUCCESS_CODES: frozenset[str] = frozenset({"00", "000"})
+import httpx
 
-
-def _is_kra_success(result: dict) -> bool:
-    """
-    Return True when the KRA result code indicates success.
-
-    Handles two officially documented success code variants — "000" (JSON API spec)
-    and "00" (VSCU JAR HTTP endpoint, derived from the TIS XML serial protocol).
-    An absent ``resultCd`` key means this is a TIaaS-native response; HTTP errors
-    are already handled by ``raise_for_status()`` so absent == no KRA error.
-    """
-    if "resultCd" not in result:
-        return True  # TIaaS-native response; no KRA result code to check
-    return str(result["resultCd"]).strip() in _KRA_SUCCESS_CODES
-
-
-from .middleware import sanitize_kra_url
+from ._base_client import _BaseKRAeTIMSClient
 from ._telemetry import span as _span
 from .exceptions import (
-    KRA_ERROR_MAP,
     KRAConnectivityTimeoutError,
     KRADuplicateInvoiceError,
     KRAeTIMSAuthError,
     KRAeTIMSError,
-    TIaaSUnavailableError,
     TIaaSAmbiguousStateError,
-    CreditNoteConflictError,
+    TIaaSUnavailableError,
 )
 from .models import (
-    DeviceInit, DataSyncRequest, BranchInfo, ItemSave,
-    ImportItem, SaleInvoice, ReverseInvoice, StockItem,
-    StockAdjustmentLine, StockAdjustmentRequest,
+    DeviceInit,
+    DataSyncRequest,
+    ItemSave,
+    SaleInvoice,
+    ReverseInvoice,
+    StockItem,
+    StockAdjustmentLine,
+    StockAdjustmentRequest,
 )
 
 
-class KRAeTIMSClient:
+class KRAeTIMSClient(_BaseKRAeTIMSClient):
     """
-    Sync SDK for TIaaS (Tax Identity as a Service).
+    Sync SDK for TIaaS. Use in Django, Flask, scripts, or Celery workers.
 
-    Acts as a high-performance remote control for the stateful TIaaS
-    middleware — which handles VSCU JAR orchestration, AES-256 encryption,
-    and KRA GavaConnect communication.
+    httpx.Client is thread-safe — a single instance serves all Celery worker
+    threads concurrently without per-thread session overhead.
 
     Auth modes (in priority order):
       1. API Key  — env TAXID_API_KEY or ``api_key`` kwarg (preferred B2B)
@@ -61,6 +48,10 @@ class KRAeTIMSClient:
     Attach sub-interfaces:
       client.reports.get_daily_z("2026-03-11")
       client.gateway.request_reverse_invoice(phone_number=..., amount=...)
+
+    Usage:
+        with KRAeTIMSClient(client_id, client_secret, api_key=...) as client:
+            receipt = client.submit_sale(invoice)
     """
 
     def __init__(
@@ -69,67 +60,30 @@ class KRAeTIMSClient:
         client_secret: str,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-    ):
-        self.client_id = client_id
-        self._client_secret = client_secret
-
-        env_url = (os.getenv("TAXID_API_URL") or "").strip()
-        default_url = "https://taxid-production.up.railway.app"
-        raw_url = env_url or base_url or default_url
-        self.base_url = raw_url.strip().rstrip("/")
-
-        # API Key auth — env var takes priority over constructor arg
-        self._api_key: Optional[str] = os.getenv("TAXID_API_KEY") or api_key
-
-        self._access_token: Optional[str] = None
-        self._token_expiry: float = 0
-
-        # Thread-local storage: each thread gets its own requests.Session.
-        # A single shared Session corrupts the connection pool under concurrent
-        # Celery workers — connections are not returned cleanly when multiple
-        # threads call session.request() simultaneously.
-        self._session_local = threading.local()
-        self._lock = threading.Lock()  # guards token refresh only
-
-        # Sub-interfaces (lazy initialised on first access)
+    ) -> None:
+        super().__init__(client_id, client_secret, api_key, base_url)
+        # httpx.Client is thread-safe — one instance handles all concurrent threads.
+        self._http = httpx.Client(
+            headers={"X-TIaaS-Service": "Handshake"},
+            timeout=30.0,
+        )
+        self._lock = threading.Lock()   # guards OAuth2 token refresh only
         self._reports = None
         self._gateway = None
 
     # ------------------------------------------------------------------
-    # Representation — never echo secrets
+    # Context manager
     # ------------------------------------------------------------------
 
-    def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}("
-            f"client_id={self.client_id!r}, "
-            f"base_url={self.base_url!r}, "
-            f"auth_mode={'api_key' if self._api_key else 'oauth2'}"
-            f")"
-        )
+    def __enter__(self) -> "KRAeTIMSClient":
+        return self
 
-    def __str__(self) -> str:
-        return self.__repr__()
+    def __exit__(self, *_: Any) -> None:
+        self._http.close()
 
-    # ------------------------------------------------------------------
-    # Session management — one Session per thread
-    # ------------------------------------------------------------------
-
-    def _get_session(self) -> requests.Session:
-        """
-        Return the requests.Session for the current thread, creating one if needed.
-
-        requests.Session is not thread-safe: concurrent threads sharing a single
-        Session instance can corrupt the urllib3 connection pool (connections not
-        returned, duplicate headers mutated mid-flight). Using threading.local()
-        gives each Celery worker its own Session with its own connection pool,
-        eliminating contention without sacrificing connection reuse within a thread.
-        """
-        if not hasattr(self._session_local, "session"):
-            session = requests.Session()
-            session.headers.update({"X-TIaaS-Service": "Handshake"})
-            self._session_local.session = session
-        return self._session_local.session
+    def close(self) -> None:
+        """Manually close the underlying httpx client."""
+        self._http.close()
 
     # ------------------------------------------------------------------
     # Sub-interface accessors
@@ -156,7 +110,7 @@ class KRAeTIMSClient:
         return self._gateway
 
     # ------------------------------------------------------------------
-    # Authentication
+    # Authentication (concrete sync — threading.Lock)
     # ------------------------------------------------------------------
 
     def _authenticate(self) -> None:
@@ -169,9 +123,8 @@ class KRAeTIMSClient:
         if self._api_key:
             return
 
-        # Outer pre-lock check: skip lock acquisition entirely on the hot path
-        # when the token is valid. Prevents all concurrent threads bottlenecking
-        # on self._lock for a nanosecond-level expiry test.
+        # Outer pre-lock check: skip lock acquisition on the hot path
+        # when the token is valid.
         now = time.time()
         if self._access_token and (self._token_expiry - now) >= 60:
             return
@@ -179,57 +132,36 @@ class KRAeTIMSClient:
         with self._lock:
             now = time.time()  # re-read: time elapsed while waiting for lock
             if not self._access_token or (self._token_expiry - now) < 60:
-                resp = self._get_session().post(
-                    f"{self.base_url}/oauth/token",
-                    auth=(self.client_id, self._client_secret),
-                    data={"grant_type": "client_credentials"},
-                )
+                try:
+                    resp = self._http.post(
+                        f"{self.base_url}/oauth/token",
+                        auth=(self.client_id, self._client_secret),
+                        data={"grant_type": "client_credentials"},
+                    )
+                except httpx.RequestError as exc:
+                    raise KRAeTIMSAuthError(
+                        f"TIaaS Authentication unreachable: {type(exc).__name__}"
+                    ) from exc
+
                 if resp.status_code != 200:
                     try:
-                        body = resp.json()
-                        detail = body.get("error_description") or body.get("error") or f"HTTP {resp.status_code}"
+                        body   = resp.json()
+                        detail = (body.get("error_description")
+                                  or body.get("error")
+                                  or f"HTTP {resp.status_code}")
                     except Exception:
                         detail = f"HTTP {resp.status_code}"
                     raise KRAeTIMSAuthError(f"TIaaS Authentication failed: {detail}")
-                data = resp.json()
+
+                data               = resp.json()
                 self._access_token = data.get("access_token")
-                expires_in = int(data.get("expires_in", 3600))
+                expires_in         = int(data.get("expires_in", 3600))
                 self._token_expiry = now + (expires_in if expires_in > 0 else 3600)
 
     # ------------------------------------------------------------------
-    # Error handling
+    # Core request dispatcher (concrete sync)
     # ------------------------------------------------------------------
 
-    def _handle_error_response(self, response_json: Any) -> None:
-        """
-        Intercept opaque KRA application errors embedded in HTTP 200 bodies.
-
-        KRA returns ``resultCd: "00"`` on success.  Any other code maps to a
-        precise, actionable exception so developers never parse raw JSON.
-        """
-        if not isinstance(response_json, dict):
-            raise KRAeTIMSError(
-                f"Unexpected response format: expected JSON object, "
-                f"got {type(response_json).__name__}"
-            )
-
-        if _is_kra_success(response_json):
-            return
-
-        result_cd = str(response_json.get("resultCd", "")).strip()
-        result_msg = response_json.get("resultMsg", "Unknown KRA error")
-
-        if result_cd in KRA_ERROR_MAP:
-            exc_class, default_msg = KRA_ERROR_MAP[result_cd]
-            raise exc_class(f"{default_msg}: {result_msg}")
-
-        raise KRAeTIMSError(f"KRA Error [{result_cd}]: {result_msg}")
-
-    # ------------------------------------------------------------------
-    # Core request dispatcher
-    # ------------------------------------------------------------------
-
-    @sanitize_kra_url
     def _request(
         self,
         method: str,
@@ -237,75 +169,36 @@ class KRAeTIMSClient:
         json: Optional[Dict[str, Any]] = None,
         idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Core request dispatcher with resilience mapping and URL sanitization.
-
-        Applies ``sanitize_kra_url`` to strip whitespace from path strings —
-        the mandatory fix for KRA GavaConnect silent routing failures.
-        """
+        """Core request dispatcher with resilience mapping."""
         _attrs: Dict[str, Any] = {"http.method": method, "http.path": path}
         if idempotency_key:
             _attrs["idempotency_key"] = idempotency_key
+
         with _span("kra_etims.request", _attrs):
             self._authenticate()
-            url = f"{self.base_url}/{path.lstrip('/')}"
-
-            if self._api_key:
-                headers: Dict[str, str] = {"X-API-Key": self._api_key}
-            else:
-                headers = {"Authorization": f"Bearer {self._access_token}"}
-
-            if idempotency_key:
-                headers["X-TIaaS-Idempotency-Key"] = idempotency_key
+            url     = self._build_url(path)
+            headers = self._build_auth_headers(idempotency_key)
 
             try:
-                resp = self._get_session().request(
-                    method, url, json=json, headers=headers, timeout=30
-                )
+                resp = self._http.request(method, url, json=json, headers=headers)
+                return self._parse_response(resp, method, idempotency_key)
 
-                if resp.status_code == 503:
-                    raise KRAConnectivityTimeoutError()
-
-                resp.raise_for_status()
-                try:
-                    response_data = resp.json()
-                except (ValueError, requests.exceptions.JSONDecodeError):
-                    raise KRAeTIMSError(
-                        f"Non-JSON response from TIaaS [{resp.status_code}]: "
-                        f"{resp.text[:200]}"
-                    )
-                self._handle_error_response(response_data)
-                return response_data
-
-            except requests.exceptions.ConnectTimeout:
+            except httpx.ConnectError:
                 # TCP handshake never completed — request was never sent.
                 raise TIaaSUnavailableError()
-            except requests.exceptions.ReadTimeout:
-                # Request was sent; response never arrived — state is ambiguous.
-                # Must precede ConnectionError: ReadTimeout is a subclass of it.
+            except httpx.ConnectTimeout:
+                # TCP handshake never completed — request was never sent.
+                raise TIaaSUnavailableError()
+            except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout,
+                    httpx.ReadError):
+                # Request was sent (or partially sent/received) — state is ambiguous
+                # for mutating methods (POST/PUT/DELETE/PATCH). The server may have
+                # committed the change before the connection dropped.
                 if method.upper() in {"POST", "PUT", "DELETE", "PATCH"}:
                     raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
                 raise TIaaSUnavailableError()
-            except requests.exceptions.ConnectionError:
-                raise TIaaSUnavailableError()
-            except requests.exceptions.RequestException as exc:
-                if hasattr(exc, "response") and exc.response is not None:
-                    status_code = exc.response.status_code
-                    if status_code == 503:
-                        raise KRAConnectivityTimeoutError()
-                    if status_code == 409:
-                        try:
-                            body = exc.response.json()
-                            msg = body.get("message") or body.get("error") or exc.response.text[:200]
-                        except Exception:
-                            msg = exc.response.text[:200]
-                        raise CreditNoteConflictError(msg) from exc
-                    if status_code == 404:
-                        raise KRAeTIMSError(
-                            f"Resource not found (HTTP 404): {exc.response.text[:200]}"
-                        ) from exc
-                    raise KRAeTIMSError(f"TIaaS returned HTTP {status_code}") from exc
-                raise KRAeTIMSError("TIaaS returned an error (no response)") from exc
+            except httpx.RequestError as exc:
+                raise TIaaSUnavailableError() from exc
 
     # ------------------------------------------------------------------
     # Category 1 — Device Initialisation
@@ -354,7 +247,6 @@ class KRAeTIMSClient:
     # Category 6 — Sales Invoices
     # ------------------------------------------------------------------
 
-    @sanitize_kra_url
     def submit_sale(
         self,
         invoice: SaleInvoice,
@@ -530,7 +422,6 @@ class KRAeTIMSClient:
     # Compliance
     # ------------------------------------------------------------------
 
-    @sanitize_kra_url
     def check_compliance(self, pin: str) -> Dict[str, Any]:
         """Verify device compliance for the given TIN/PIN."""
         return self._request("GET", f"/v2/etims/compliance/{pin}")

@@ -4,6 +4,8 @@ from typing import List, Optional
 from decimal import Decimal, ROUND_HALF_UP
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
+_LAST_REQ_DT_RE = re.compile(r'^\d{14}$')  # YYYYMMDDHHmmss — exactly 14 digits
+
 # ---------------------------------------------------------------------------
 # Single source-of-truth for KRA PIN format.
 # Mirrors KraTinConstraintValidator.PATTERN in the TIaaS middleware.
@@ -47,7 +49,17 @@ class DeviceInit(BaseSchema):
 class DataSyncRequest(BaseSchema):
     tin: str
     bhfId: str
-    lastReqDt: str  # YYYYMMDDHHmmss
+    lastReqDt: str  # YYYYMMDDHHmmss — enforced by validator below
+
+    @field_validator('lastReqDt', mode='before')
+    @classmethod
+    def validate_last_req_dt(cls, v: str) -> str:
+        if not isinstance(v, str) or not _LAST_REQ_DT_RE.match(v):
+            raise ValueError(
+                f"lastReqDt '{v}' is not in YYYYMMDDHHmmss format (expected 14 digits, e.g. '20260419000000'). "
+                "The VSCU JAR returns error E31 on malformed lastReqDt."
+            )
+        return v
 
 # --- Category 3: Branch Management ---
 
@@ -92,25 +104,37 @@ class ItemDetail(BaseSchema):
     qtyUnitCd: str = "U"
     qty: Decimal = Field(..., description="Quantity")
     uprc: Decimal = Field(..., description="Unit Price")
-    totAmt: Decimal = Field(..., description="Total Amount (qty * uprc)")
+    # Supply amount = qty × uprc before discount. Default 0 for non-discounted items.
+    # Mirrors Java ResolvedItemDto.splyAmt — required by the VSCU JAR salesList contract.
+    splyAmt: Decimal = Field(default=Decimal("0.00"), description="Supply amount (qty * uprc, pre-discount)")
+    # Discount rate as a percentage (e.g. 10.00 for 10%). Default 0 for no discount.
+    dcRt: Decimal = Field(default=Decimal("0.00"), description="Discount rate (%)")
+    # Discount amount in KES. Default 0. dcAmt = splyAmt * (dcRt / 100).
+    dcAmt: Decimal = Field(default=Decimal("0.00"), description="Discount amount (KES)")
+    totAmt: Decimal = Field(..., description="Total Amount (splyAmt - dcAmt, tax-inclusive)")
     taxTyCd: TaxType = Field(..., description="Tax Type Code (A/B/C/D/E)")
-    taxblAmt: Decimal = Field(..., description="Taxable Amount")
+    taxblAmt: Decimal = Field(..., description="Taxable Amount (net, VAT-exclusive)")
     taxAmt: Decimal = Field(..., description="Tax Amount")
 
     @model_validator(mode='after')
     def validate_math(self) -> 'ItemDetail':
-        # 1. Total Amount = Qty * Price
-        # We quantize the expected total to 2 decimal places to match KRA rounding
+        # 1. Total Amount = Qty * Price (when no discount is applied splyAmt == totAmt)
         expected_tot = (self.qty * self.uprc).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        
-        # Strict check: input must match expected_tot EXACTLY. 
+
+        # Strict check: input must match expected_tot EXACTLY.
         # This catches float drift because Decimal("300.3000...04") != Decimal("300.30")
         if self.totAmt != expected_tot:
-             raise ValueError(f"Math Error: totAmt ({self.totAmt}) must be exactly qty * uprc = {expected_tot}. Detected precision drift or mismatch.")
+            raise ValueError(
+                f"Math Error: totAmt ({self.totAmt}) must be exactly qty * uprc = {expected_tot}. "
+                "Detected precision drift or mismatch."
+            )
 
         # 2. Taxable + Tax = Total
         if (self.taxblAmt + self.taxAmt).quantize(Decimal('0.01')) != self.totAmt.quantize(Decimal('0.01')):
-            raise ValueError(f"Math Error: taxblAmt ({self.taxblAmt}) + taxAmt ({self.taxAmt}) must be exactly totAmt ({self.totAmt})")
+            raise ValueError(
+                f"Math Error: taxblAmt ({self.taxblAmt}) + taxAmt ({self.taxAmt}) "
+                f"must be exactly totAmt ({self.totAmt})"
+            )
 
         return self
 
@@ -120,7 +144,12 @@ class InvoiceBase(BaseSchema):
     invcNo: str
     orgInvcNo: Optional[str] = None
     custPin: Optional[str] = None
-    custNm: str
+    # B2C (retail) invoices have no identifiable customer. KRA eTIMS Spec v2.0 §4.1 requires
+    # custNm to be present in the payload but does not mandate a specific string for B2C.
+    # Community implementations (navariltd/kenya-compliance) and the KRA eTIMS Lite UI
+    # use "N/A" as the de-facto standard for anonymous retail customers.
+    # Override with the actual customer name for B2B sales.
+    custNm: str = "N/A"
     rcptTyCd: str = "S" # Sale
     pmtTyCd: str = "01" # Cash by default
     rcptLbel: ReceiptLabel = ReceiptLabel.NORMAL

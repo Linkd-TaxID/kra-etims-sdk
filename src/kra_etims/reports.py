@@ -11,12 +11,12 @@ Middleware endpoints (ground truth):
 
 The Z Report is deliberately POST because it mutates VSCU state. Calling it
 twice for the same date returns HTTP 409 Conflict — the period-close is not
-repeated. The SDK method is named ``get_daily_z`` for readability, but
-internally it issues a POST.
+repeated. The SDK raises ``ZReportAlreadyIssuedError`` on 409, which callers
+can catch to handle the already-submitted case cleanly.
 
 Usage (sync):
     x = client.reports.get_x_report("2026-03-11")
-    print(x.band_a.taxable_amount)   # Decimal("43103.45")
+    print(x.band_b.taxable_amount)   # Decimal("43103.45")  # Band B = Standard VAT 16%
 
     z = client.reports.get_daily_z("2026-03-11")  # mutates VSCU — call once
     print(z.vscu_acknowledged)       # True
@@ -24,6 +24,13 @@ Usage (sync):
 Usage (async):
     x = await client.reports.get_x_report("2026-03-11")
     z = await client.reports.get_daily_z("2026-03-11")
+
+KRA eTIMS Tax Band Mapping — KRA TIS for OSCU/VSCU v2.0 §4.1 (★ RESEARCH-VALIDATED):
+    A = Exempt (0%)          — exempt supplies; no input credit allowed
+    B = Standard VAT (16%)   — standard-rated goods and services ← B is the 16% band
+    C = Zero-Rated (0%)      — exports, certain zero-rated supplies; input credit allowed
+    D = Non-VAT (0%)         — supplies outside the VAT Act entirely
+    E = Special Rate (8%)    — petroleum products, LPG per Kenya VAT Act
 """
 
 from __future__ import annotations
@@ -32,6 +39,8 @@ from decimal import Decimal
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from pydantic import BaseModel, Field
+
+from .exceptions import CreditNoteConflictError, ZReportAlreadyIssuedError
 
 if TYPE_CHECKING:
     from .client import KRAeTIMSClient
@@ -54,6 +63,11 @@ class XReport(BaseModel):
 
     Safe to pull at any time during the business day.
     Does NOT reset VSCU counters or close the fiscal period.
+
+    KRA eTIMS Tax Band Mapping (★ RESEARCH-VALIDATED — KRA TIS v2.0 §4.1):
+        band_a = Exempt (0%)          band_b = Standard VAT (16%)
+        band_c = Zero-Rated (0%)      band_d = Non-VAT (0%)
+        band_e = Special Rate (8%)
     """
     report_date:   str
     report_time:   str = ""   # ISO-8601 timestamp of report generation (generatedAt)
@@ -61,11 +75,11 @@ class XReport(BaseModel):
     branch_id:     str
     tin:           str
     invoice_count: int
-    band_a: TaxBreakdown = Field(default_factory=TaxBreakdown)  # 16% Standard VAT
-    band_b: TaxBreakdown = Field(default_factory=TaxBreakdown)  #  0% Zero-Rated (petroleum, exports)
-    band_c: TaxBreakdown = Field(default_factory=TaxBreakdown)  #  8% Special Rate
-    band_d: TaxBreakdown = Field(default_factory=TaxBreakdown)  #  0% Exempt (basic foodstuffs)
-    band_e: TaxBreakdown = Field(default_factory=TaxBreakdown)  #  8% Non-VAT scope levy
+    band_a: TaxBreakdown = Field(default_factory=TaxBreakdown)  # A = Exempt (0%)
+    band_b: TaxBreakdown = Field(default_factory=TaxBreakdown)  # B = Standard VAT (16%)
+    band_c: TaxBreakdown = Field(default_factory=TaxBreakdown)  # C = Zero-Rated (0%)
+    band_d: TaxBreakdown = Field(default_factory=TaxBreakdown)  # D = Non-VAT (0%)
+    band_e: TaxBreakdown = Field(default_factory=TaxBreakdown)  # E = Special Rate (8%)
     total_taxable: Decimal
     total_vat:     Decimal
     total_amount:  Decimal
@@ -138,9 +152,17 @@ class ZReport(BaseModel):
     Z-Report — daily end-of-day totals.
 
     Triggers the mandatory VSCU period-close sequence on the middleware.
-    The underlying endpoint is POST (not GET) because it mutates VSCU state.
+    The underlying endpoint is POST (not GET) because it mutates VSCU state
+    (KRA TIS v2.0 §6.5 — ★ RESEARCH-VALIDATED: Z report covers full day
+    00:00:00–23:59:59).
+
     Call once per day after close of trade; a second call for the same date
-    returns HTTP 409 Conflict.
+    raises ``ZReportAlreadyIssuedError`` (middleware returns HTTP 409 Conflict).
+
+    KRA eTIMS Tax Band Mapping (★ RESEARCH-VALIDATED — KRA TIS v2.0 §4.1):
+        band_a = Exempt (0%)          band_b = Standard VAT (16%)
+        band_c = Zero-Rated (0%)      band_d = Non-VAT (0%)
+        band_e = Special Rate (8%)
     """
     report_date:       str
     report_time:       str = ""   # ISO-8601 timestamp of report generation
@@ -148,11 +170,11 @@ class ZReport(BaseModel):
     branch_id:         str
     tin:               str
     invoice_count:     int
-    band_a: TaxBreakdown = Field(default_factory=TaxBreakdown)  # 16% Standard VAT
-    band_b: TaxBreakdown = Field(default_factory=TaxBreakdown)  #  0% Zero-Rated
-    band_c: TaxBreakdown = Field(default_factory=TaxBreakdown)  #  8% Special Rate
-    band_d: TaxBreakdown = Field(default_factory=TaxBreakdown)  #  0% Exempt
-    band_e: TaxBreakdown = Field(default_factory=TaxBreakdown)  #  8% Non-VAT scope levy
+    band_a: TaxBreakdown = Field(default_factory=TaxBreakdown)  # A = Exempt (0%)
+    band_b: TaxBreakdown = Field(default_factory=TaxBreakdown)  # B = Standard VAT (16%)
+    band_c: TaxBreakdown = Field(default_factory=TaxBreakdown)  # C = Zero-Rated (0%)
+    band_d: TaxBreakdown = Field(default_factory=TaxBreakdown)  # D = Non-VAT (0%)
+    band_e: TaxBreakdown = Field(default_factory=TaxBreakdown)  # E = Special Rate (8%)
     total_taxable:     Decimal
     total_vat:         Decimal
     total_amount:      Decimal
@@ -227,13 +249,23 @@ class ReportsInterface:
         Close the fiscal day and fetch the Z-report for the given date (YYYY-MM-DD).
 
         Issues a POST to the middleware, triggering the mandatory VSCU
-        period-close sequence. A second call for the same date raises
-        ``KRAeTIMSError`` (middleware returns HTTP 409 Conflict).
+        period-close sequence (KRA TIS v2.0 §6.5 — full day 00:00:00–23:59:59).
+
+        A second call for the same date raises ``ZReportAlreadyIssuedError``
+        (middleware returns HTTP 409 Conflict). The VSCU day-reset is irreversible
+        (KRA TIS v2.0 §21.6.1) — do NOT retry on this exception.
 
         Call once per business day, after the last transaction of the day.
         """
-        # Z Report is POST because it mutates VSCU state (period close).
-        raw = self._client._request("POST", f"/v2/reports/daily-z?date={date}")
+        try:
+            raw = self._client._request("POST", f"/v2/reports/daily-z?date={date}")
+        except CreditNoteConflictError as exc:
+            # The base client maps ALL HTTP 409 responses to CreditNoteConflictError.
+            # For Z-reports, 409 means the report was already issued — re-raise as the
+            # correct, semantically precise exception type.
+            raise ZReportAlreadyIssuedError(
+                f"Z-Report already issued for date={date}: {exc}"
+            ) from exc
         return ZReport.from_api(raw)
 
 
@@ -261,7 +293,13 @@ class AsyncReportsInterface:
         """
         Close the fiscal day and fetch the Z-report (YYYY-MM-DD).
 
-        Issues a POST — triggers VSCU period close. Call once per day.
+        Issues a POST — triggers VSCU period close (KRA TIS v2.0 §6.5). Call once per day.
+        Raises ``ZReportAlreadyIssuedError`` on HTTP 409 — the report was already submitted.
         """
-        raw = await self._client._request("POST", f"/v2/reports/daily-z?date={date}")
+        try:
+            raw = await self._client._request("POST", f"/v2/reports/daily-z?date={date}")
+        except CreditNoteConflictError as exc:
+            raise ZReportAlreadyIssuedError(
+                f"Z-Report already issued for date={date}: {exc}"
+            ) from exc
         return ZReport.from_api(raw)

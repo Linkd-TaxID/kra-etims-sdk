@@ -1,9 +1,7 @@
 import pytest
-import responses
-import requests
 import httpx
 from decimal import Decimal
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from kra_etims.client import KRAeTIMSClient
 from kra_etims.async_client import AsyncKRAeTIMSClient
 from kra_etims.exceptions import TIaaSAmbiguousStateError, TIaaSUnavailableError
@@ -22,17 +20,22 @@ def _minimal_invoice():
     )
 
 
-@responses.activate
-def test_sync_idempotency_header_injection():
+def test_sync_idempotency_header_injection(httpx_mock):
     client = KRAeTIMSClient("id", "secret", base_url="https://api.test")
     client._access_token = "mock"
     client._token_expiry = 9999999999
 
-    responses.add(responses.POST, "https://api.test/v2/etims/sale", status=200, json={})
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.test/v2/etims/sale",
+        json={"resultCd": "000", "resultMsg": "It is succeeded", "data": {}},
+        status_code=200,
+    )
 
     client.submit_sale(_minimal_invoice(), idempotency_key="unique_123")
 
-    assert responses.calls[0].request.headers["X-TIaaS-Idempotency-Key"] == "unique_123"
+    sent = httpx_mock.get_requests()[0]
+    assert sent.headers.get("X-TIaaS-Idempotency-Key") == "unique_123"
 
 
 def test_sync_ambiguous_state_on_post():
@@ -44,26 +47,23 @@ def test_sync_ambiguous_state_on_post():
     client._access_token = "mock"
     client._token_expiry = 9999999999
 
-    mock_session = MagicMock()
-    mock_session.request.side_effect = requests.exceptions.ReadTimeout(
-        "response never arrived"
-    )
-
-    with patch.object(client, "_get_session", return_value=mock_session):
+    with patch.object(
+        client._http, "request",
+        side_effect=httpx.ReadTimeout("response never arrived"),
+    ):
         with pytest.raises(TIaaSAmbiguousStateError):
             client.submit_sale(_minimal_invoice())
 
 
-@responses.activate
-def test_sync_unavailable_state_on_get():
+def test_sync_unavailable_state_on_get(httpx_mock):
     client = KRAeTIMSClient("id", "secret", base_url="https://api.test")
     client._access_token = "mock"
     client._token_expiry = 9999999999
 
-    responses.add(
-        responses.GET,
-        "https://api.test/v2/etims/compliance/P1",
-        body=requests.exceptions.ConnectionError("Down"),
+    httpx_mock.add_exception(
+        httpx.ConnectError("Down"),
+        method="GET",
+        url="https://api.test/v2/etims/compliance/P1",
     )
 
     with pytest.raises(TIaaSUnavailableError):
