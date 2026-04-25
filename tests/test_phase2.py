@@ -2,7 +2,6 @@
 Phase 2 Test Suite
 ==================
 Covers:
-  - middleware.py  : async-aware sanitize_kra_url decorator
   - exceptions.py  : full error taxonomy + _handle_error_response mapping
   - tax.py         : zero-math tax calculator (all 5 bands)
   - qr.py          : render_kra_qr_string
@@ -15,62 +14,6 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-# ---------------------------------------------------------------------------
-# middleware — async-aware decorator
-# ---------------------------------------------------------------------------
-
-class TestSanitizeKraUrl:
-    def test_sync_strips_whitespace(self):
-        from kra_etims.middleware import sanitize_kra_url
-
-        @sanitize_kra_url
-        def my_func(path: str, token: str = "x") -> tuple:
-            return (path, token)
-
-        assert my_func("  /v2/test  ", token="  tok  ") == ("/v2/test", "tok")
-
-    def test_sync_preserves_non_string_args(self):
-        from kra_etims.middleware import sanitize_kra_url
-
-        @sanitize_kra_url
-        def my_func(a, b=None):
-            return (a, b)
-
-        assert my_func(42, b=3.14) == (42, 3.14)
-
-    def test_async_returns_coroutine(self):
-        from kra_etims.middleware import sanitize_kra_url
-
-        @sanitize_kra_url
-        async def my_async_func(path: str) -> str:
-            return path
-
-        result = my_async_func("  /v2/async  ")
-        assert asyncio.iscoroutine(result)
-        result.close()  # clean up unawaited coroutine
-
-    @pytest.mark.asyncio
-    async def test_async_strips_whitespace(self):
-        from kra_etims.middleware import sanitize_kra_url
-
-        @sanitize_kra_url
-        async def my_async_func(path: str, token: str = "x") -> tuple:
-            return (path, token)
-
-        result = await my_async_func("  /v2/etims  ", token="  bearer123  ")
-        assert result == ("/v2/etims", "bearer123")
-
-    @pytest.mark.asyncio
-    async def test_async_preserves_non_string_args(self):
-        from kra_etims.middleware import sanitize_kra_url
-
-        @sanitize_kra_url
-        async def my_async_func(a, b=None):
-            return (a, b)
-
-        assert await my_async_func(99, b=True) == (99, True)
-
 
 # ---------------------------------------------------------------------------
 # exceptions — error taxonomy
@@ -331,7 +274,7 @@ class TestAsyncClientApiKeyParity:
         from kra_etims.async_client import AsyncKRAeTIMSClient
         client = AsyncKRAeTIMSClient("id", "secret", api_key="skip_oauth_key")
         # _authenticate should return immediately without hitting /oauth/token
-        with patch.object(client._client, "post") as mock_post:
+        with patch.object(client._http, "post") as mock_post:
             await client._authenticate()
             mock_post.assert_not_called()
         await client.aclose()

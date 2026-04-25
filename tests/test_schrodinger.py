@@ -12,7 +12,7 @@ server received the request bytes but did not return a definitive signed
 or rejected response. This class covers:
   1. ReadTimeout on POST (request sent, TCP drops before response arrives).
   2. HTTP 500 on POST where middleware body signals the split-brain condition.
-  3. Partial response (connection reset mid-response).
+  3. Partial response (connection reset mid-response via ReadError).
 
 The client MUST NOT swallow these errors or retry automatically — retrying
 a Schrödinger invoice would create a duplicate KRA receipt if the first
@@ -21,10 +21,9 @@ IdempotencyFilter on the server side handle deduplication (TIaaS Spec §4.8).
 """
 
 import pytest
-import requests
-import responses as resp_lib
+import httpx
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from kra_etims.client import KRAeTIMSClient
 from kra_etims.exceptions import TIaaSAmbiguousStateError, TIaaSUnavailableError
@@ -90,12 +89,11 @@ def test_read_timeout_on_post_raises_ambiguous_not_unavailable():
     definitely did not reach the server.
     """
     client = _authed_client()
-    mock_session = MagicMock()
-    mock_session.request.side_effect = requests.exceptions.ReadTimeout(
-        "response never arrived"
-    )
 
-    with patch.object(client, "_get_session", return_value=mock_session):
+    with patch.object(
+        client._http, "request",
+        side_effect=httpx.ReadTimeout("response never arrived"),
+    ):
         with pytest.raises(TIaaSAmbiguousStateError) as exc_info:
             client.submit_sale(_standard_vat_invoice())
 
@@ -109,8 +107,7 @@ def test_read_timeout_on_post_raises_ambiguous_not_unavailable():
 # Test 2: HTTP 500 on POST — middleware signals split-brain DB failure
 # ---------------------------------------------------------------------------
 
-@resp_lib.activate
-def test_http_500_on_post_raises_ambiguous_state():
+def test_http_500_on_post_raises_ambiguous_state(httpx_mock):
     """
     The TIaaS middleware received the sale, the VSCU signed it, but the
     PostgreSQL commit failed. Middleware returns 500 with a body indicating
@@ -119,13 +116,10 @@ def test_http_500_on_post_raises_ambiguous_state():
     The SDK must map POST + 500 to TIaaSAmbiguousStateError, not a generic
     KRAeTIMSError. The distinction: the request reached and was processed by
     the server — the invoice may exist in KRA's system.
-
-    Note: GET + 500 maps to TIaaSUnavailableError (server-side error on a
-    read-only request — safe to retry without idempotency key).
     """
-    resp_lib.add(
-        resp_lib.POST,
-        SALE_URL,
+    httpx_mock.add_response(
+        method="POST",
+        url=SALE_URL,
         json={
             "error": "TIaaS Ambiguous State",
             "detail": (
@@ -135,7 +129,7 @@ def test_http_500_on_post_raises_ambiguous_state():
             ),
             "resultCd": "AMBIGUOUS",
         },
-        status=500,
+        status_code=500,
     )
 
     client = _authed_client()
@@ -157,12 +151,11 @@ def test_connection_reset_mid_response_raises_ambiguous():
     Must raise TIaaSAmbiguousStateError, not ConnectionError or generic exception.
     """
     client = _authed_client()
-    mock_session = MagicMock()
-    mock_session.request.side_effect = requests.exceptions.ChunkedEncodingError(
-        "Connection broken: incomplete read"
-    )
 
-    with patch.object(client, "_get_session", return_value=mock_session):
+    with patch.object(
+        client._http, "request",
+        side_effect=httpx.ReadError("Connection broken: incomplete read"),
+    ):
         with pytest.raises(TIaaSAmbiguousStateError):
             client.submit_sale(_standard_vat_invoice())
 
@@ -171,18 +164,17 @@ def test_connection_reset_mid_response_raises_ambiguous():
 # Test 4: GET 500 is NOT ambiguous — safe to retry without idempotency
 # ---------------------------------------------------------------------------
 
-@resp_lib.activate
-def test_http_500_on_get_raises_unavailable_not_ambiguous():
+def test_http_500_on_get_raises_unavailable_not_ambiguous(httpx_mock):
     """
     A 500 on a GET (compliance check) is a server-side error on a read-only
     request. It cannot have a signing side-effect.
     Must raise TIaaSUnavailableError, not TIaaSAmbiguousStateError.
     """
-    resp_lib.add(
-        resp_lib.GET,
-        f"{BASE}/v2/etims/compliance/A000111222B",
+    httpx_mock.add_response(
+        method="GET",
+        url=f"{BASE}/v2/etims/compliance/A000111222B",
         json={"error": "Internal Server Error"},
-        status=500,
+        status_code=500,
     )
 
     client = _authed_client()
@@ -194,8 +186,7 @@ def test_http_500_on_get_raises_unavailable_not_ambiguous():
 # Test 5: Idempotency key on retry — server returns cached result (not re-signed)
 # ---------------------------------------------------------------------------
 
-@resp_lib.activate
-def test_retry_with_idempotency_key_returns_cached_receipt_not_new_signing():
+def test_retry_with_idempotency_key_returns_cached_receipt_not_new_signing(httpx_mock):
     """
     After a Schrödinger event, the caller retries with the SAME idempotency key.
     The TIaaS IdempotencyFilter (§4.8) detects the duplicate key and returns
@@ -203,45 +194,43 @@ def test_retry_with_idempotency_key_returns_cached_receipt_not_new_signing():
 
     This test verifies that the SDK correctly sends X-TIaaS-Idempotency-Key
     on retry, enabling the server-side deduplication.
-
-    The SDK MUST NOT generate a new idempotency key on retry — that would
-    defeat the whole mechanism and produce a duplicate KRA receipt.
     """
-    # First call: simulate the ambiguous state (timeout)
     client = _authed_client()
-    mock_session = MagicMock()
-    mock_session.request.side_effect = requests.exceptions.ReadTimeout("timeout")
 
-    with patch.object(client, "_get_session", return_value=mock_session):
+    # First call: simulate the ambiguous state (timeout)
+    with patch.object(
+        client._http, "request",
+        side_effect=httpx.ReadTimeout("timeout"),
+    ):
         with pytest.raises(TIaaSAmbiguousStateError):
             client.submit_sale(_standard_vat_invoice(), idempotency_key="idem-retry-001")
 
     # Second call (retry): server returns the cached signed receipt.
-    # The idempotency key is the same — IdempotencyFilter returns the winner's response.
-    resp_lib.add(
-        resp_lib.POST,
-        SALE_URL,
+    httpx_mock.add_response(
+        method="POST",
+        url=SALE_URL,
         json={
             "resultCd": "000",
             "resultMsg": "It is succeeded",
             "data": {
-                "rcptNo":      "KRACU0100000001/042 NS",
-                "sdcId":       "KRACU0100000001",
-                "signature":   "V249-J39C-FJ48-HE2W",
+                "rcptNo":       "KRACU0100000001/042 NS",
+                "sdcId":        "KRACU0100000001",
+                "signature":    "V249-J39C-FJ48-HE2W",
                 "internalData": "INTR0042ABCDTEST",
-                "qrCode":      "20042026#120000#KRACU0100000001#042#INTR0042ABCDTEST#V249-J39C-FJ48-HE2W",
+                "qrCode":       "20042026#120000#KRACU0100000001#042#INTR0042ABCDTEST#V249-J39C-FJ48-HE2W",
             },
         },
-        status=200,
+        status_code=200,
     )
 
-    # Retry with the SAME idempotency key
     result = client.submit_sale(
         _standard_vat_invoice(), idempotency_key="idem-retry-001"
     )
 
     # Verify the idempotency key was sent in the retry request
-    sent_key = resp_lib.calls[0].request.headers.get("X-TIaaS-Idempotency-Key")
+    sent_requests = httpx_mock.get_requests()
+    assert len(sent_requests) == 1
+    sent_key = sent_requests[0].headers.get("X-TIaaS-Idempotency-Key")
     assert sent_key == "idem-retry-001", (
         f"Retry must send the SAME idempotency key. Got: {sent_key!r}"
     )

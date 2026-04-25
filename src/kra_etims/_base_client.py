@@ -63,7 +63,7 @@ class _BaseKRAeTIMSClient(ABC):
 
         env_url = (os.getenv("TAXID_API_URL") or "").strip()
         raw_url = env_url or base_url or _DEFAULT_BASE_URL
-        self.base_url = raw_url.strip().rstrip("/")
+        self.base_url = raw_url.strip().rstrip("/").strip()
 
         # API key takes priority over OAuth2 (env var overrides constructor arg).
         self._api_key: Optional[str] = os.getenv("TAXID_API_KEY") or api_key
@@ -196,6 +196,14 @@ class _BaseKRAeTIMSClient(ABC):
                 raise KRAeTIMSError(
                     f"Resource not found (HTTP 404): {exc.response.text[:200]}"
                 ) from exc
+            if sc == 500:
+                # 500 on a mutating method: server received the request and may have
+                # committed before erroring — state is ambiguous, not safe to retry
+                # without an idempotency key.
+                if method.upper() in {"POST", "PUT", "DELETE", "PATCH"}:
+                    raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key) from exc
+                # 500 on a read-only method: server-side error with no side-effect.
+                raise TIaaSUnavailableError() from exc
             raise KRAeTIMSError(f"TIaaS returned HTTP {sc}") from exc
 
         try:

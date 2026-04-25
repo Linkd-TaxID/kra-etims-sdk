@@ -189,8 +189,11 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             except httpx.ConnectTimeout:
                 # TCP handshake never completed — request was never sent.
                 raise TIaaSUnavailableError()
-            except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout):
-                # Request was sent; response never arrived — state is ambiguous.
+            except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout,
+                    httpx.ReadError):
+                # Request was sent (or partially sent/received) — state is ambiguous
+                # for mutating methods (POST/PUT/DELETE/PATCH). The server may have
+                # committed the change before the connection dropped.
                 if method.upper() in {"POST", "PUT", "DELETE", "PATCH"}:
                     raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
                 raise TIaaSUnavailableError()
