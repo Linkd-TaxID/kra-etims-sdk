@@ -14,7 +14,6 @@ import httpx
 
 from ._base_client import _BaseKRAeTIMSClient
 from ._telemetry import span as _span
-from .middleware import sanitize_kra_url
 from .exceptions import (
     KRAConnectivityTimeoutError,
     KRADuplicateInvoiceError,
@@ -171,7 +170,6 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     # Core request dispatcher (concrete async)
     # ------------------------------------------------------------------
 
-    @sanitize_kra_url
     async def _request(
         self,
         method: str,
@@ -179,12 +177,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         json: Optional[Dict[str, Any]] = None,
         idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Core async request dispatcher with resilience mapping.
-
-        The ``@sanitize_kra_url`` decorator is async-aware (returns
-        ``async def wrapper``) — no event-loop deadlocks.
-        """
+        """Core async request dispatcher with resilience mapping."""
         _attrs: Dict[str, Any] = {"http.method": method, "http.path": path}
         if idempotency_key:
             _attrs["idempotency_key"] = idempotency_key
@@ -258,7 +251,6 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     # Category 6 — Sales Invoices
     # ------------------------------------------------------------------
 
-    @sanitize_kra_url
     async def submit_sale(
         self,
         invoice: SaleInvoice,
@@ -441,7 +433,6 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     # Compliance
     # ------------------------------------------------------------------
 
-    @sanitize_kra_url
     async def check_compliance(self, pin: str) -> Dict[str, Any]:
         """Verify device compliance for the given TIN/PIN."""
         return await self._request("GET", f"/v2/etims/compliance/{pin}")

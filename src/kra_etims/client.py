@@ -14,7 +14,6 @@ import httpx
 
 from ._base_client import _BaseKRAeTIMSClient
 from ._telemetry import span as _span
-from .middleware import sanitize_kra_url
 from .exceptions import (
     KRAConnectivityTimeoutError,
     KRADuplicateInvoiceError,
@@ -163,7 +162,6 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
     # Core request dispatcher (concrete sync)
     # ------------------------------------------------------------------
 
-    @sanitize_kra_url
     def _request(
         self,
         method: str,
@@ -171,12 +169,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         json: Optional[Dict[str, Any]] = None,
         idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Core request dispatcher with resilience mapping and URL sanitization.
-
-        Applies ``sanitize_kra_url`` to strip whitespace from path strings —
-        the mandatory fix for KRA GavaConnect silent routing failures.
-        """
+        """Core request dispatcher with resilience mapping."""
         _attrs: Dict[str, Any] = {"http.method": method, "http.path": path}
         if idempotency_key:
             _attrs["idempotency_key"] = idempotency_key
@@ -251,7 +244,6 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
     # Category 6 — Sales Invoices
     # ------------------------------------------------------------------
 
-    @sanitize_kra_url
     def submit_sale(
         self,
         invoice: SaleInvoice,
@@ -427,7 +419,6 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
     # Compliance
     # ------------------------------------------------------------------
 
-    @sanitize_kra_url
     def check_compliance(self, pin: str) -> Dict[str, Any]:
         """Verify device compliance for the given TIN/PIN."""
         return self._request("GET", f"/v2/etims/compliance/{pin}")
