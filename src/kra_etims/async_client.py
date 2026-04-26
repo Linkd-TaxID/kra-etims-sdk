@@ -256,7 +256,25 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         invoice: SaleInvoice,
         idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Category 6: Submit a Sales Invoice (Normal / Copy / Training)."""
+        """
+        Category 6: Submit a Sales Invoice (Normal / Copy / Training).
+
+        ``idempotency_key`` is strongly recommended.  If omitted, a deterministic
+        key ``"{tin}:{invcNo}"`` is auto-generated and a :class:`UserWarning` is
+        emitted.  Pass an explicit key to suppress the warning and to guarantee
+        safe retry behaviour when a network timeout drops the response before it
+        reaches the caller.
+        """
+        if idempotency_key is None:
+            idempotency_key = f"{invoice.tin}:{invoice.invcNo}"
+            warnings.warn(
+                f"submit_sale() called without an idempotency_key — "
+                f"auto-generated '{idempotency_key}'. "
+                "Pass idempotency_key=<your-key> explicitly to suppress this warning "
+                "and guarantee safe retry behaviour on network timeouts.",
+                UserWarning,
+                stacklevel=2,
+            )
         with _span("kra_etims.submit_sale", {
             "invoice.no": str(invoice.invcNo),
             "invoice.tin": invoice.tin,

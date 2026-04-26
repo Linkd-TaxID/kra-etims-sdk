@@ -265,4 +265,15 @@ KRA_ERROR_MAP: dict = {
     # Letter-prefixed variants observed in live KRA GavaConnect responses
     "E04": (KRAInvalidBranchError,   "Device/Branch Not Found"),
     "E11": (KRAVSCUMemoryFullError,  "VSCU Memory Full (prefixed)"),
+    # Extended codes observed in live GavaConnect / VSCU responses
+    # 994: invoice already processed on a prior retry — idempotent success.
+    # Do not re-submit with a new invoice number; the receipt exists on KRA.
+    "994": (KRADuplicateInvoiceError, "Duplicate invoice (code 994 — prior retry succeeded)"),
+    # 901: device serial not approved — requires KRA eTIMS portal action.
+    "901": (KRAeTIMSError, "Device serial not approved — contact timsupport@kra.go.ke to register"),
+    # 902: device already initialized — retrieve existing cmcKey, do not re-initialize.
+    # Treated as KRADuplicateInvoiceError so is_idempotent_success=True is available.
+    "902": (KRADuplicateInvoiceError, "Device already initialized (code 902) — existing cmcKey remains valid"),
+    # 921: VSCU requires saveSales → saveInvoice in sequence. Cannot mix OSCU path.
+    "921": (KRAeTIMSError, "VSCU sequence error (code 921) — saveSales must precede saveInvoice"),
 }

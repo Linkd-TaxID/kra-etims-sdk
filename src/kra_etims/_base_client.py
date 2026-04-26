@@ -29,7 +29,13 @@ from .exceptions import (
 #   "000"  KRA VSCU/OSCU Specification v2.0 §4.14/§4.18 (JSON HTTP API)
 #   "00"   KRA TIS Specification v2.0 §21.6.3 (VSCU JAR HTTP endpoint,
 #          derived from the XML serial protocol but emitted over HTTP)
-_KRA_SUCCESS_CODES: frozenset = frozenset({"00", "000"})
+# KRA eTIMS success result codes — all documented variants:
+#   "00"   — VSCU JAR (KRA TIS Spec v2.0 §21.6.3)
+#   "000"  — OSCU HTTP API (KRA VSCU/OSCU Spec v2.0 §4.14)
+#   "0"    — observed in live GavaConnect responses
+#   "0000" — observed in live GavaConnect production responses
+#   "001"  — empty-list response (no records match query) — NOT an error; must not raise
+_KRA_SUCCESS_CODES: frozenset = frozenset({"0", "00", "000", "0000", "001"})
 
 _DEFAULT_BASE_URL = "https://taxid-production.up.railway.app"
 

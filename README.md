@@ -135,7 +135,9 @@ client = KRAeTIMSClient("ID", "SEC", base_url="https://your-instance.railway.app
 | `B` | 16% | Standard VAT (most goods & services) |
 | `C` |  0% | Zero-Rated (exports, certain food — input credit allowed) |
 | `D` |  0% | Non-VAT (outside VAT Act entirely) |
-| `E` |  8% | Special Rate (petroleum products, LPG per Kenya VAT Act) |
+| `E` |  8% | Special Rate (petroleum products, LPG — **verify with KRA post-Finance Act 2023**) |
+
+> ⚠️ **Band E rate advisory:** The Finance Act 2023 (Kenya) amended the VAT Act and may have changed the 8% petroleum rate. Do not use Band E on new items until confirmed with KRA at timsupport@kra.go.ke. If the rate changed, update the `ETIMS_TAX_RATE_E` environment variable — no SDK code change required.
 
 > **Warning:** A≠16% and B≠0%. This ordering is counterintuitive but is explicit in KRA VSCU/OSCU Specification v2.0 §4.1. Swapping A and B is the single most common integration error and results in incorrect Z-Report aggregation.
 
@@ -206,6 +208,16 @@ totals = build_invoice_totals(items)
 
 ### Preventing Double Taxation — Schrödinger's Invoice
 
+**`idempotency_key` is strongly recommended.** If you omit it, the SDK auto-generates `"{tin}:{invcNo}"` and emits a `UserWarning` at the call site. Pass it explicitly to suppress the warning:
+
+```python
+# Explicit key — no warning, full control
+result = client.submit_sale(invoice, idempotency_key="INV-2026-001")
+
+# Omitted — auto-generates "P051234567X:INV-2026-001" + UserWarning
+result = client.submit_sale(invoice)
+```
+
 When a network timeout interrupts a POST in-flight, the invoice state is unknown. `TIaaSAmbiguousStateError` carries the `idempotency_key` that was in-flight:
 
 ```python
@@ -245,6 +257,10 @@ except KRADuplicateInvoiceError:
 | `KRAInvalidItemCodeError` | Item not registered on eTIMS (code 13) |
 | `KRAInvalidBranchError` | Branch not registered for this TIN (code 14) |
 | `KRAServerError` | Transient KRA server error (codes 20/96/99) |
+| `KRADuplicateInvoiceError` | Invoice already processed on prior retry (code 994); `is_idempotent_success=True` — receipt exists on KRA |
+| `KRAeTIMSError` | Device serial not approved (code 901) — contact timsupport@kra.go.ke |
+| `KRADuplicateInvoiceError` | Device already initialized (code 902) — existing cmcKey valid, do not re-initialize |
+| `KRAeTIMSError` | VSCU sequence error (code 921) — saveSales must precede saveInvoice; cannot mix OSCU path |
 | `CreditNoteConflictError` | Credit note already issued for this sale (HTTP 409); carries `original_purchase_id` |
 | `ZReportAlreadyIssuedError` | Z-report already submitted for this date (HTTP 409); the VSCU day-reset is irreversible — do not retry; carries `report_date` |
 | `KRAeTIMSError` | Base class for all SDK exceptions; also raised directly for unexpected HTTP 4xx/5xx responses from the middleware (message contains only the status code — no request URLs or PII) |

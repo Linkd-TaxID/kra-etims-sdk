@@ -16,10 +16,17 @@ client = KRAeTIMSClient(
 )
 
 # Pass retail price + tax band — the SDK handles all VAT arithmetic.
+# KRA eTIMS Tax Bands (VSCU/OSCU Specification v2.0 §4.1):
+#   A = 0%  Exempt         (no input credit — e.g. basic food, medical supplies)
+#   B = 16% Standard VAT   (most goods and services)
+#   C = 0%  Zero-Rated     (exports, certain zero-rated supplies; input credit allowed)
+#   D = 0%  Non-VAT        (supplies outside the VAT Act entirely)
+#   E = 8%  Special Rate   (petroleum/LPG — verify current rate with KRA post-Finance Act 2023;
+#                           update ETIMS_TAX_RATE_E env var if KRA confirms the rate changed)
 items = [
-    calculate_item("MacBook Pro M3",  "HS847130", 5800, "A"),   # 16% VAT  → Band A
-    calculate_item("Maize Flour 2kg", "HS110100",  200, "D"),   # 0% Exempt → Band D
-    calculate_item("Diesel 1L",       "HS270900",  216, "B"),   # 0% Zero-Rated → Band B
+    calculate_item("MacBook Pro M3",  "HS847130", 5800, "B"),  # Band B — 16% Standard VAT
+    calculate_item("Maize Flour 2kg", "HS110100",  200, "A"),  # Band A — 0% Exempt (no input credit)
+    calculate_item("Diesel 1L",       "HS270900",  216, "E"),  # Band E — 8% Special Rate (petroleum)
 ]
 
 invoice = SaleInvoice(
