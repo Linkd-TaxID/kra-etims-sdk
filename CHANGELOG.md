@@ -4,6 +4,41 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **`examples/basic_invoice.py` tax band inversion** — all three example items had wrong
+  bands and completely inverted comments. MacBook Pro was Band A (0% Exempt) with a comment
+  claiming "16% VAT"; Diesel was Band B (16%) with a comment claiming "0% Zero-Rated"; Maize
+  Flour was Band D (Non-VAT) with a comment claiming "0% Exempt". Corrected to Band B (laptop),
+  Band A (maize flour), Band E (diesel). An ERP integrator copy-pasting this example would have
+  submitted invoices with incorrect VAT band classifications to KRA.
+- **`_KRA_SUCCESS_CODES` incomplete** — live KRA GavaConnect responses emit `resultCd="0"` and
+  `"0000"` which were absent from the frozenset. Legitimate signed receipts were raising
+  `KRAeTIMSError` on production traffic. Also added `"001"` (empty-list — no records match
+  query) which is not an error but was previously raised as one, breaking day-one `syncData()`
+  calls for newly onboarded devices.
+- **`init_device.py` auth bypass removed** — a `DUMMY_INIT_TOKEN` injected directly into
+  `client._access_token` was left in the initialization helper script from before API key auth
+  was wired into the middleware. Replaced with a hard failure if neither `TAXID_API_KEY` nor
+  OAuth2 credentials are set.
+
+### Changed
+- **`submit_sale()` idempotency key auto-generation** — if `idempotency_key` is omitted,
+  both the sync and async clients now auto-generate `"{tin}:{invcNo}"` and emit a `UserWarning`
+  at the call site (`stacklevel=2`). This ensures middleware deduplication is always active and
+  prompts integrators to supply explicit keys. Callers passing an explicit key are unaffected.
+- **Tax Band E advisory** — Band E documentation updated to flag that the Finance Act 2023
+  (Kenya) may have changed the 8% petroleum rate. Use `ETIMS_TAX_RATE_E` env var to override;
+  confirm the current rate with KRA at timsupport@kra.go.ke before using Band E on new items.
+
+### Added
+- **New result codes in `KRA_ERROR_MAP`:**
+  - `"994"` → `KRADuplicateInvoiceError` (`is_idempotent_success=True`) — invoice already
+    processed on a prior retry; receipt exists on KRA; do not resubmit with a new number.
+  - `"901"` → `KRAeTIMSError` — device serial not approved; contact timsupport@kra.go.ke.
+  - `"902"` → `KRADuplicateInvoiceError` — device already initialized; existing cmcKey valid;
+    do not re-initialize.
+  - `"921"` → `KRAeTIMSError` — VSCU sequence error; saveSales must precede saveInvoice.
+
 ### Fixed (Test Infrastructure)
 - **`sys.modules.clear()` bomb removed from `test_phase2.py`** — `TestRenderKraQrString.test_generate_qr_bytes_raises_import_error_without_qrcode` previously called `sys.modules.clear()` in its `finally` block, destroying the entire module registry for the process. This caused `ModuleNotFoundError` in any test running in parallel (pytest-xdist, concurrent fixtures). Replaced with `monkeypatch.setitem(sys.modules, "qrcode", None)` — pytest restores the original value on test teardown with zero process-wide impact.
 - **Float literals in financial test data replaced with `Decimal`** — `test_vscu_resilience.py`, `test_async.py`, and `test_schema.py` were constructing `SaleInvoice` objects with `totTaxblAmt=0.0`, `totTaxAmt=0.0`, `totAmt=0.0`. Float literals in financial fields silently validated the float ingestion path instead of the `Decimal("0.00")` path required by the SDK's own contract. All instances replaced with `Decimal("0.00")`.
