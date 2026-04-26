@@ -53,8 +53,9 @@ jobs:
 
       - name: pip-audit — dependency CVE check
         # --skip-editable: omit taxid-etims (our own package, not on PyPI).
-        # Upgrading pip above ensures pip itself is not reported as vulnerable.
-        run: pip-audit --skip-editable
+        # --ignore-vuln CVE-2026-3219: pip 26.x self-CVE; not a dependency of this SDK.
+        # Cannot be fixed by upgrading pip as 26.0.1 is the latest available release.
+        run: pip-audit --skip-editable --ignore-vuln CVE-2026-3219
 
       - name: bandit — SAST scan
         # -r src/: recursive scan of the SDK source tree.
