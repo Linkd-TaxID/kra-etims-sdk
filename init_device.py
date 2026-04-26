@@ -11,14 +11,16 @@ The /v2/etims/init-handshake endpoint instructs the middleware to:
 Usage:
     python init_device.py
 
+Required environment variables (one of):
+    TAXID_API_KEY       – API key (preferred; set this for all deployments)
+
 Optional environment variables:
-    TAXID_CLIENT_ID     – OAuth2 client ID  (default: uses env or falls back to value below)
+    TAXID_CLIENT_ID     – OAuth2 client ID  (fallback when no API key is set)
     TAXID_CLIENT_SECRET – OAuth2 client secret
     TAXID_API_URL       – Base URL of the middleware (default: https://taxid-production.up.railway.app)
 """
 
 import os
-import time
 import json
 from kra_etims.client import KRAeTIMSClient
 
@@ -29,30 +31,37 @@ def run_init_device() -> None:
     print("=" * 60)
 
     # ------------------------------------------------------------------ #
-    # Configuration — reads from environment variables when available.    #
+    # Authentication — API key preferred, OAuth2 as fallback.             #
     # ------------------------------------------------------------------ #
-    client_id     = os.getenv("TAXID_CLIENT_ID",     "YOUR_CLIENT_ID")
-    client_secret = os.getenv("TAXID_CLIENT_SECRET", "YOUR_CLIENT_SECRET")
-    base_url      = os.getenv("TAXID_API_URL",       "https://taxid-production.up.railway.app")
+    api_key       = os.getenv("TAXID_API_KEY", "").strip() or None
+    client_id     = os.getenv("TAXID_CLIENT_ID",     "").strip() or None
+    client_secret = os.getenv("TAXID_CLIENT_SECRET", "").strip() or None
+    base_url      = os.getenv("TAXID_API_URL", "https://taxid-production.up.railway.app").strip()
 
-    # 1. Instantiate the SDK client
-    print(f"\n[INFO] Connecting to middleware at: {base_url}")
+    if not api_key and not (client_id and client_secret):
+        print(
+            "\n[ERROR] No authentication credentials found.\n"
+            "  Set TAXID_API_KEY for API key authentication (preferred):\n"
+            "      export TAXID_API_KEY=your-key\n"
+            "  Or set both OAuth2 credentials:\n"
+            "      export TAXID_CLIENT_ID=your-id\n"
+            "      export TAXID_CLIENT_SECRET=your-secret\n"
+        )
+        raise SystemExit(1)
+
+    if api_key:
+        print(f"[INFO] Using API key authentication (key prefix: {api_key[:6]}…)")
+    else:
+        print(f"[INFO] Using OAuth2 client credentials (client_id={client_id})")
+
+    print(f"[INFO] Connecting to middleware at: {base_url}")
+
     client = KRAeTIMSClient(
-        client_id=client_id,
-        client_secret=client_secret,
+        client_id=client_id or "",
+        client_secret=client_secret or "",
+        api_key=api_key,
         base_url=base_url,
     )
-
-    # ----------------------------------------------------------------------- #
-    # TEMPORARY: Bypass OAuth2 until /oauth/token is implemented in middleware #
-    # The middleware has no auth server yet. This mirrors the pattern used in   #
-    # every unit test (e.g. test_resilience.py, test_idempotency.py, etc.).    #
-    # REMOVE these two lines once API Key auth is wired up (see plan below).   #
-    # ----------------------------------------------------------------------- #
-    client._access_token = "DUMMY_INIT_TOKEN"   # noqa: SLF001
-    client._token_expiry = time.time() + 3600   # noqa: SLF001
-    print("[INFO] Auth bypass active (middleware has no /oauth/token yet).")
-
 
     print("[INFO] Calling initialize_device_handshake() → GET /v2/etims/init-handshake …\n")
     try:
@@ -61,13 +70,10 @@ def run_init_device() -> None:
         print("[SUCCESS] Handshake completed. Middleware response:")
         print(json.dumps(response, indent=2, default=str))
 
-        # ---------------------------------------------------------------- #
-        # Friendly confirmation based on common middleware response shapes. #
-        # ---------------------------------------------------------------- #
         if isinstance(response, dict):
             cmc_key = (
                 response.get("cmcKey")
-                or response.get("data", {}).get("cmcKey") if isinstance(response.get("data"), dict) else None
+                or (response.get("data", {}).get("cmcKey") if isinstance(response.get("data"), dict) else None)
             )
             status = response.get("status") or response.get("resultCd") or response.get("resultMsg")
 
