@@ -35,13 +35,31 @@ dependencies = [
     "httpx>=0.25.0",
 ]
 
+[project.scripts]
+etims = "kra_etims.cli.main:main"
+
 [project.optional-dependencies]
+cli = [
+    "typer>=0.25.0",
+    "rich>=15.0",
+    "platformdirs>=4.9.6",
+    "keyring>=25.0",
+    # tomllib is stdlib on 3.11+; tomli is the backport for 3.10.
+    "tomli>=1.2; python_version < '3.11'",
+    # tomli-w: correct TOML writer (atomic writes, full spec compliance).
+    # tomllib (stdlib) reads but cannot write; hand-rolling TOML is fragile.
+    "tomli-w>=1.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.23.0",
     # pytest-httpx covers both httpx.Client and httpx.AsyncClient via httpx_mock fixture.
     # responses was a requests-specific mock library and is no longer needed.
     "pytest-httpx>=0.30.0",
+    # build + setuptools/wheel: used by test_packaging.py --no-isolation wheel builds.
+    "build>=1.0",
+    "setuptools>=61.0",
+    "wheel",
 ]
 qr = [
     "qrcode[pil]>=7.4.2",
@@ -59,3 +77,7 @@ kra_etims = ["py.typed"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = [
+    "slow: marks tests that build/install packages (deselect with -m 'not slow')",
+    "integration: marks CLI+HTTP integration tests (always run in CI)",
+]

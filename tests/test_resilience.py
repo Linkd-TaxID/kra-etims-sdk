@@ -51,6 +51,7 @@ def test_schrodinger_invoice_throws_ambiguous_error():
         side_effect=httpx.ReadTimeout("response never arrived"),
     ):
         with pytest.raises(TIaaSAmbiguousStateError) as exc_info:
-            client.submit_sale(invoice)
+            client.submit_sale(invoice, idempotency_key="idem-resilience-schrodinger-001")
 
     assert "Ambiguous" in str(exc_info.value) or "ambiguous" in str(exc_info.value)
+    assert exc_info.value.idempotency_key == "idem-resilience-schrodinger-001"

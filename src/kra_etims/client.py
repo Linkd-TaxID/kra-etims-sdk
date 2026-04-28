@@ -443,3 +443,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
     def check_compliance(self, pin: str) -> Dict[str, Any]:
         """Verify device compliance for the given TIN/PIN."""
         return self._request("GET", f"/v2/etims/compliance/{pin}")
+
+    def lookup_pin(self, pin: str) -> Dict[str, Any]:
+        """Look up a KRA PIN via GavaConnect (read-only, no VSCU state change)."""
+        return self._request("GET", f"/v2/taxpayer/lookup?pin={pin}")

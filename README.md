@@ -1,7 +1,8 @@
 # KRA eTIMS SDK (Python) `v0.3.0`
 
 ```bash
-pip install taxid-etims               # core
+pip install taxid-etims               # core SDK
+pip install "taxid-etims[cli]"        # + etims CLI (auth, invoices, reports, tax, TCC)
 pip install "taxid-etims[qr]"         # + offline QR code image generation
 pip install "taxid-etims[otel]"       # + OpenTelemetry spans
 pip install "taxid-etims[dev]"        # + pytest, pytest-asyncio, pytest-httpx
@@ -11,21 +12,23 @@ Requires **Python 3.10+**.
 
 ---
 
-## Upgrading from v0.2.0
-
-**Breaking changes in v0.3.0:**
-
-**`requests` removed — transport unified on `httpx`.** The sync client (`KRAeTIMSClient`) now uses `httpx.Client` instead of `requests.Session`. If your code catches transport exceptions directly, update the exception types:
-
-| v0.2.0 (`requests`) | v0.3.0 (`httpx`) |
-|---|---|
-| `requests.exceptions.ConnectionError` | `httpx.ConnectError` |
-| `requests.exceptions.Timeout` | `httpx.TimeoutException` (or `httpx.ReadTimeout` / `httpx.ConnectTimeout`) |
-| `requests.exceptions.JSONDecodeError` | `httpx.DecodingError` |
-
-If you only catch SDK-level exceptions (`TIaaSUnavailableError`, `TIaaSAmbiguousStateError`, `KRAeTIMSError`, etc.) — no changes needed. Those exceptions are unchanged and still raised for all transport failures.
-
-**New exception: `KRAAuthorizationError`.** HTTP 403 responses now raise `KRAAuthorizationError` (a subclass of `KRAeTIMSError`) instead of the generic base. If you have a bare `except KRAeTIMSError` handler, it still catches this — no action required unless you want to handle 403 specifically.
+- [Three ways to use this SDK](#three-ways-to-use-this-sdk)
+- [Architecture](#architecture)
+- [Authentication](#authentication)
+- [CLI](#cli)
+- [Tax Bands](#tax-bands-kra-etims-v20)
+- [Idempotency & Resilience](#idempotency--resilience)
+- [Exception Taxonomy](#exception-taxonomy)
+- [Thread Safety & Concurrency](#thread-safety--concurrency)
+- [Observability](#observability)
+- [Async Client](#async-client-fastapi--starlette)
+- [QR Code Generator](#offline-qr-code-generator)
+- [Gateway: Supplier Onboarding](#gateway-supplier-onboarding-taxid-links)
+- [Reports (X/Z)](#reports-xz)
+- [Credit Notes](#credit-notes-category-7)
+- [Stock Adjustments](#stock-adjustments-category-8)
+- [Error Code Reference](#error-code-reference)
+- [Upgrading from v0.2.0](#upgrading-from-v020)
 
 ---
 
@@ -41,11 +44,11 @@ normalization issue (`"00"` vs `"000"` vs `"0000"`).
 
 ---
 
-## Two ways to use this SDK
+## Three ways to use this SDK
 
-### Track 1 — Tax Calculator (no account required)
+### Track 1 — Tax Calculator (offline, no account required)
 
-`calculate_item` and `build_invoice_totals` are pure math functions. They work offline with no credentials, no network, and no TaxID account. Any Python developer in Kenya who needs KRA-compliant VAT arithmetic can use them independently.
+`calculate_item` and `build_invoice_totals` are pure math functions. They work offline with no credentials, no network, and no account of any kind. Any Python developer in Kenya who needs KRA-compliant VAT arithmetic can use them independently.
 
 ```python
 from kra_etims import calculate_item, build_invoice_totals
@@ -64,7 +67,66 @@ print(totals["totAmt"])       # Decimal("6216.00")
 
 No configuration needed. The calculator handles all five KRA tax bands, inclusive and exclusive pricing, 4dp quantity precision for fuel/pharmaceuticals, and invoice-level residual absorption so KRA never rejects with result code 20.
 
-### Track 2 — Full KRA Submission via TaxID (requires account)
+### Track 2 — GavaConnect Direct (free, requires KRA developer registration)
+
+`GavaConnectClient` connects directly to KRA's own API gateway — no TIaaS subscription required. Supports taxpayer PIN validation and Tax Compliance Certificate (TCC) checks. Registration is free at [developer.go.ke](https://developer.go.ke).
+
+```python
+from kra_etims import GavaConnectClient, GavaConnectPINNotFoundError
+
+client = GavaConnectClient(
+    consumer_key="your_consumer_key",
+    consumer_secret="your_consumer_secret",
+    # sandbox=True  # use sbx.kra.go.ke for testing
+)
+
+# Validate a KRA PIN against the taxpayer registry
+try:
+    result = client.lookup_pin("A000123456B")
+    print(result["PINDATA"]["Name"])          # KRA masks the name (e.g. "J**n D**")
+    print(result["PINDATA"]["StatusOfPIN"])   # "Active"
+    print(result["PINDATA"]["TypeOfTaxpayer"]) # "Individual" | "Company"
+except GavaConnectPINNotFoundError:
+    print("PIN not found in KRA registry")
+
+# Validate a Tax Compliance Certificate
+from kra_etims import GavaConnectTCCError
+
+try:
+    result = client.check_tcc("A000123456B", tcc_number="TCC2026001234")
+    print(result["Status"])    # "OK"
+except GavaConnectTCCError:
+    print("TCC invalid or expired")
+```
+
+```python
+# Async
+from kra_etims import AsyncGavaConnectClient
+
+async with AsyncGavaConnectClient(consumer_key="...", consumer_secret="...") as client:
+    result = await client.lookup_pin("A000123456B")
+    result = await client.check_tcc("A000123456B", tcc_number="TCC2026001234")
+```
+
+```python
+# Or via environment variables
+# export GAVACONNECT_CONSUMER_KEY=your_key
+# export GAVACONNECT_CONSUMER_SECRET=your_secret
+# export GAVACONNECT_SANDBOX=true  # optional
+client = GavaConnectClient.from_env()
+```
+
+Token management is automatic — the client fetches and caches a Bearer token (valid ~1 hour) and refreshes it transparently. The sync client is thread-safe for use across Celery workers.
+
+| Operation | GavaConnect | TIaaS |
+|---|---|---|
+| PIN validation (registry lookup) | ✅ | ✅ |
+| TCC validation | ✅ | ❌ |
+| Invoice submission | ❌ (roadmap) | ✅ |
+| X/Z reports | ❌ | ✅ |
+| Device initialization | ❌ | ✅ |
+
+### Track 3 — Full KRA Submission via TaxID (requires account)
 
 The full platform adds KRA invoice submission, digital signing via the VSCU JAR, durable offline queuing, idempotency, and the supplier onboarding gateway — none of which exist client-side.
 
@@ -95,14 +157,16 @@ print(response["invoiceSignature"])
 
 ---
 
-## Architecture: The Middleware Moat
+## Architecture
 
-| Layer | Responsibility |
-|---|---|
-| **This SDK** | Auth, payload validation, tax math, QR rendering, idempotency headers |
-| **TIaaS Middleware** | VSCU JAR orchestration, AES-256 `cmcKey` encryption, KRA GavaConnect communication, 24-hour offline signing window |
+| Layer | What it does | Account needed |
+|---|---|---|
+| **This SDK — offline** | Tax math, payload validation, QR rendering | None |
+| **This SDK — GavaConnect** | PIN validation, TCC checks direct to KRA | Free (developer.go.ke) |
+| **This SDK — TIaaS** | Auth, idempotency headers, offline queue | TIaaS subscription |
+| **TIaaS Middleware** | VSCU JAR orchestration, AES-256 `cmcKey` encryption, 24-hour offline signing window | TIaaS subscription |
 
-The VSCU JAR is KRA's proprietary device credential program — it cannot be called directly without device initialization and cryptographic key management. TIaaS handles all of that. The SDK is the remote control; TIaaS is the engine.
+The VSCU JAR is KRA's proprietary device credential program — it cannot be called directly without device initialization and cryptographic key management. TIaaS handles all of that. For invoice submission, the SDK is the remote control; TIaaS is the engine. For PIN and TCC lookups, the SDK talks to KRA's GavaConnect gateway directly.
 
 ---
 
@@ -124,6 +188,124 @@ client = KRAeTIMSClient("ID", "SEC", base_url="https://your-instance.railway.app
 # Or via environment variable (takes priority over constructor base_url):
 # export TAXID_API_URL=https://your-instance.railway.app
 ```
+
+---
+
+## CLI
+
+```bash
+pip install "taxid-etims[cli]"
+```
+
+The `etims` CLI exposes all SDK features from the terminal. Useful for scripting, CI pipelines, manual submission, and exploring KRA APIs without writing code.
+
+### Authentication
+
+```bash
+# TIaaS — full feature set (invoice submission, reports, device init)
+etims auth login --api-key YOUR_TAXID_KEY
+
+# GavaConnect — PIN validation and TCC checks, free, no TIaaS subscription
+etims auth login --consumer-key YOUR_KEY --consumer-secret YOUR_SECRET
+
+# Both at once — stored separately, used automatically per command
+etims auth login --api-key TAXID_KEY --consumer-key GC_KEY --consumer-secret GC_SECRET
+
+# Sandbox mode (uses sbx.kra.go.ke instead of api.kra.go.ke)
+etims auth login --consumer-key KEY --consumer-secret SECRET --sandbox
+
+# Check what's configured
+etims auth status
+
+# Remove credentials
+etims auth logout           # removes TIaaS API key
+etims auth logout --gavaconnect  # removes GavaConnect credentials only
+etims auth logout --all          # removes everything
+```
+
+Credentials are stored in the OS keyring (macOS Keychain, Windows Credential Manager, Linux SecretService). In headless environments use environment variables instead:
+
+```bash
+export TAXID_API_KEY=your_tiaas_key
+export GAVACONNECT_CONSUMER_KEY=your_key
+export GAVACONNECT_CONSUMER_SECRET=your_secret
+```
+
+### Offline commands (no credentials, no network)
+
+```bash
+# Tax calculation — same math as a live invoice submission
+etims tax calculate --price 5800 --band B
+etims tax calculate --price 1000 --band B --exclusive   # net price, add VAT on top
+etims tax calculate --price 5800 --band B --qty 3 --json  # JSON output for scripting
+
+# Tax band reference
+etims tax bands
+etims tax bands --json
+
+# PIN format validation (regex only — no network)
+etims pin check A000123456B    # ✓ valid format
+etims pin check BADPIN123      # ✗ invalid, exit code 1
+
+# Invoice validation (Pydantic + math checks — no API call)
+etims invoice validate invoice.json
+etims invoice validate invoice.json --json
+
+# Dry-run submission (validates locally, does not submit)
+etims invoice submit invoice.json --dry-run
+```
+
+### GavaConnect commands (free, requires developer.go.ke registration)
+
+```bash
+# Live PIN lookup — auto-uses GavaConnect if credentials are configured,
+# falls back to TIaaS if only a TIaaS API key is available
+etims pin validate A000123456B
+etims pin validate A000123456B --json
+
+# Tax Compliance Certificate check (GavaConnect only — no TIaaS equivalent)
+etims tcc check --pin A000123456B --tcc-number TCC2026001234
+etims tcc check --pin A000123456B --tcc-number TCC2026001234 --json
+```
+
+### TIaaS commands (requires TIaaS subscription)
+
+```bash
+# Device
+etims device init --tin A000123456B --serial VSCU001
+etims device status --pin A000123456B
+
+# Invoice submission
+etims invoice submit invoice.json
+etims invoice submit invoice.json --idempotency-key INV-2026-001
+etims invoice submit - < invoice.json   # read from stdin
+
+# Reports
+etims report x                          # today's X-report (safe, read-only)
+etims report x --date 2026-04-26
+etims report z                          # close fiscal day (irreversible — prompts for confirmation)
+etims report z --date 2026-04-26 --yes  # skip confirmation
+
+# Offline queue (invoices queued when TIaaS was unreachable)
+etims queue status
+etims queue flush
+
+# Connectivity check
+etims sandbox ping
+```
+
+### JSON output and scripting
+
+Every command accepts `--json` to emit raw JSON to stdout (Rich output goes to stderr). Safe to pipe to `jq`:
+
+```bash
+etims tax calculate --price 5800 --band B --json | jq '.taxAmt'
+etims invoice validate invoice.json --json | jq '.valid'
+etims tcc check --pin A000123456B --tcc-number TCC2026001234 --json | jq '.Status'
+etims queue status --json | jq '.pending'
+```
+
+Exit code is `0` on success, `1` on any error — suitable for use in shell conditionals and CI pipelines.
 
 ---
 
@@ -264,6 +446,15 @@ except KRADuplicateInvoiceError:
 | `CreditNoteConflictError` | Credit note already issued for this sale (HTTP 409); carries `original_purchase_id` |
 | `ZReportAlreadyIssuedError` | Z-report already submitted for this date (HTTP 409); the VSCU day-reset is irreversible — do not retry; carries `report_date` |
 | `KRAeTIMSError` | Base class for all SDK exceptions; also raised directly for unexpected HTTP 4xx/5xx responses from the middleware (message contains only the status code — no request URLs or PII) |
+
+**GavaConnect exceptions** (raised by `GavaConnectClient` / `AsyncGavaConnectClient`):
+
+| Exception | Trigger |
+|---|---|
+| `GavaConnectAuthError` | Consumer key / secret rejected by KRA, or token fetch failed |
+| `GavaConnectPINNotFoundError` | PIN is not in KRA's taxpayer registry |
+| `GavaConnectTCCError` | TCC number is invalid, expired, or not found for the given PIN |
+| `GavaConnectError` | Base class for all GavaConnect exceptions |
 
 ---
 
@@ -566,6 +757,25 @@ This SDK and the TIaaS Middleware comply with the **Kenya Data Protection Act (2
 
 > [!CAUTION]
 > This SDK is a technical implementation tool, not tax advice. The authors are not responsible for KRA penalties, non-deductible expenses, or financial losses resulting from user error, misconfigured payloads, or middleware misapplication.
+
+---
+
+## Upgrading from v0.2.0
+
+
+**Breaking changes in v0.3.0:**
+
+**`requests` removed — transport unified on `httpx`.** The sync client (`KRAeTIMSClient`) now uses `httpx.Client` instead of `requests.Session`. If your code catches transport exceptions directly, update the exception types:
+
+| v0.2.0 (`requests`) | v0.3.0 (`httpx`) |
+|---|---|
+| `requests.exceptions.ConnectionError` | `httpx.ConnectError` |
+| `requests.exceptions.Timeout` | `httpx.TimeoutException` (or `httpx.ReadTimeout` / `httpx.ConnectTimeout`) |
+| `requests.exceptions.JSONDecodeError` | `httpx.DecodingError` |
+
+If you only catch SDK-level exceptions (`TIaaSUnavailableError`, `TIaaSAmbiguousStateError`, `KRAeTIMSError`, etc.) — no changes needed. Those exceptions are unchanged and still raised for all transport failures.
+
+**New exception: `KRAAuthorizationError`.** HTTP 403 responses now raise `KRAAuthorizationError` (a subclass of `KRAeTIMSError`) instead of the generic base. If you have a bare `except KRAeTIMSError` handler, it still catches this — no action required unless you want to handle 403 specifically.
 
 ---
 

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/**", "fix/**"]
   pull_request:
     branches: [main]
 
@@ -29,7 +29,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,cli]"
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
@@ -49,7 +49,7 @@ jobs:
       - name: Install package and security tools
         run: |
           pip install --upgrade pip
-          pip install -e ".[dev]" pip-audit bandit
+          pip install -e ".[dev,cli]" pip-audit bandit
 
       - name: pip-audit — dependency CVE check
         # --skip-editable: omit taxid-etims (our own package, not on PyPI).
