@@ -51,8 +51,10 @@ def test_sync_ambiguous_state_on_post():
         client._http, "request",
         side_effect=httpx.ReadTimeout("response never arrived"),
     ):
-        with pytest.raises(TIaaSAmbiguousStateError):
-            client.submit_sale(_minimal_invoice())
+        with pytest.raises(TIaaSAmbiguousStateError) as exc_info:
+            client.submit_sale(_minimal_invoice(), idempotency_key="idem-sync-ambiguous-001")
+
+    assert exc_info.value.idempotency_key == "idem-sync-ambiguous-001"
 
 
 def test_sync_unavailable_state_on_get(httpx_mock):
@@ -82,5 +84,7 @@ async def test_async_ambiguous_state(httpx_mock):
             url="https://api.test/v2/etims/sale",
         )
 
-        with pytest.raises(TIaaSAmbiguousStateError):
-            await client.submit_sale(_minimal_invoice())
+        with pytest.raises(TIaaSAmbiguousStateError) as exc_info:
+            await client.submit_sale(_minimal_invoice(), idempotency_key="idem-async-ambiguous-001")
+
+        assert exc_info.value.idempotency_key == "idem-async-ambiguous-001"
