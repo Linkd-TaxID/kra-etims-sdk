@@ -27,7 +27,7 @@ def test_payload_integrity_excludes_none(httpx_mock):
         itemList=[]
     )
 
-    client.submit_sale(invoice)
+    client.submit_sale(invoice, idempotency_key="idem-payload-integrity-001")
 
     sent = httpx_mock.get_requests()[0]
     payload = json.loads(sent.content)

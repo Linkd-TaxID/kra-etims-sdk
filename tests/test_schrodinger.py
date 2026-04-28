@@ -95,12 +95,13 @@ def test_read_timeout_on_post_raises_ambiguous_not_unavailable():
         side_effect=httpx.ReadTimeout("response never arrived"),
     ):
         with pytest.raises(TIaaSAmbiguousStateError) as exc_info:
-            client.submit_sale(_standard_vat_invoice())
+            client.submit_sale(_standard_vat_invoice(), idempotency_key="idem-schrod-timeout-001")
 
     error_msg = str(exc_info.value)
     assert "Ambiguous" in error_msg or "ambiguous" in error_msg, (
         f"Expected 'Ambiguous' in error message, got: {error_msg!r}"
     )
+    assert exc_info.value.idempotency_key == "idem-schrod-timeout-001"
 
 
 # ---------------------------------------------------------------------------
@@ -156,8 +157,10 @@ def test_connection_reset_mid_response_raises_ambiguous():
         client._http, "request",
         side_effect=httpx.ReadError("Connection broken: incomplete read"),
     ):
-        with pytest.raises(TIaaSAmbiguousStateError):
-            client.submit_sale(_standard_vat_invoice())
+        with pytest.raises(TIaaSAmbiguousStateError) as exc_info:
+            client.submit_sale(_standard_vat_invoice(), idempotency_key="idem-schrod-reset-001")
+
+    assert exc_info.value.idempotency_key == "idem-schrod-reset-001"
 
 
 # ---------------------------------------------------------------------------
