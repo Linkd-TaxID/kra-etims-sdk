@@ -25,6 +25,12 @@ import sys
 import zipfile
 from pathlib import Path
 
+# tomllib is stdlib on 3.11+; on 3.10 use the backport so inline
+# `import tomllib` inside test methods resolves correctly.
+if sys.version_info < (3, 11):
+    import tomli as _tomllib_backport
+    sys.modules.setdefault("tomllib", _tomllib_backport)
+
 import pytest
 
 # Root of the source tree (one level above tests/)
