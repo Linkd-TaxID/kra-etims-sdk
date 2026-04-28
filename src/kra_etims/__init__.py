@@ -54,6 +54,16 @@ Exceptions
 from .client import KRAeTIMSClient
 from .async_client import AsyncKRAeTIMSClient
 
+# GavaConnect — direct KRA API (no TIaaS subscription required)
+from .gavaconnect import (
+    GavaConnectClient,
+    AsyncGavaConnectClient,
+    GavaConnectError,
+    GavaConnectAuthError,
+    GavaConnectPINNotFoundError,
+    GavaConnectTCCError,
+)
+
 # Models
 from .models import (
     # Enums
@@ -125,7 +135,11 @@ from .exceptions import (
     CreditNoteConflictError,
 )
 
-__version__ = "0.2.0"
+try:
+    from importlib.metadata import version as _v
+    __version__: str = _v("taxid-etims")
+except Exception:
+    __version__ = "0.3.0"
 
 __all__ = [
     # Clients
@@ -182,4 +196,11 @@ __all__ = [
     "KRAInvalidBranchError",
     "KRAServerError",
     "CreditNoteConflictError",
+    # GavaConnect
+    "GavaConnectClient",
+    "AsyncGavaConnectClient",
+    "GavaConnectError",
+    "GavaConnectAuthError",
+    "GavaConnectPINNotFoundError",
+    "GavaConnectTCCError",
 ]
