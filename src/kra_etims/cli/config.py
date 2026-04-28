@@ -17,8 +17,12 @@ Headless environments (no keyring backend): use TAXID_API_KEY env var.
 from __future__ import annotations
 
 import sys
-import tomllib
 import tomli_w
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib  # type: ignore[no-reattr]
 from pathlib import Path
 from typing import Any, Optional
 

@@ -44,6 +44,8 @@ cli = [
     "rich>=15.0",
     "platformdirs>=4.9.6",
     "keyring>=25.0",
+    # tomllib is stdlib on 3.11+; tomli is the backport for 3.10.
+    "tomli>=1.2; python_version < '3.11'",
     # tomli-w: correct TOML writer (atomic writes, full spec compliance).
     # tomllib (stdlib) reads but cannot write; hand-rolling TOML is fragile.
     "tomli-w>=1.0",
