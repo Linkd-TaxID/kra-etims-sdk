@@ -129,4 +129,4 @@ jobs:
       # No API token or password — authentication is via GitHub's OIDC provider.
       # PyPI project must be configured to trust this repository + environment.
       - name: Publish
-        uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b
