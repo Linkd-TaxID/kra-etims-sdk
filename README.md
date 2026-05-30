@@ -12,35 +12,15 @@ Requires **Python 3.10+**.
 
 ---
 
-- [Three ways to use this SDK](#three-ways-to-use-this-sdk)
-- [Architecture](#architecture)
-- [Authentication](#authentication)
-- [CLI](#cli)
-- [Tax Bands](#tax-bands-kra-etims-v20)
-- [Idempotency & Resilience](#idempotency--resilience)
-- [Exception Taxonomy](#exception-taxonomy)
-- [Thread Safety & Concurrency](#thread-safety--concurrency)
-- [Observability](#observability)
-- [Async Client](#async-client-fastapi--starlette)
-- [QR Code Generator](#offline-qr-code-generator)
-- [Gateway: Supplier Onboarding](#gateway-supplier-onboarding-taxid-links)
-- [Reports (X/Z)](#reports-xz)
-- [Credit Notes](#credit-notes-category-7)
-- [Stock Adjustments](#stock-adjustments-category-8)
-- [Error Code Reference](#error-code-reference)
-- [Upgrading from v0.2.0](#upgrading-from-v020)
-
----
-
 ## Error Code Reference
 
 Hitting a `resultCd` you don't recognize?
 
 → **[Complete KRA eTIMS Error Code Reference](https://linkd-taxid.github.io/kra-etims-sdk/)**
 
-Covers all official OSCU/VSCU spec codes plus production-observed codes absent
-from the official KRA documentation — including the critical success code
-normalization issue (`"00"` vs `"000"` vs `"0000"`).
+Covers all official OSCU/VSCU spec codes plus production-observed codes absent from the official KRA documentation.
+
+One gotcha worth knowing: the SDK normalizes five distinct `resultCd` success variants — `"0"`, `"00"`, `"000"`, `"0000"`, and `"001"`. The spec documents `"000"` (OSCU) and `"00"` (VSCU JAR). The variants `"0"` and `"0000"` were discovered from live GavaConnect production traffic; `"001"` signals an empty result set and is not an error. Before this normalization, legitimately signed receipts were raising `KRAeTIMSError` in production on the GavaConnect path.
 
 ---
 
@@ -72,25 +52,18 @@ No configuration needed. The calculator handles all five KRA tax bands, inclusiv
 `GavaConnectClient` connects directly to KRA's own API gateway — no TIaaS subscription required. Supports taxpayer PIN validation and Tax Compliance Certificate (TCC) checks. Registration is free at [developer.go.ke](https://developer.go.ke).
 
 ```python
-from kra_etims import GavaConnectClient, GavaConnectPINNotFoundError
+from kra_etims import GavaConnectClient, GavaConnectPINNotFoundError, GavaConnectTCCError
 
-client = GavaConnectClient(
-    consumer_key="your_consumer_key",
-    consumer_secret="your_consumer_secret",
-    # sandbox=True  # use sbx.kra.go.ke for testing
-)
+client = GavaConnectClient(consumer_key="your_key", consumer_secret="your_secret")
+# Also: GavaConnectClient.from_env(), AsyncGavaConnectClient(...), sandbox=True
 
-# Validate a KRA PIN against the taxpayer registry
 try:
     result = client.lookup_pin("A000123456B")
-    print(result["PINDATA"]["Name"])          # KRA masks the name (e.g. "J**n D**")
-    print(result["PINDATA"]["StatusOfPIN"])   # "Active"
+    print(result["PINDATA"]["Name"])           # KRA masks: "J**n D**"
+    print(result["PINDATA"]["StatusOfPIN"])    # "Active"
     print(result["PINDATA"]["TypeOfTaxpayer"]) # "Individual" | "Company"
 except GavaConnectPINNotFoundError:
     print("PIN not found in KRA registry")
-
-# Validate a Tax Compliance Certificate
-from kra_etims import GavaConnectTCCError
 
 try:
     result = client.check_tcc("A000123456B", tcc_number="TCC2026001234")
@@ -99,24 +72,7 @@ except GavaConnectTCCError:
     print("TCC invalid or expired")
 ```
 
-```python
-# Async
-from kra_etims import AsyncGavaConnectClient
-
-async with AsyncGavaConnectClient(consumer_key="...", consumer_secret="...") as client:
-    result = await client.lookup_pin("A000123456B")
-    result = await client.check_tcc("A000123456B", tcc_number="TCC2026001234")
-```
-
-```python
-# Or via environment variables
-# export GAVACONNECT_CONSUMER_KEY=your_key
-# export GAVACONNECT_CONSUMER_SECRET=your_secret
-# export GAVACONNECT_SANDBOX=true  # optional
-client = GavaConnectClient.from_env()
-```
-
-Token management is automatic — the client fetches and caches a Bearer token (valid ~1 hour) and refreshes it transparently. The sync client is thread-safe for use across Celery workers.
+Token management is automatic — the client fetches and caches a Bearer token (valid ~1 hour) and refreshes it transparently. The sync client is thread-safe; async and `from_env()` variants available.
 
 | Operation | GavaConnect | TIaaS |
 |---|---|---|
@@ -197,115 +153,26 @@ client = KRAeTIMSClient("ID", "SEC", base_url="https://your-instance.railway.app
 pip install "taxid-etims[cli]"
 ```
 
-The `etims` CLI exposes all SDK features from the terminal. Useful for scripting, CI pipelines, manual submission, and exploring KRA APIs without writing code.
-
-### Authentication
+All SDK features from the terminal. Credentials stored in the OS keyring; use env vars (`TAXID_API_KEY`, `GAVACONNECT_CONSUMER_KEY/SECRET`) in headless environments.
 
 ```bash
-# TIaaS — full feature set (invoice submission, reports, device init)
-etims auth login --api-key YOUR_TAXID_KEY
+etims auth login --api-key YOUR_KEY                          # TIaaS
+etims auth login --consumer-key KEY --consumer-secret SEC    # GavaConnect
 
-# GavaConnect — PIN validation and TCC checks, free, no TIaaS subscription
-etims auth login --consumer-key YOUR_KEY --consumer-secret YOUR_SECRET
-
-# Both at once — stored separately, used automatically per command
-etims auth login --api-key TAXID_KEY --consumer-key GC_KEY --consumer-secret GC_SECRET
-
-# Sandbox mode (uses sbx.kra.go.ke instead of api.kra.go.ke)
-etims auth login --consumer-key KEY --consumer-secret SECRET --sandbox
-
-# Check what's configured
-etims auth status
-
-# Remove credentials
-etims auth logout           # removes TIaaS API key
-etims auth logout --gavaconnect  # removes GavaConnect credentials only
-etims auth logout --all          # removes everything
-```
-
-Credentials are stored in the OS keyring (macOS Keychain, Windows Credential Manager, Linux SecretService). In headless environments use environment variables instead:
-
-```bash
-export TAXID_API_KEY=your_tiaas_key
-export GAVACONNECT_CONSUMER_KEY=your_key
-export GAVACONNECT_CONSUMER_SECRET=your_secret
-```
-
-### Offline commands (no credentials, no network)
-
-```bash
-# Tax calculation — same math as a live invoice submission
-etims tax calculate --price 5800 --band B
-etims tax calculate --price 1000 --band B --exclusive   # net price, add VAT on top
-etims tax calculate --price 5800 --band B --qty 3 --json  # JSON output for scripting
-
-# Tax band reference
-etims tax bands
-etims tax bands --json
-
-# PIN format validation (regex only — no network)
-etims pin check A000123456B    # ✓ valid format
-etims pin check BADPIN123      # ✗ invalid, exit code 1
-
-# Invoice validation (Pydantic + math checks — no API call)
-etims invoice validate invoice.json
-etims invoice validate invoice.json --json
-
-# Dry-run submission (validates locally, does not submit)
-etims invoice submit invoice.json --dry-run
-```
-
-### GavaConnect commands (free, requires developer.go.ke registration)
-
-```bash
-# Live PIN lookup — auto-uses GavaConnect if credentials are configured,
-# falls back to TIaaS if only a TIaaS API key is available
-etims pin validate A000123456B
-etims pin validate A000123456B --json
-
-# Tax Compliance Certificate check (GavaConnect only — no TIaaS equivalent)
-etims tcc check --pin A000123456B --tcc-number TCC2026001234
-etims tcc check --pin A000123456B --tcc-number TCC2026001234 --json
-```
-
-### TIaaS commands (requires TIaaS subscription)
-
-```bash
-# Device
-etims device init --tin A000123456B --serial VSCU001
-etims device status --pin A000123456B
-
-# Invoice submission
-etims invoice submit invoice.json
-etims invoice submit invoice.json --idempotency-key INV-2026-001
-etims invoice submit - < invoice.json   # read from stdin
-
-# Reports
-etims report x                          # today's X-report (safe, read-only)
-etims report x --date 2026-04-26
-etims report z                          # close fiscal day (irreversible — prompts for confirmation)
-etims report z --date 2026-04-26 --yes  # skip confirmation
-
-# Offline queue (invoices queued when TIaaS was unreachable)
-etims queue status
-etims queue flush
-
-# Connectivity check
-etims sandbox ping
-```
-
-### JSON output and scripting
-
-Every command accepts `--json` to emit raw JSON to stdout (Rich output goes to stderr). Safe to pipe to `jq`:
-
-```bash
 etims tax calculate --price 5800 --band B --json | jq '.taxAmt'
-etims invoice validate invoice.json --json | jq '.valid'
-etims tcc check --pin A000123456B --tcc-number TCC2026001234 --json | jq '.Status'
-etims queue status --json | jq '.pending'
+etims invoice validate invoice.json
+etims invoice submit invoice.json --idempotency-key INV-2026-001
+etims invoice submit - < invoice.json   # stdin
+
+etims pin validate A000123456B          # live KRA lookup
+etims tcc check --pin A000123456B --tcc-number TCC2026001234
+
+etims report x --date 2026-04-26        # read-only snapshot
+etims report z                          # close fiscal day — irreversible, prompts first
+etims queue flush
 ```
 
-Exit code is `0` on success, `1` on any error — suitable for use in shell conditionals and CI pipelines.
+Every command: `--json` → machine-readable stdout, Rich → stderr. Exit `0`/`1`. `etims --help` and `etims <command> --help` for full reference.
 
 ---
 
@@ -350,27 +217,6 @@ diesel = calculate_item("Diesel", "HS270900", 3236.57, "E", qty=15.456)
 # qty stored as Decimal("15.4560") — transmitted to KRA exactly
 ```
 
-### Discounted Items
-
-`ItemDetail` carries `splyAmt` (supply amount), `dcRt` (discount rate %), and `dcAmt` (discount amount in KES) — all default to `Decimal("0.00")` for non-discounted items. Supply them explicitly for line items with negotiated discounts:
-
-```python
-from kra_etims.models import ItemDetail, TaxType
-from decimal import Decimal
-
-item = ItemDetail(
-    itemCd="HS847130", itemNm="MacBook Pro M3",
-    qty=Decimal("2"), uprc=Decimal("2900.00"),
-    totAmt=Decimal("5800.00"),
-    splyAmt=Decimal("5800.00"),   # qty * uprc before discount
-    dcRt=Decimal("10.00"),        # 10% negotiated discount
-    dcAmt=Decimal("580.00"),      # splyAmt * dcRt / 100
-    taxTyCd=TaxType.B,
-    taxblAmt=Decimal("4500.00"),  # (splyAmt - dcAmt) / 1.16
-    taxAmt=Decimal("720.00"),
-)
-```
-
 ### Residual Drift — Invoice Integrity
 
 `ROUND_HALF_UP` applied independently to each line can leave a 1-cent gap at invoice level. The SDK absorbs this residual into `totTaxAmt`, preventing KRA result code 20 rejections.
@@ -390,7 +236,16 @@ totals = build_invoice_totals(items)
 
 ### Preventing Double Taxation — Schrödinger's Invoice
 
-**`idempotency_key` is strongly recommended.** If you omit it, the SDK auto-generates `"{tin}:{invcNo}"` and emits a `UserWarning` at the call site. Pass it explicitly to suppress the warning:
+Most financial libraries collapse network failures into one `TimeoutError` and leave retry semantics to the caller. This SDK partitions failures into four states with explicit retry rules:
+
+| Failure | Exception | Safe to retry? |
+|---|---|---|
+| TCP `ConnectError` — request never left the socket | `TIaaSUnavailableError` | Yes — unconditional |
+| `ReadTimeout` / `WriteTimeout` on POST — sent, no response | `TIaaSAmbiguousStateError` | Only with the **same** idempotency key |
+| HTTP 500 on POST — server may have committed before erroring | `TIaaSAmbiguousStateError` | Only with the **same** idempotency key |
+| `ReadTimeout` on GET / HTTP 500 on GET — no mutation possible | `TIaaSUnavailableError` | Yes — unconditional |
+
+`TIaaSAmbiguousStateError` carries the `idempotency_key` that was in-flight. Re-submit with the same key: if the first attempt committed, KRA returns code 12 and the middleware deduplicates it; if it didn't commit, the invoice is submitted normally. Without an idempotency key the correct action after an ambiguous failure is undefined — which is why omitting it emits a `UserWarning`.
 
 ```python
 # Explicit key — no warning, full control
@@ -399,8 +254,6 @@ result = client.submit_sale(invoice, idempotency_key="INV-2026-001")
 # Omitted — auto-generates "P051234567X:INV-2026-001" + UserWarning
 result = client.submit_sale(invoice)
 ```
-
-When a network timeout interrupts a POST in-flight, the invoice state is unknown. `TIaaSAmbiguousStateError` carries the `idempotency_key` that was in-flight:
 
 ```python
 from kra_etims import TIaaSAmbiguousStateError, KRADuplicateInvoiceError
@@ -412,12 +265,12 @@ try:
     result = client.submit_sale(invoice, idempotency_key=IDEMPOTENCY_KEY)
 
 except TIaaSAmbiguousStateError as exc:
-    # Request sent; connection dropped before response arrived.
+    # Sent; connection dropped before response. Re-submit with the same key.
     time.sleep(2)
     try:
         result = client.submit_sale(invoice, idempotency_key=exc.idempotency_key)
     except KRADuplicateInvoiceError:
-        # First attempt succeeded — middleware deduplicated it.
+        # First attempt committed — middleware deduplicated it. Receipt exists on KRA.
         print(f"Invoice {exc.idempotency_key} already processed.")
 
 except KRADuplicateInvoiceError:
@@ -431,21 +284,21 @@ except KRADuplicateInvoiceError:
 | `KRAeTIMSAuthError` | Bad credentials or token refresh failure (HTTP 401) |
 | `KRAAuthorizationError` | Authenticated but not authorised for this operation (HTTP 403) — key lacks required role |
 | `KRAConnectivityTimeoutError` | 24-hour VSCU offline ceiling breached (HTTP 503) |
-| `TIaaSUnavailableError` | Middleware instance unreachable (TCP failure) |
-| `TIaaSAmbiguousStateError` | Network dropped mid-POST; state unknown — carries `idempotency_key` |
+| `TIaaSUnavailableError` | Middleware unreachable — TCP `ConnectError` or timeout on a read-only request; safe to retry unconditionally |
+| `TIaaSAmbiguousStateError` | POST sent but connection dropped, or HTTP 500 on POST — carries `idempotency_key`; re-submit with the same key |
 | `KRAInvalidPINError` | Invalid TIN format (code 10) |
 | `KRAVSCUMemoryFullError` | VSCU storage at capacity — sync before invoicing (code 11) |
-| `KRADuplicateInvoiceError` | Already processed; retrieve original receipt (code 12) |
+| `KRADuplicateInvoiceError` | Invoice already processed (codes 12, 994); `is_idempotent_success=True` — receipt exists on KRA, treat as success in retry loops |
 | `KRAInvalidItemCodeError` | Item not registered on eTIMS (code 13) |
 | `KRAInvalidBranchError` | Branch not registered for this TIN (code 14) |
 | `KRAServerError` | Transient KRA server error (codes 20/96/99) |
-| `KRADuplicateInvoiceError` | Invoice already processed on prior retry (code 994); `is_idempotent_success=True` — receipt exists on KRA |
+| `KRADuplicateInvoiceError` | Device already initialized (code 902); `is_idempotent_success=True` — existing `cmcKey` remains valid, do not re-initialize |
 | `KRAeTIMSError` | Device serial not approved (code 901) — contact timsupport@kra.go.ke |
-| `KRADuplicateInvoiceError` | Device already initialized (code 902) — existing cmcKey valid, do not re-initialize |
-| `KRAeTIMSError` | VSCU sequence error (code 921) — saveSales must precede saveInvoice; cannot mix OSCU path |
+| `KRAeTIMSError` | VSCU sequence error (code 921) — `saveSales` must precede `saveInvoice`; cannot mix OSCU and VSCU paths |
 | `CreditNoteConflictError` | Credit note already issued for this sale (HTTP 409); carries `original_purchase_id` |
-| `ZReportAlreadyIssuedError` | Z-report already submitted for this date (HTTP 409); the VSCU day-reset is irreversible — do not retry; carries `report_date` |
-| `KRAeTIMSError` | Base class for all SDK exceptions; also raised directly for unexpected HTTP 4xx/5xx responses from the middleware (message contains only the status code — no request URLs or PII) |
+| `ZReportAlreadyIssuedError` | Z-report already submitted for this date (HTTP 409); VSCU day-reset is irreversible — do not retry; carries `report_date` |
+
+> `KRAeTIMSError` is the base class for all SDK exceptions. Unexpected HTTP 4xx/5xx responses not mapped to a subclass raise it directly — the message contains the status code only, never request URLs or PII.
 
 **GavaConnect exceptions** (raised by `GavaConnectClient` / `AsyncGavaConnectClient`):
 
@@ -502,44 +355,16 @@ print(client)
 pip install "taxid-etims[otel]"
 ```
 
-The SDK emits [OpenTelemetry](https://opentelemetry.io/) spans when `opentelemetry-api` is installed. Without it, every span call is a no-op — existing integrations are unaffected.
+Emits OpenTelemetry spans when `opentelemetry-api` is installed. Without it, every span call is a no-op — no import error, no overhead.
 
-### Spans emitted
+| Span | Key attributes |
+|---|---|
+| `kra_etims.submit_sale` | `invoice.no`, `invoice.tin` |
+| `kra_etims.issue_credit_note` | `sale.id` |
+| `kra_etims.flush_offline_queue` | `queue.size` |
+| `kra_etims.request` | `http.method`, `http.path`, `idempotency_key` |
 
-| Span name | Emitted by | Key attributes |
-|---|---|---|
-| `kra_etims.submit_sale` | `submit_sale()` | `invoice.no`, `invoice.tin` |
-| `kra_etims.issue_credit_note` | `issue_credit_note()` | `sale.id` |
-| `kra_etims.flush_offline_queue` | `flush_offline_queue()` | `queue.size` |
-| `kra_etims.request` | `_request()` (internal) | `http.method`, `http.path`, `idempotency_key` |
-
-On exception, the span is marked `ERROR` and the exception recorded before re-raising — failures always appear in traces regardless of how the caller handles them.
-
-### Wiring spans to an exporter
-
-The SDK only depends on `opentelemetry-api`. To see spans in a backend (Jaeger, Grafana Tempo, Honeycomb, etc.) your application configures the SDK and exporter — the SDK never touches that layer.
-
-```python
-# Minimal setup — add this once at application startup, before any SDK calls.
-# Example uses the OTLP exporter; swap for your backend's exporter package.
-#
-#   pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-grpc
-
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-
-provider = TracerProvider()
-provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
-trace.set_tracer_provider(provider)
-
-# From here, all kra_etims.* spans flow to your backend automatically.
-from kra_etims import KRAeTIMSClient
-client = KRAeTIMSClient(client_id="...", client_secret="...")
-```
-
-The same setup works for the async client — `opentelemetry-api` is context-propagation-aware and works across `asyncio` task boundaries without any changes.
+On exception the span is marked `ERROR` and the exception recorded before re-raising. The SDK depends only on `opentelemetry-api` — wire your exporter (OTLP, Jaeger, Honeycomb) at the application layer as usual.
 
 ---
 
@@ -749,14 +574,8 @@ result = await client.submit_stock_adjustment(lines)
 
 ---
 
-## Sovereignty & Data Protection
-
-This SDK and the TIaaS Middleware comply with the **Kenya Data Protection Act (2019)**.
-
----
-
 > [!CAUTION]
-> This SDK is a technical implementation tool, not tax advice. The authors are not responsible for KRA penalties, non-deductible expenses, or financial losses resulting from user error, misconfigured payloads, or middleware misapplication.
+> This SDK is a technical implementation tool, not tax advice. Complies with the Kenya Data Protection Act (2019). The authors are not responsible for KRA penalties, non-deductible expenses, or financial losses resulting from user error, misconfigured payloads, or middleware misapplication.
 
 ---
 
