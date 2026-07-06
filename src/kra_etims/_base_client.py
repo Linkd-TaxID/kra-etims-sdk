@@ -186,8 +186,13 @@ class _BaseKRAeTIMSClient(ABC):
                     body = exc.response.json()
                     msg  = body.get("message") or body.get("error") or exc.response.text[:200]
                 except Exception:
+                    body = {}
                     msg  = exc.response.text[:200]
-                raise CreditNoteConflictError(msg) from exc
+                raise CreditNoteConflictError(
+                    msg,
+                    existing_credit_note_id=body.get("existingCreditNoteId"),
+                    existing_cu_invoice_no=body.get("existingCuInvoiceNo"),
+                ) from exc
             if sc == 401:
                 raise KRAeTIMSAuthError(
                     "Authentication failed (HTTP 401): invalid or missing API key. "

@@ -220,9 +220,12 @@ class StockAdjustmentLine(BaseSchema):
     itemCd: str = Field(..., description="Item code registered on eTIMS")
     itemNm: str = Field(..., description="Item name")
     ioType: str = Field(..., pattern=r'^[MAI]$', description="I/O type: M=Import, A=Adjustment, I=Issue")
-    pkgUnitCd: Optional[str] = None
+    # Middleware validation requires both unit codes; None was rejected with HTTP 400.
+    # Defaults per KRA VSCU Spec v2.0 §4.5 (Packaging Unit: NT=Net) and §4.6
+    # (Quantity Unit: U=Pieces/Number). Override for weighed or bulk goods.
+    pkgUnitCd: str = Field(default="NT", description="Packaging unit code (spec §4.5)")
     pkgQty: Decimal = Field(default=Decimal("1"), description="Package quantity")
-    qtyUnitCd: Optional[str] = None
+    qtyUnitCd: str = Field(default="U", description="Quantity unit code (spec §4.6)")
     qty: Decimal = Field(..., description="Quantity", gt=Decimal("0"))
     prc: Decimal = Field(..., description="Unit price (KES)")
     totDcAmt: Decimal = Field(default=Decimal("0"), description="Total discount amount")
@@ -265,3 +268,53 @@ ETIMS_MODELS = {
     "7": ReverseInvoice,
     "8": StockItem,
 }
+
+
+def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
+    """
+    Translate a KRA-native :class:`SaleInvoice` into the TIaaS middleware's
+    ``POST /v2/etims/sale`` request schema.
+
+    The middleware exposes a deliberately flat contract (``supplierPin``,
+    ``amount``, ``invoiceDate``, ``taxBand``, ``taxAmount``, ``buyerPin``,
+    ``buyerName``) and constructs the spec-compliant ``TrnsSalesSaveWrReq``
+    server-side (KRA VSCU Specification v2.0 §3.3.6). Prior to v0.3.1 the SDK
+    posted the raw KRA-native schema, which the middleware rejected with
+    HTTP 400 on every call — the two projects had drifted apart.
+
+    Field derivation:
+
+    - ``supplierPin``  ← ``invoice.tin`` (the selling taxpayer's PIN)
+    - ``amount``       ← ``invoice.totAmt``
+    - ``invoiceDate``  ← ``invoice.confirmDt`` (``yyyyMMddHHmmss`` → ISO date)
+    - ``taxBand``      ← the band contributing the largest ``taxAmt`` across
+      ``itemList`` (ties resolved by first occurrence). Multi-band invoices are
+      classified by their dominant band; per-band fidelity is preserved
+      server-side once the tenant's item catalog is registered.
+    - ``taxAmount``    ← ``invoice.totTaxAmt``
+    - ``buyerPin`` / ``buyerName`` ← ``custPin`` / ``custNm`` (B2B only;
+      omitted entirely for B2C, where ``custPin`` is ``None``)
+    """
+    dt = invoice.confirmDt
+    invoice_date = f"{dt[0:4]}-{dt[4:6]}-{dt[6:8]}"
+
+    band_totals: dict = {}
+    for item in invoice.itemList:
+        band = str(getattr(item.taxTyCd, "value", item.taxTyCd))
+        band_totals[band] = band_totals.get(band, Decimal("0")) + item.taxAmt
+    tax_band = max(band_totals, key=lambda b: band_totals[b]) if band_totals else "B"
+
+    description = ", ".join(i.itemNm for i in invoice.itemList[:3])[:200] or "General supply"
+
+    payload = {
+        "supplierPin":     invoice.tin,
+        "amount":          str(invoice.totAmt),
+        "invoiceDate":     invoice_date,
+        "itemDescription": description,
+        "taxBand":         tax_band,
+        "taxAmount":       str(invoice.totTaxAmt),
+    }
+    if invoice.custPin:
+        payload["buyerPin"]  = invoice.custPin
+        payload["buyerName"] = invoice.custNm
+    return payload
