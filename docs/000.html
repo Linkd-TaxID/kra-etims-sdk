@@ -7,14 +7,14 @@
   <meta name="description" content="The request was processed successfully. This is the OSCU spec code per §4.18.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
-  <link rel="canonical" href="https://linkd-taxid.github.io/kra-etims-sdk/000.html">
+  <link rel="canonical" href="https://docs.taxid.co.ke/000.html">
   <script type="application/ld+json">{
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 000 — Success",
   "description": "The request was processed successfully. This is the OSCU spec code per §4.18.",
-  "url": "https://linkd-taxid.github.io/kra-etims-sdk/000.html",
-  "dateModified": "2026-03-24",
+  "url": "https://docs.taxid.co.ke/000.html",
+  "dateModified": "2026-07-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -39,13 +39,13 @@
       "@type": "ListItem",
       "position": 1,
       "name": "KRA eTIMS Error Codes",
-      "item": "https://linkd-taxid.github.io/kra-etims-sdk/"
+      "item": "https://docs.taxid.co.ke/"
     },
     {
       "@type": "ListItem",
       "position": 2,
       "name": "Error 000: Success",
-      "item": "https://linkd-taxid.github.io/kra-etims-sdk/000.html"
+      "item": "https://docs.taxid.co.ke/000.html"
     }
   ]
 }</script>
@@ -88,12 +88,12 @@
       <div class="section-label">Fix</div>
        <div class="fix-box">No action needed.</div>
       <div class="section-label">Gotcha</div>
-       <div class="gotcha-box">KRA emits three different success codes depending on integration path: &quot;00&quot; from the VSCU JAR, &quot;000&quot; from OSCU, and &quot;0000&quot; from GavaConnect. Never hardcode a single string. Always check membership in {&quot;0&quot;, &quot;00&quot;, &quot;000&quot;, &quot;0000&quot;}.</div>
+       <div class="gotcha-box">Success-code shape varies by integration path: &quot;000&quot; per the OSCU spec §4.18 — and live signings against the real VSDC 2.0.6 sandbox JAR also return &quot;000&quot; (verified 2026-07-06); &quot;0000&quot; observed live from GavaConnect; &quot;00&quot; reported for the VSCU JAR but unconfirmed by direct observation. Never hardcode a single string. Always check membership in {&quot;0&quot;, &quot;00&quot;, &quot;000&quot;, &quot;0000&quot;}.</div>
       <div class="section-label">Related Errors</div>
-       <div class="related-list"><a class="related-link" href="./00.html">00 — Success (VSCU JAR Variant)</a><a class="related-link" href="./0000.html">0000 — Success (GavaConnect Variant)</a><a class="related-link" href="./001.html">001 — No Search Result</a></div>
+       <div class="related-list"><a class="related-link" href="./00.html">00 — Success (Reported VSCU JAR Variant)</a><a class="related-link" href="./0000.html">0000 — Success (GavaConnect Variant)</a><a class="related-link" href="./001.html">001 — No Search Result</a></div>
     </div>
     <footer>
-      <p>Part of the <a href="https://linkd-taxid.github.io/kra-etims-sdk/">KRA eTIMS Error Code Reference</a> · Maintained by <a href="https://github.com/Linkd-TaxID">Linkd TaxID</a></p>
+      <p>Part of the <a href="https://docs.taxid.co.ke/">KRA eTIMS Error Code Reference</a> · Maintained by <a href="https://github.com/Linkd-TaxID">Linkd TaxID</a></p>
     </footer>
   </div>
 </body>

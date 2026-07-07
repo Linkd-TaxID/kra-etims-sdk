@@ -15,7 +15,7 @@ const path = require('path');
 
 const { ERRORS } = require('../docs/errors.js');
 
-const BASE_URL   = 'https://linkd-taxid.github.io/kra-etims-sdk';
+const BASE_URL   = 'https://docs.taxid.co.ke';
 const DOCS_DIR   = path.join(__dirname, '..', 'docs');
 const FAVICON    = `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>`;
 
@@ -72,7 +72,7 @@ function buildPage(e) {
     'name': `KRA eTIMS resultCd ${e.code} — ${e.title}`,
     'description': e.description,
     'url': `${BASE_URL}/${e.code}.html`,
-    'dateModified': '2026-03-24',
+    'dateModified': '2026-07-07',
     'author': { '@type': 'Organization', 'name': 'Linkd TaxID', 'url': 'https://github.com/Linkd-TaxID' },
     'about': [
       { '@type': 'Thing', 'name': 'KRA eTIMS' },

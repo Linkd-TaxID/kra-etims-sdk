@@ -6,15 +6,15 @@ const ERRORS = [
     description: "The request was processed successfully. This is the OSCU spec code per §4.18.",
     causes: [],
     fix: "No action needed.",
-    gotcha: "KRA emits three different success codes depending on integration path: \"00\" from the VSCU JAR, \"000\" from OSCU, and \"0000\" from GavaConnect. Never hardcode a single string. Always check membership in {\"0\", \"00\", \"000\", \"0000\"}.",
+    gotcha: "Success-code shape varies by integration path: \"000\" per the OSCU spec §4.18 — and live signings against the real VSDC 2.0.6 sandbox JAR also return \"000\" (verified 2026-07-06); \"0000\" observed live from GavaConnect; \"00\" reported for the VSCU JAR but unconfirmed by direct observation. Never hardcode a single string. Always check membership in {\"0\", \"00\", \"000\", \"0000\"}.",
     related: ["00", "0000", "001"]
   },
   {
     code: "00",
-    title: "Success (VSCU JAR Variant)",
+    title: "Success (Reported VSCU JAR Variant)",
     category: "Production",
-    description: "Success code emitted specifically by the VSCU JAR. Functionally identical to 000 but a different string.",
-    causes: ["You are on the VSCU integration path"],
+    description: "Two-digit success variant reported for the VSCU JAR. Unconfirmed by direct observation: live signings against the real VSDC 2.0.6 sandbox JAR (2026-07-06) returned \"000\" per the spec §3.3.6 sample. Keep \"00\" in your success set defensively.",
+    causes: ["Reported for some VSCU/VSDC builds (unconfirmed — live VSDC 2.0.6 returns \"000\")"],
     fix: "Normalize all success checks to check membership in {\"0\", \"00\", \"000\", \"0000\"} rather than equality to \"000\".",
     gotcha: "Any hardcoded if resultCd == \"000\" check will silently swallow this as a failure, causing every VSCU invoice signature to appear unsuccessful with no exception raised.",
     related: ["000", "0000"]
@@ -106,10 +106,15 @@ const ERRORS = [
     code: "899",
     title: "Client Catch-All",
     category: "Client",
-    description: "Generic client-side error not covered by 891–896.",
-    causes: ["Unclassified SCU library fault"],
-    fix: "Inspect the full raw response body — additional detail is usually present in resultMsg.",
-    related: ["891", "892", "893"]
+    description: "Generic client-side error not covered by 891–896. Verified against the live VSDC 2.0.6 sandbox JAR (2026-07-06): the body is {\"resultCd\":\"899\",\"resultMsg\":\"An error regarding Client occurred.\",\"data\":null} — the resultMsg is the same generic sentence for every cause and carries no diagnostic detail.",
+    causes: [
+      "Resubmitting an invoice number KRA has already accepted — e.g. an offline-queue replay after a client timeout where the original submission actually succeeded (verified live)",
+      "Missing, empty, or invalid device credential files (cmcKey, tin, bhfId, dvcSrlNo) on the VSCU path (verified live)",
+      "Unclassified SCU library fault"
+    ],
+    fix: "Do not blindly retry. If this 899 follows a timeout retry or offline-queue replay, first check whether the receipt already exists (receipt-counter arithmetic or the corresponding select endpoint) — re-signing under a new invoice number creates a duplicate receipt at KRA. Then verify all device credential files are present and non-empty.",
+    gotcha: "On the VSCU path, duplicate-invoice replays return 899 — not 994 as widely assumed. Because the resultMsg is identical for credential faults and duplicates, the two cases are indistinguishable from the response body alone.",
+    related: ["994", "902", "891"]
   },
   {
     code: "900",
@@ -119,7 +124,8 @@ const ERRORS = [
     causes: [
       "Authorization header missing",
       "tin, bhfId, or cmcKey missing from OSCU request headers",
-      "Content-Type not set to application/json"
+      "Content-Type not set to application/json",
+      "A present-but-empty (0-byte) cmcKey device file on the VSCU path — file-exists bootstrap checks pass, but the JAR sends an empty credential (verified live 2026-07-04)"
     ],
     fix: "For OSCU, every request after initialization requires tin, bhfId, and cmcKey in the request headers or body depending on the endpoint. Verify all three are present.",
     related: ["910", "892"]
@@ -147,8 +153,8 @@ const ERRORS = [
       "Re-running initialization on an already-active device",
       "Redeploying without persisting the original cmcKey"
     ],
-    fix: "This is idempotent — not a hard failure. Extract the existing cmcKey from the response body and use it. Do not re-initialize. If the original cmcKey is lost, contact KRA to regenerate.",
-    gotcha: "The cmcKey is issued once with no rotation mechanism. Any log line recording the full init response permanently leaks this key. Redact cmcKey before any logging.",
+    fix: "This is idempotent — not a hard failure, but the 902 response does NOT return the cmcKey: verified live against the KRA sandbox (2026-07-04), the body is {\"resultCd\":\"902\",\"resultMsg\":\"This device is installed\",\"data\":null}. Use the cmcKey you persisted at first initialization. If it is lost, contact timsupport@kra.go.ke to de-register the serial so the device can be re-initialized — there is no self-service recovery.",
+    gotcha: "The cmcKey is issued exactly once, only in the original init response, with no rotation mechanism — 902 will not hand it back. Any log line recording the full init response permanently leaks this key; redact cmcKey before any logging. Also watch for a present-but-empty cmcKey file after a failed restore: a file-exists check passes, but every subsequent request fails with 899/900 — validate the file is non-empty.",
     related: ["901", "903"]
   },
   {
@@ -270,15 +276,15 @@ const ERRORS = [
     code: "994",
     title: "Duplicate Record",
     category: "Official",
-    description: "A unique constraint violation — the record already exists.",
+    description: "A unique constraint violation — the record already exists. Documented for the OSCU path. On the VSCU path the same situation returns 899 instead — verified against the live VSDC 2.0.6 sandbox JAR (2026-07-06).",
     causes: [
       "Invoice number already used for this branch",
       "Duplicate transaction submitted after a timeout retry",
       "Offline queue replay submitting an already-processed invoice"
     ],
-    fix: "Invoice numbers must be sequential integers and can never be reused even after cancellation. For retry and offline replay scenarios, treat 994 as an idempotent success — the invoice was already registered. Do not raise an exception.",
-    gotcha: "This is the correct behavior for offline queue replay. If your system retries a failed submission and receives 994, the original submission likely succeeded. Check the invoice status via the corresponding select endpoint before treating this as a hard failure.",
-    related: ["991", "921", "922"]
+    fix: "Invoice numbers must be sequential integers and can never be reused even after cancellation. On OSCU retry and offline replay, treat 994 as an idempotent success — the invoice was already registered; do not raise an exception. On the VSCU JAR path, do not wait for a 994 that never comes: a duplicate-invoice replay returns 899 with a generic client-error message — confirm via the select endpoint or receipt-counter arithmetic before treating the replay as failed.",
+    gotcha: "If a retry of a timed-out submission returns 994 (OSCU) or 899 (VSCU), the original submission likely succeeded — KRA consumes the receipt counter even when the HTTP response is lost to a client timeout. Check invoice status via the corresponding select endpoint before treating this as a hard failure.",
+    related: ["899", "991", "921", "922"]
   },
   {
     code: "995",

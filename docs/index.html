@@ -9,11 +9,11 @@
   <meta name="robots" content="index, follow, max-snippet:-1">
   <meta name="google-site-verification" content="kvoqWPq6RXNOcyORJr4pyubDvsm7YdA_T15Y6yJ86VY">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
-  <link rel="canonical" href="https://linkd-taxid.github.io/kra-etims-sdk/">
+  <link rel="canonical" href="https://docs.taxid.co.ke/">
   <meta property="og:title" content="KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference">
   <meta property="og:description" content="The most complete public reference for KRA eTIMS OSCU/VSCU result codes, including production codes absent from the official KRA spec.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://linkd-taxid.github.io/kra-etims-sdk/">
+  <meta property="og:url" content="https://docs.taxid.co.ke/">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference">
   <meta name="twitter:description" content="Complete reference for KRA eTIMS OSCU/VSCU resultCd values including production codes absent from the official spec.">
@@ -23,7 +23,7 @@
     "@type": "TechArticle",
     "name": "KRA eTIMS OSCU/VSCU API Error Code Reference",
     "description": "Complete reference for KRA eTIMS result codes including official OSCU/VSCU spec codes and production-observed codes absent from official documentation.",
-    "url": "https://linkd-taxid.github.io/kra-etims-sdk/",
+    "url": "https://docs.taxid.co.ke/",
     "author": {
       "@type": "Organization",
       "name": "Linkd TaxID",
@@ -87,8 +87,8 @@
       <h1>KRA eTIMS Error Codes</h1>
       <p class="subtitle">Complete OSCU/VSCU <code>resultCd</code> reference — including production codes absent from the official KRA spec.</p>
       <div class="warning-banner">
-        <strong>⚠️ Critical: Three different success codes exist</strong>
-        KRA emits <code>"000"</code> (OSCU spec), <code>"00"</code> (VSCU JAR), and <code>"0000"</code> (GavaConnect). Never hardcode a single string. Always check membership in <code>{"0", "00", "000", "0000"}</code>.
+        <strong>⚠️ Critical: Multiple success-code variants exist</strong>
+        KRA returns <code>"000"</code> (OSCU spec §4.18 — also confirmed live from the VSDC 2.0.6 JAR), <code>"0000"</code> (observed live from GavaConnect), and <code>"00"</code> has been reported for the VSCU JAR. Never hardcode a single string. Always check membership in <code>{"0", "00", "000", "0000"}</code>.
       </div>
     </header>
     <div class="controls">

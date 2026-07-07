@@ -8,11 +8,11 @@
   <meta name="keywords" content="KRA eTIMS FAQ, eTIMS integration questions, OSCU VSCU setup, KRA resultCd 901 fix, eTIMS 921 error, Kenya eTIMS developer guide">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
-  <link rel="canonical" href="https://linkd-taxid.github.io/kra-etims-sdk/faq.html">
+  <link rel="canonical" href="https://docs.taxid.co.ke/faq.html">
   <meta property="og:title" content="KRA eTIMS FAQ — Common Integration Questions Answered">
   <meta property="og:description" content="Answers to the most common KRA eTIMS OSCU/VSCU integration questions including resultCd errors, cmcKey handling, VSCU 24-hour ceiling, and tax band codes.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://linkd-taxid.github.io/kra-etims-sdk/faq.html">
+  <meta property="og:url" content="https://docs.taxid.co.ke/faq.html">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="KRA eTIMS FAQ — Common Integration Questions Answered">
   <meta name="twitter:description" content="Developer FAQ for KRA eTIMS: resultCd errors, VSCU vs OSCU differences, cmcKey, tax bands, offline queueing, and more.">
@@ -22,7 +22,7 @@
     "@type": "FAQPage",
     "name": "KRA eTIMS Integration FAQ",
     "description": "Frequently asked questions about KRA eTIMS OSCU and VSCU API integration.",
-    "url": "https://linkd-taxid.github.io/kra-etims-sdk/faq.html",
+    "url": "https://docs.taxid.co.ke/faq.html",
     "author": {
       "@type": "Organization",
       "name": "Linkd TaxID",
@@ -50,7 +50,7 @@
         "name": "What does resultCd 994 mean on retry?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "resultCd 994 means 'Duplicate Record'. On retry and offline queue replay, treat 994 as an idempotent success — the invoice was already registered. Do not raise an exception. Invoice numbers are sequential integers that can never be reused even after cancellation. If your system retries a failed submission and receives 994, the original submission likely succeeded; verify via the corresponding select endpoint."
+          "text": "resultCd 994 means 'Duplicate Record'. On the OSCU path, treat 994 on retry or offline queue replay as an idempotent success — the invoice was already registered; do not raise an exception. On the VSCU JAR path, the same situation returns 899 instead, not 994 (verified against the live VSDC 2.0.6 sandbox, 2026-07-06) — do not wait for a 994 that never comes. Either way the original submission likely succeeded and KRA consumed the receipt counter; verify via the corresponding select endpoint before re-signing. Invoice numbers are sequential integers that can never be reused even after cancellation."
         }
       },
       {
@@ -58,7 +58,7 @@
         "name": "What are the KRA eTIMS success codes? Is '000' the only one?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "No. KRA emits three different success codes depending on your integration path: '000' from the OSCU spec (§4.18), '00' from the VSCU JAR, and '0000' from GavaConnect. Never hardcode a single string. Always check membership in the set {\"0\", \"00\", \"000\", \"0000\"}. Any check like if resultCd == '000' will silently treat VSCU success responses as failures."
+          "text": "'000' is the documented OSCU spec code (§4.18), and live signings against the real VSDC 2.0.6 sandbox JAR also return '000' (verified 2026-07-06). But '0000' has been observed live from GavaConnect, and '00' has been reported for the VSCU JAR (unconfirmed by direct observation). Never hardcode a single string. Always check membership in the set {\"0\", \"00\", \"000\", \"0000\"} so every variant is treated as success."
         }
       },
       {
@@ -106,7 +106,7 @@
         "name": "My initialization keeps returning resultCd 902. Is my device broken?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "No. resultCd 902 means 'Device Already Installed' — the device serial has already been initialized and an active cmcKey exists. This is idempotent, not a hard failure. Extract the existing cmcKey from the response body and use it. Do not re-initialize. If you redeployed and lost the original cmcKey, contact KRA to regenerate it."
+          "text": "No. resultCd 902 means 'Device Already Installed' — the device serial has already been initialized and an active cmcKey exists. This is idempotent, not a hard failure. Important: the 902 response does NOT return the cmcKey — verified live against the KRA sandbox (2026-07-04), the body is {\"resultCd\":\"902\",\"resultMsg\":\"This device is installed\",\"data\":null}. Use the cmcKey you persisted at first initialization. If you redeployed and lost it, contact timsupport@kra.go.ke to de-register the serial so the device can be re-initialized."
         }
       },
       {
@@ -139,6 +139,30 @@
         "acceptedAnswer": {
           "@type": "Answer",
           "text": "No. Invoice numbers are sequential integers and can never be reused, even after cancellation. They must be strictly monotonically increasing (1, 2, 3...) — not string identifiers like INV001. Reusing an invoice number causes resultCd 994 (Duplicate Record)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What timeout should I use for VSCU saveSales? Why does a 1-second timeout fail every sale?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "In ONLINE mode the VSCU JAR relays each saveSales call synchronously to KRA's servers before responding. Live signings against the KRA sandbox take about 2.0–2.2 seconds (measured 2026-07-06). Any client timeout at or below ~2 seconds therefore fails every real signing — and dangerously: KRA still consumes the receipt counter even though your client never sees the response. Use a client timeout of 15 seconds or more, and treat a timeout as 'outcome unknown', not 'failed': check whether the receipt exists (select endpoint or receipt-counter arithmetic) before replaying, because a replay of the same invoice number returns 899 on the VSCU path."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does the VSCU JAR use HTTP status codes for errors?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. The VSCU JAR returns HTTP 200 for error responses — both 899 (client catch-all) and 902 (device already installed) arrive as HTTP 200 with the error in the JSON body (verified live against VSDC 2.0.6, 2026-07-04). GavaConnect does the same for some malformed requests. You must parse resultCd from the body on every response; status-code-based error handling silently treats every KRA error as success."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why is VSCURcptPbctDate null in my saveSales response?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The spec's §3.3.6 JSON sample names the receipt publication timestamp 'VSCURcptPbctDate', but the real VSDC 2.0.6 JAR returns the field as 'vsdcRcptPbctDate' (verified live 2026-07-06: {\"data\":{...,\"vsdcRcptPbctDate\":\"20260706202219\",...}}). A strict mapping against the spec name silently yields null. Parse the timestamp case-insensitively or register aliases for vsdcRcptPbctDate, VSDCRcptPbctDate, and VSCURcptPbctDate. The real JAR also returns mrcNo in the data object."
         }
       },
       {
@@ -201,15 +225,15 @@
     <div class="faq-item">
       <span class="tag tag-gotcha">Gotcha</span>
       <h2>What does resultCd 994 mean on retry?</h2>
-      <p>resultCd 994 means <strong>Duplicate Record</strong>. On retry and offline queue replay, treat 994 as an <strong>idempotent success</strong> — the invoice was already registered. Do not raise an exception.</p>
-      <p style="margin-top:10px;">If your system retries a timed-out submission and receives 994, the original submission likely succeeded. Verify the invoice status via the corresponding <code>selectTrnsSales</code> endpoint before treating this as a hard failure. Invoice numbers can never be reused even after cancellation.</p>
+      <p>resultCd 994 means <strong>Duplicate Record</strong>. On the <strong>OSCU path</strong>, treat 994 on retry or offline queue replay as an <strong>idempotent success</strong> — the invoice was already registered. Do not raise an exception.</p>
+      <p style="margin-top:10px;"><strong>On the VSCU JAR path, the same situation returns <code>899</code> instead, not 994</strong> (verified against the live VSDC 2.0.6 sandbox, 2026-07-06) — do not wait for a 994 that never comes. Either way, the original submission likely succeeded and KRA consumed the receipt counter; verify via the corresponding <code>selectTrnsSales</code> endpoint before re-signing. Invoice numbers can never be reused even after cancellation.</p>
     </div>
 
     <div class="faq-item">
       <span class="tag tag-gotcha">Gotcha</span>
       <h2>What are the KRA eTIMS success codes? Is "000" the only one?</h2>
-      <p>No. KRA emits <strong>three different success codes</strong> depending on your integration path: <code>"000"</code> from the OSCU spec (§4.18), <code>"00"</code> from the VSCU JAR, and <code>"0000"</code> from GavaConnect.</p>
-      <p style="margin-top:10px;">Never hardcode a single string. Always check membership in <code>{"0", "00", "000", "0000"}</code>. Any check like <code>if resultCd == "000"</code> will silently treat every VSCU success response as a failure, with no exception raised.</p>
+      <p><code>"000"</code> is the documented OSCU spec code (§4.18), and live signings against the real VSDC 2.0.6 sandbox JAR also return <code>"000"</code> (verified 2026-07-06). But <code>"0000"</code> has been observed live from GavaConnect, and <code>"00"</code> has been reported for the VSCU JAR (unconfirmed by direct observation).</p>
+      <p style="margin-top:10px;">Never hardcode a single string. Always check membership in <code>{"0", "00", "000", "0000"}</code> so every variant is treated as success.</p>
     </div>
 
     <div class="faq-item">
@@ -257,7 +281,7 @@
       <span class="tag tag-both">OSCU · VSCU</span>
       <h2>My initialization keeps returning resultCd 902. Is my device broken?</h2>
       <p>No. resultCd 902 means <strong>Device Already Installed</strong> — the device serial has already been initialized and an active <code>cmcKey</code> exists. This is idempotent, not a hard failure.</p>
-      <p style="margin-top:10px;">Extract the existing <code>cmcKey</code> from the response body and use it. Do not re-initialize. If you redeployed and lost the original key, contact KRA to regenerate it.</p>
+      <p style="margin-top:10px;"><strong>The 902 response does NOT return the cmcKey</strong> — verified live against the KRA sandbox (2026-07-04), the body is <code>{"resultCd":"902","resultMsg":"This device is installed","data":null}</code>. Use the <code>cmcKey</code> you persisted at first initialization. If you redeployed and lost it, contact <code>timsupport@kra.go.ke</code> to de-register the serial so the device can be re-initialized.</p>
     </div>
 
     <div class="faq-item">
@@ -279,6 +303,27 @@
       <span class="tag tag-both">OSCU · VSCU</span>
       <h2>Can I reuse an invoice number after cancelling an invoice?</h2>
       <p>No. Invoice numbers are sequential integers and can never be reused, even after cancellation. They must be strictly monotonically increasing (1, 2, 3…) — not string identifiers like <code>INV001</code>. Reusing an invoice number causes resultCd 994 (Duplicate Record).</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-vscu">VSCU</span>
+      <h2>What timeout should I use for VSCU saveSales? Why does a 1-second timeout fail every sale?</h2>
+      <p>In ONLINE mode the VSCU JAR relays each <code>saveSales</code> call synchronously to KRA's servers before responding. Live signings against the KRA sandbox take about <strong>2.0–2.2 seconds</strong> (measured 2026-07-06). Any client timeout at or below ~2 seconds therefore fails every real signing — and dangerously: <strong>KRA still consumes the receipt counter</strong> even though your client never sees the response.</p>
+      <p style="margin-top:10px;">Use a client timeout of <strong>15 seconds or more</strong>, and treat a timeout as "outcome unknown", not "failed": check whether the receipt exists (select endpoint or receipt-counter arithmetic) before replaying, because a replay of the same invoice number returns <code>899</code> on the VSCU path.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-gotcha">Gotcha</span>
+      <h2>Does the VSCU JAR use HTTP status codes for errors?</h2>
+      <p>No. The VSCU JAR returns <strong>HTTP 200 for error responses</strong> — both <code>899</code> (client catch-all) and <code>902</code> (device already installed) arrive as HTTP 200 with the error in the JSON body (verified live against VSDC 2.0.6, 2026-07-04). GavaConnect does the same for some malformed requests.</p>
+      <p style="margin-top:10px;">Parse <code>resultCd</code> from the body on every response. Status-code-based error handling silently treats every KRA error as success.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-vscu">VSCU</span>
+      <h2>Why is VSCURcptPbctDate null in my saveSales response?</h2>
+      <p>The spec's §3.3.6 JSON sample names the receipt publication timestamp <code>VSCURcptPbctDate</code>, but the real VSDC 2.0.6 JAR returns the field as <code>vsdcRcptPbctDate</code> (verified live 2026-07-06: <code>{"data":{…,"vsdcRcptPbctDate":"20260706202219",…}}</code>). A strict mapping against the spec name silently yields null.</p>
+      <p style="margin-top:10px;">Parse the timestamp case-insensitively or register aliases for <code>vsdcRcptPbctDate</code>, <code>VSDCRcptPbctDate</code>, and <code>VSCURcptPbctDate</code>. The real JAR also returns <code>mrcNo</code> in the <code>data</code> object.</p>
     </div>
 
     <div class="faq-item">
