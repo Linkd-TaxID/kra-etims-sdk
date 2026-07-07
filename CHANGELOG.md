@@ -16,6 +16,16 @@ All notable changes to kra-etims-sdk are documented here.
 - **`ItemSave.pkgUnitCd` / `qtyUnitCd` / `bcd`** — optional KRA unit codes (spec §4.5/§4.6)
   and barcode, passed through to the middleware registry (e.g. `qtyUnitCd="LTR"` for fuel
   sold by the litre). Middleware defaults both unit codes to `"U"` when omitted.
+- **`pmtTyCd` transmitted on sales** — `SaleInvoice.pmtTyCd` (KRA spec §4.7: `01` cash,
+  `05` card, `06` mobile money, …) now reaches the middleware and the signed VSCU
+  receipt. Previously the middleware hardcoded `01` (cash) on every receipt.
+
+### Changed
+- **Mixed-band invoices now raise `ValueError` client-side** — the middleware aggregates
+  X/Z reports per receipt-level band and (as of 2026-07-07) rejects receipts whose lines
+  mix tax bands with HTTP 400. `to_middleware_sale_payload` previously classified mixed
+  invoices by their *dominant* band, silently mis-booking the minority band's turnover
+  (verified live against the KRA sandbox). Submit one invoice per band.
 
 ## [0.4.0] — 2026-07-07
 

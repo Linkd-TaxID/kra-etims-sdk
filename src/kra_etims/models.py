@@ -330,22 +330,27 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
     - ``supplierPin``  ← ``invoice.tin`` (the selling taxpayer's PIN)
     - ``amount``       ← ``invoice.totAmt``
     - ``invoiceDate``  ← ``invoice.confirmDt`` (``yyyyMMddHHmmss`` → ISO date)
-    - ``taxBand``      ← the band contributing the largest ``taxAmt`` across
-      ``itemList`` (ties resolved by first occurrence). Multi-band invoices are
-      classified by their dominant band; per-band fidelity is preserved
-      server-side once the tenant's item catalog is registered.
+    - ``taxBand``      ← the single band shared by every line in ``itemList``.
+      Mixed-band invoices raise :class:`ValueError` — the middleware's X/Z
+      aggregation is receipt-level, so a mixed ticket would either be rejected
+      server-side (HTTP 400) or booked under the wrong band. Split the sale
+      into one invoice per band (verified live against KRA sandbox 2026-07-07).
     - ``taxAmount``    ← ``invoice.totTaxAmt``
+    - ``pmtTyCd``      ← ``invoice.pmtTyCd`` (KRA §4.7: 01 cash … 06 mobile money)
     - ``buyerPin`` / ``buyerName`` ← ``custPin`` / ``custNm`` (B2B only;
       omitted entirely for B2C, where ``custPin`` is ``None``)
     """
     dt = invoice.confirmDt
     invoice_date = f"{dt[0:4]}-{dt[4:6]}-{dt[6:8]}"
 
-    band_totals: dict = {}
-    for item in invoice.itemList:
-        band = str(getattr(item.taxTyCd, "value", item.taxTyCd))
-        band_totals[band] = band_totals.get(band, Decimal("0")) + item.taxAmt
-    tax_band = max(band_totals, key=lambda b: band_totals[b]) if band_totals else "B"
+    bands = {str(getattr(i.taxTyCd, "value", i.taxTyCd)) for i in invoice.itemList}
+    if len(bands) > 1:
+        raise ValueError(
+            f"SaleInvoice {invoice.invcNo!r} mixes tax bands {sorted(bands)}. "
+            "The middleware aggregates X/Z reports per receipt-level band and "
+            "rejects mixed-band receipts — submit one invoice per band."
+        )
+    tax_band = bands.pop() if bands else "B"
 
     description = ", ".join(i.itemNm for i in invoice.itemList[:3])[:200] or "General supply"
 
@@ -356,6 +361,7 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
         "itemDescription": description,
         "taxBand":         tax_band,
         "taxAmount":       str(invoice.totTaxAmt),
+        "pmtTyCd":         invoice.pmtTyCd,
     }
     if invoice.custPin:
         payload["buyerPin"]  = invoice.custPin
