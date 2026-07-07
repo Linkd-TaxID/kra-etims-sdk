@@ -29,4 +29,4 @@ Allow: /
 User-agent: Googlebot
 Allow: /
 
-Sitemap: https://linkd-taxid.github.io/kra-etims-sdk/sitemap.xml
+Sitemap: https://docs.taxid.co.ke/sitemap.xml
