@@ -47,7 +47,8 @@ Exceptions
 - ``KRAInvalidItemCodeError`` — item not registered on eTIMS (code 13)
 - ``KRAInvalidBranchError``   — branch not registered for this TIN (code 14)
 - ``KRAServerError``          — transient KRA server error (codes 20/96/99)
-- ``CreditNoteConflictError`` — credit note already issued for this sale (HTTP 409)
+- ``CreditNoteConflictError`` — generic HTTP 409 carrier (see reports for Z-report use)
+- ``CreditNoteExceedsOriginalError`` — reversal exceeds the reversible balance (HTTP 422)
 """
 
 # Clients
@@ -133,6 +134,7 @@ from .exceptions import (
     KRAInvalidBranchError,
     KRAServerError,
     CreditNoteConflictError,
+    CreditNoteExceedsOriginalError,
     ZReportAlreadyIssuedError,
 )
 
@@ -197,6 +199,7 @@ __all__ = [
     "KRAInvalidBranchError",
     "KRAServerError",
     "CreditNoteConflictError",
+    "CreditNoteExceedsOriginalError",
     "ZReportAlreadyIssuedError",
     # GavaConnect
     "GavaConnectClient",

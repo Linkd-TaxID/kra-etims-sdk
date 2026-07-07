@@ -21,11 +21,19 @@ All notable changes to kra-etims-sdk are documented here.
   receipt. Previously the middleware hardcoded `01` (cash) on every receipt.
 
 ### Changed
-- **Mixed-band invoices now raise `ValueError` client-side** — the middleware aggregates
-  X/Z reports per receipt-level band and (as of 2026-07-07) rejects receipts whose lines
-  mix tax bands with HTTP 400. `to_middleware_sale_payload` previously classified mixed
-  invoices by their *dominant* band, silently mis-booking the minority band's turnover
-  (verified live against the KRA sandbox). Submit one invoice per band.
+- **Mixed-band invoices are now supported (previously rejected client-side)** — the
+  middleware books per-line tax bands as of V14, so `to_middleware_sale_payload` no longer
+  raises `ValueError` on a mixed ticket. For a mixed invoice it emits the `items` array
+  (each line under its own band) and omits the receipt-level `taxBand`; single-band
+  invoices keep the flat payload unchanged. `ItemDetail` gains an optional `itemClsCd`
+  (UN/CEFACT commodity code) that is **required on every line of a mixed-band invoice**.
+  Verified live against the KRA sandbox (exempt bread + standard soda on one receipt).
+- **Credit notes: over-reversal is now `422 CREDIT_NOTE_EXCEEDS_ORIGINAL`, not `409`** —
+  the middleware permits multiple credit notes per receipt (V15) up to the reversible
+  balance. New `CreditNoteExceedsOriginalError` (HTTP 422; carries `remaining` /
+  `already_reversed`) is raised on over-reversal and is exported from the package root.
+  `CreditNoteConflictError` is retained as the generic 409 carrier (still used by the
+  Z-report path). Verified live against the KRA sandbox.
 
 ## [0.4.0] — 2026-07-07
 

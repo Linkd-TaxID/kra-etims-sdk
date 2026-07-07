@@ -19,6 +19,7 @@ import httpx
 from .exceptions import (
     KRA_ERROR_MAP,
     CreditNoteConflictError,
+    CreditNoteExceedsOriginalError,
     KRAConnectivityTimeoutError,
     KRAeTIMSAuthError,
     KRAAuthorizationError,
@@ -193,6 +194,20 @@ class _BaseKRAeTIMSClient(ABC):
                     existing_credit_note_id=body.get("existingCreditNoteId"),
                     existing_cu_invoice_no=body.get("existingCuInvoiceNo"),
                 ) from exc
+            if sc == 422:
+                # 422 covers VSCU terminal rejections AND the credit-note
+                # over-reversal guard (middleware V15). Discriminate by body code.
+                try:
+                    body = exc.response.json()
+                except Exception:
+                    body = {}
+                if body.get("code") == "CREDIT_NOTE_EXCEEDS_ORIGINAL":
+                    raise CreditNoteExceedsOriginalError(
+                        body.get("message") or exc.response.text[:200],
+                        remaining=body.get("remaining"),
+                        already_reversed=body.get("alreadyReversed"),
+                    ) from exc
+                # Other 422s fall through to the generic handler below.
             if sc == 401:
                 raise KRAeTIMSAuthError(
                     "Authentication failed (HTTP 401): invalid or missing API key. "

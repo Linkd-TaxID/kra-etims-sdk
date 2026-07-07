@@ -105,6 +105,11 @@ class ImportItem(BaseSchema):
 class ItemDetail(BaseSchema):
     itemCd: str = Field(..., description="Item Code")
     itemNm: str = Field(..., description="Item Name")
+    # UN/CEFACT commodity classification code (8–10 digits). Optional for the flat
+    # single-band middleware payload, but REQUIRED on every line of a mixed-band
+    # invoice so the middleware can book each line under its own band (V14 per-band
+    # aggregation). Verify against the middleware's commodity_codes cache.
+    itemClsCd: Optional[str] = Field(default=None, description="UN/CEFACT commodity classification code")
     pkgUnitCd: str = "UNT"
     pkg: Decimal = Decimal("1.0")
     qtyUnitCd: str = "U"
@@ -330,11 +335,11 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
     - ``supplierPin``  ← ``invoice.tin`` (the selling taxpayer's PIN)
     - ``amount``       ← ``invoice.totAmt``
     - ``invoiceDate``  ← ``invoice.confirmDt`` (``yyyyMMddHHmmss`` → ISO date)
-    - ``taxBand``      ← the single band shared by every line in ``itemList``.
-      Mixed-band invoices raise :class:`ValueError` — the middleware's X/Z
-      aggregation is receipt-level, so a mixed ticket would either be rejected
-      server-side (HTTP 400) or booked under the wrong band. Split the sale
-      into one invoice per band (verified live against KRA sandbox 2026-07-07).
+    - ``taxBand``      ← the single band shared by every line, for a single-band
+      invoice. **Mixed-band invoices** are supported (middleware V14 per-band
+      aggregation): the SDK emits the ``items`` array so each line is booked
+      under its own band, and omits the receipt-level ``taxBand``. Each line then
+      requires ``itemClsCd`` — a :class:`ValueError` is raised if any is missing.
     - ``taxAmount``    ← ``invoice.totTaxAmt``
     - ``pmtTyCd``      ← ``invoice.pmtTyCd`` (KRA §4.7: 01 cash … 06 mobile money)
     - ``buyerPin`` / ``buyerName`` ← ``custPin`` / ``custNm`` (B2B only;
@@ -344,14 +349,6 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
     invoice_date = f"{dt[0:4]}-{dt[4:6]}-{dt[6:8]}"
 
     bands = {str(getattr(i.taxTyCd, "value", i.taxTyCd)) for i in invoice.itemList}
-    if len(bands) > 1:
-        raise ValueError(
-            f"SaleInvoice {invoice.invcNo!r} mixes tax bands {sorted(bands)}. "
-            "The middleware aggregates X/Z reports per receipt-level band and "
-            "rejects mixed-band receipts — submit one invoice per band."
-        )
-    tax_band = bands.pop() if bands else "B"
-
     description = ", ".join(i.itemNm for i in invoice.itemList[:3])[:200] or "General supply"
 
     payload = {
@@ -359,11 +356,42 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
         "amount":          str(invoice.totAmt),
         "invoiceDate":     invoice_date,
         "itemDescription": description,
-        "taxBand":         tax_band,
         "taxAmount":       str(invoice.totTaxAmt),
         "pmtTyCd":         invoice.pmtTyCd,
     }
+
+    if len(bands) > 1:
+        # Mixed-band: send the line items so the middleware books each under its own
+        # band. Receipt-level taxBand is omitted (it is only a label for the flat path).
+        missing = [i.itemCd for i in invoice.itemList if not i.itemClsCd]
+        if missing:
+            raise ValueError(
+                f"SaleInvoice {invoice.invcNo!r} is mixed-band ({sorted(bands)}) but line(s) "
+                f"{missing} have no itemClsCd. A commodity classification code is required on "
+                "every line of a mixed-band invoice so the middleware can book each per band."
+            )
+        payload["items"] = [_to_middleware_sale_line(i) for i in invoice.itemList]
+    else:
+        payload["taxBand"] = bands.pop() if bands else "B"
+
     if invoice.custPin:
         payload["buyerPin"]  = invoice.custPin
         payload["buyerName"] = invoice.custNm
     return payload
+
+
+def _to_middleware_sale_line(item: "ItemDetail") -> dict:
+    """One entry in the middleware ``items`` array (``SaleItemDto``) for a sale line."""
+    line = {
+        "sku":       item.itemCd,
+        "itemNm":    item.itemNm,
+        "itemClsCd": item.itemClsCd,
+        "taxTyCd":   str(getattr(item.taxTyCd, "value", item.taxTyCd)),
+        "qty":       str(item.qty),
+        "unitPrice": str(item.uprc),
+    }
+    if item.pkgUnitCd:
+        line["pkgUnitCd"] = item.pkgUnitCd
+    if item.qtyUnitCd:
+        line["qtyUnitCd"] = item.qtyUnitCd
+    return line

@@ -314,11 +314,15 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         If ``items`` is ``None`` the full original invoice is reversed.
         Supply ``items`` only to partially reverse specific line items.
 
+        Multiple credit notes may be issued against one receipt (e.g. items returned
+        across separate visits) as long as the cumulative reversed amount does not
+        exceed the original (middleware V15).
+
         :param original_purchase_id: TIaaS database ID of the original sale.
         :param reason: Human-readable reversal reason (optional).
         :param items: Partial line items to reverse; ``None`` reverses the full invoice.
-        :raises CreditNoteConflictError: HTTP 409 — a credit note already exists for
-            this sale.  Retrieve the existing credit note instead of retrying.
+        :raises CreditNoteExceedsOriginalError: HTTP 422 — the reversal would exceed the
+            receipt's remaining reversible balance (carries ``remaining``).
         :raises KRAeTIMSError: HTTP 404 — original sale not found.
         :raises KRAConnectivityTimeoutError: VSCU offline ceiling breached (HTTP 503).
         """

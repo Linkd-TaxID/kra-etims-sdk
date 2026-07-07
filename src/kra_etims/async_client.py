@@ -307,7 +307,8 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         :param original_purchase_id: TIaaS database ID of the original sale.
         :param reason: Human-readable reversal reason (optional).
         :param items: Partial line items to reverse; ``None`` reverses the full invoice.
-        :raises CreditNoteConflictError: HTTP 409 — credit note already exists.
+        :raises CreditNoteExceedsOriginalError: HTTP 422 — reversal exceeds the
+            receipt's remaining reversible balance (multiple notes allowed within it).
         :raises KRAeTIMSError: HTTP 404 — original sale not found.
         :raises KRAConnectivityTimeoutError: VSCU offline ceiling breached (HTTP 503).
         """

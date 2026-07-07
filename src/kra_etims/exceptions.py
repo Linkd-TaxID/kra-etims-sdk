@@ -199,13 +199,18 @@ class KRAServerError(KRAeTIMSError):
 
 class CreditNoteConflictError(KRAeTIMSError):
     """
-    A credit note has already been issued for this sale (HTTP 409).
+    Generic HTTP 409 Conflict carrier for the TIaaS middleware.
 
-    KRA prohibits issuing more than one credit note per original invoice.
-    Retrieve the existing credit note receipt instead of retrying.
+    .. note::
+       As of middleware V15 (2026-07) multiple credit notes MAY be issued
+       against one receipt — over-reversal now raises
+       :class:`CreditNoteExceedsOriginalError` (HTTP 422), not this. This
+       exception remains the intermediary the base client raises for any 409;
+       :mod:`kra_etims.reports` catches it to re-raise
+       :class:`ZReportAlreadyIssuedError` for the Z-report path.
 
-    ``original_purchase_id`` carries the ID of the sale that already has a
-    credit note attached, so callers can look it up without parsing the message.
+    ``original_purchase_id`` carries the sale ID when present, so callers can
+    look it up without parsing the message.
     """
     def __init__(
         self,
@@ -224,6 +229,36 @@ class CreditNoteConflictError(KRAeTIMSError):
         # existingCuInvoiceNo}) — the fields callers need to fetch the winner.
         self.existing_credit_note_id = existing_credit_note_id
         self.existing_cu_invoice_no = existing_cu_invoice_no
+
+
+class CreditNoteExceedsOriginalError(KRAeTIMSError):
+    """
+    Issuing this credit note would exceed the original receipt's reversible
+    balance (HTTP 422, code ``CREDIT_NOTE_EXCEEDS_ORIGINAL``).
+
+    As of middleware V15, multiple credit notes may be issued against one
+    receipt (e.g. items returned across separate visits) as long as the
+    cumulative reversed amount does not exceed the original. This is raised
+    when the running total would be exceeded.
+
+    ``remaining`` is the amount still reversible and ``already_reversed`` the
+    sum already credited (both from the 422 body). Retry with a note whose
+    amount is ``<= remaining``.
+    """
+    def __init__(
+        self,
+        message: str = (
+            "Credit Note Exceeds Original (HTTP 422): the reversal would exceed "
+            "the receipt's remaining reversible balance. Issue a smaller credit note."
+        ),
+        remaining: Optional[str] = None,
+        already_reversed: Optional[str] = None,
+        original_purchase_id: Optional[int] = None,
+    ):
+        super().__init__(message)
+        self.remaining = remaining
+        self.already_reversed = already_reversed
+        self.original_purchase_id = original_purchase_id
 
 
 class ZReportAlreadyIssuedError(KRAeTIMSError):
