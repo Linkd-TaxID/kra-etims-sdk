@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "taxid-etims"
-version = "0.4.0"
+version = "0.5.0"
 description = "Enterprise Python SDK for KRA eTIMS via TIaaS Middleware — idempotency engine with offline resilience"
 readme = "README.md"
 requires-python = ">=3.10"

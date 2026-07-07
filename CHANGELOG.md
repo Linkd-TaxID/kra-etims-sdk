@@ -4,6 +4,8 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-07-08
+
 ### Fixed
 - **`save_item()` sent the wrong wire schema to the wrong path — HTTP 404/400 on every
   call** — the client POSTed the KRA-native `ItemSave` dump to `/v2/etims/item`
