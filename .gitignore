@@ -13,3 +13,6 @@ verify_v2.py
 *.egg-info/
 dist/
 build/
+# Local agent instructions — internal audit notes, never publish
+CLAUDE.md
+.claude/
