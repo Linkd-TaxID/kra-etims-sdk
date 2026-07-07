@@ -32,7 +32,7 @@ resultCd 896  | Client | Request status error — unexpected HTTP status from pr
 resultCd 899  | Client | Generic client error — inspect resultMsg for detail
 resultCd 900  | Server | No header information — tin/bhfId/cmcKey missing from request
 resultCd 901  | Server | Not a valid device — dvcSrlNo not registered with KRA. Unrecoverable without KRA intervention. Contact timsupport@kra.go.ke.
-resultCd 902  | Server | Device already installed — idempotent. Extract cmcKey from response, do not re-initialize.
+resultCd 902  | Server | Device already installed — idempotent, not a failure. The 902 body does NOT return the cmcKey (verified live: data:null). Use the cmcKey persisted at first initialization; if lost, contact timsupport@kra.go.ke to de-register the serial. Do not re-initialize.
 resultCd 903  | Server | Device type mismatch — VSCU serial on OSCU endpoint or vice versa. Unrecoverable without KRA.
 resultCd 910  | Server | Request parameter error — missing/malformed field. Common: cmcKey absent, invoice number as string, tax fields missing.
 resultCd 911  | Server | Empty request body
@@ -68,7 +68,7 @@ resultCd 905    | OSCU-only device on VSCU endpoint — contact KRA, no self-ser
 - All 15 tax fields are required: taxblAmtA/B/C/D/E, taxRtA/B/C/D/E, taxAmtA/B/C/D/E. Set to 0 if unused.
 - VSCU stops issuing receipt numbers exactly 24 hours after last successful KRA connection. No warning signal.
 - resultCd 994 on retry = the original submission succeeded. Treat as idempotent success.
-- resultCd 902 on re-initialization = device already active. Extract cmcKey from response, do not fail.
+- resultCd 902 on re-initialization = device already active. The response does NOT return the cmcKey (data:null) — reuse the one persisted at first init; do not fail, do not re-initialize.
 - Sandbox device serial: dvcv1130. Sandbox bhfId: 00.
 - KRA support: timsupport@kra.go.ke — include full request payload and resultDt timestamp.
 
