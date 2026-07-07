@@ -2,6 +2,21 @@
 
 All notable changes to kra-etims-sdk are documented here.
 
+## [Unreleased]
+
+### Fixed
+- **`save_item()` sent the wrong wire schema to the wrong path — HTTP 404/400 on every
+  call** — the client POSTed the KRA-native `ItemSave` dump to `/v2/etims/item`
+  (singular); the middleware's item registry lives at `POST /v2/etims/items` and expects
+  `sku`/`itemNm`/`itemClsCd`/`taxTyCd`/`qty`/`unitPrice`. `save_item` now transmits
+  `models.to_middleware_item_payload(...)` — the same wire-contract repair `submit_sale`
+  received in 0.4.0. No call-site changes required.
+
+### Added
+- **`ItemSave.pkgUnitCd` / `qtyUnitCd` / `bcd`** — optional KRA unit codes (spec §4.5/§4.6)
+  and barcode, passed through to the middleware registry (e.g. `qtyUnitCd="LTR"` for fuel
+  sold by the litre). Middleware defaults both unit codes to `"U"` when omitted.
+
 ## [0.4.0] — 2026-07-07
 
 ### Fixed

@@ -82,6 +82,12 @@ class ItemSave(BaseSchema):
     taxTyCd: TaxType
     uprc: Decimal
     isUsed: str = "Y"
+    # Optional KRA unit codes (VSCU Spec v2.0 §4.5 / §4.6). The middleware
+    # defaults both to "U" when omitted; override for weighed or bulk goods
+    # (e.g. qtyUnitCd="LTR" for fuel sold by the litre).
+    pkgUnitCd: Optional[str] = None
+    qtyUnitCd: Optional[str] = None
+    bcd: Optional[str] = None
 
 # --- Category 5: Import Information ---
 
@@ -268,6 +274,43 @@ ETIMS_MODELS = {
     "7": ReverseInvoice,
     "8": StockItem,
 }
+
+
+def to_middleware_item_payload(item: "ItemSave") -> dict:
+    """
+    Translate a KRA-native :class:`ItemSave` into the TIaaS middleware's
+    ``POST /v2/etims/items`` request schema.
+
+    The middleware's item registry keys items by ``sku`` (the caller's
+    internal product identifier), generates the VSCU ``itemCd`` server-side,
+    and requires ``qty``/``unitPrice`` for the registry row. Prior to v0.4.1
+    the SDK posted the raw KRA-native schema to ``/v2/etims/item`` (singular),
+    which the middleware rejected — the same wire-contract drift fixed for
+    ``submit_sale`` in v0.4.0.
+
+    Field derivation:
+
+    - ``sku``       ← ``item.itemCd`` (caller's product identifier; the
+      middleware derives the actual VSCU ``itemCd`` from SHA-256(tin+bhfId+sku))
+    - ``unitPrice`` ← ``item.uprc``
+    - ``qty``       ← ``1`` (registration default; sales carry real quantities)
+    - unit codes / barcode pass through when set
+    """
+    payload = {
+        "sku":       item.itemCd,
+        "itemNm":    item.itemNm,
+        "itemClsCd": item.itemClsCd,
+        "taxTyCd":   str(getattr(item.taxTyCd, "value", item.taxTyCd)),
+        "qty":       "1",
+        "unitPrice": str(item.uprc),
+    }
+    if item.pkgUnitCd:
+        payload["pkgUnitCd"] = item.pkgUnitCd
+    if item.qtyUnitCd:
+        payload["qtyUnitCd"] = item.qtyUnitCd
+    if item.bcd:
+        payload["bcd"] = item.bcd
+    return payload
 
 
 def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:

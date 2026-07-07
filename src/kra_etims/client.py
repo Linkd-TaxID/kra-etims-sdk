@@ -31,6 +31,7 @@ from .models import (
     StockItem,
     StockAdjustmentLine,
     StockAdjustmentRequest,
+    to_middleware_item_payload,
     to_middleware_sale_payload,
 )
 
@@ -238,10 +239,18 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
     # ------------------------------------------------------------------
 
     def save_item(self, data: ItemSave) -> Dict[str, Any]:
-        """Category 4: Save or update item master data."""
+        """
+        Category 4: Save or update item master data.
+
+        Posts the middleware's ``POST /v2/etims/items`` registry schema — NOT
+        the KRA-native ``ItemSave`` dump, which the middleware 400s. See
+        :func:`kra_etims.models.to_middleware_item_payload` for the mapping.
+        The response includes ``vscuRegistered`` (whether the VSCU JAR
+        acknowledged the registration) and the server-generated ``itemCd``.
+        """
         return self._request(
-            "POST", "/v2/etims/item",
-            json=data.model_dump(mode="json", exclude_none=True),
+            "POST", "/v2/etims/items",
+            json=to_middleware_item_payload(data),
         )
 
     # ------------------------------------------------------------------
