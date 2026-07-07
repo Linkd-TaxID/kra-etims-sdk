@@ -1,4 +1,4 @@
-# KRA eTIMS SDK (Python) `v0.3.0`
+# KRA eTIMS SDK (Python) `v0.4.0`
 
 ```bash
 pip install taxid-etims               # core SDK

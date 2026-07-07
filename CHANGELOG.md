@@ -2,7 +2,47 @@
 
 All notable changes to kra-etims-sdk are documented here.
 
-## [Unreleased]
+## [0.4.0] — 2026-07-07
+
+### Fixed
+- **`submit_sale()` sent the wrong wire schema — HTTP 400 on every call** — both sync and
+  async clients were POSTing the raw KRA-native `SaleInvoice` dump to `/v2/etims/sale`,
+  which the TIaaS middleware rejects (it expects its flat schema: `supplierPin`, `amount`,
+  `invoiceDate`, …). Verified live 2026-07-04 against the deployed middleware. `submit_sale`
+  now transmits `models.to_middleware_sale_payload(...)`. No call-site changes required —
+  the `SaleInvoice` you construct is unchanged; only the bytes on the wire differ. This is
+  the fix that produced the first real KRA-signed receipts through the SDK
+  (`KRACU0300003881` NS, KRA sandbox).
+- **`StockAdjustmentLine.pkgUnitCd` / `qtyUnitCd`** — now default to `NT` / `U`
+  (KRA spec §4.5/§4.6 standard codes). `None` was rejected by middleware validation,
+  making stock adjustments impossible without explicitly setting both on every line.
+- **`ZReportAlreadyIssuedError` importable from package root** — the README-documented
+  `from kra_etims import ZReportAlreadyIssuedError` previously raised `ImportError`;
+  it is now exported from `kra_etims.__init__`.
+
+### Changed
+- **`CreditNoteConflictError` carries the conflicting receipt** — on a middleware 409 the
+  exception now exposes `existing_credit_note_id` and `existing_cu_invoice_no` parsed from
+  the response body, so callers can reference the already-issued credit note instead of
+  re-parsing the error message.
+
+### Documentation
+- **Error reference corrected against live VSDC 2.0.6 sandbox evidence** (now at
+  https://docs.taxid.co.ke/): duplicate-invoice replay on the VSCU path returns **899**,
+  not 994 (994 idempotent-success semantics are OSCU-scoped); the 902 "device installed"
+  response body is `data: null` — it does **not** return the existing `cmcKey`; the `"00"`
+  success variant is marked unconfirmed (live VSDC 2.0.6 emits `"000"`); new FAQs cover
+  real ONLINE-mode signing latency (~2s — use a ≥15s timeout), HTTP-200 error envelopes,
+  and the `vsdcRcptPbctDate` field-name mismatch.
+
+## [0.3.0] — 2026-04-29
+
+Consolidates changes shipped across 0.2.0 (2026-04-04) and 0.3.0 (2026-04-29);
+these releases were published without cutting changelog sections at the time.
+
+### Added
+- **GavaConnect direct transport** and the **`etims` CLI**
+  (`pip install "taxid-etims[cli]"`, entry point `etims`) — the 0.3.0 headline features.
 
 ### Fixed
 - **`examples/basic_invoice.py` tax band inversion** — all three example items had wrong
