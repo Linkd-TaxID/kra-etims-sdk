@@ -205,10 +205,11 @@ def test_invoice_submit_request_body_fields(httpx_mock, tmp_path) -> None:
     runner.invoke(app, ["invoice", "submit", str(f)])
     req = httpx_mock.get_requests()[0]
     body = json.loads(req.content)
-    assert body["tin"] == _VALID_PIN
-    assert body["invcNo"] == "INV-INTG-001"
-    assert len(body["itemList"]) == 1
-    assert body["itemList"][0]["taxTyCd"] == "A"
+    # v0.3.1: the SDK transmits the middleware's flat sale schema
+    # (to_middleware_sale_payload), not the KRA-native SaleInvoice dump.
+    assert body["supplierPin"] == _VALID_PIN
+    assert body["taxBand"] == "A"
+    assert "amount" in body and "invoiceDate" in body and "taxAmount" in body
 
 
 @pytest.mark.integration

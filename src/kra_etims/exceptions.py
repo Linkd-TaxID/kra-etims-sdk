@@ -215,9 +215,15 @@ class CreditNoteConflictError(KRAeTIMSError):
             "KRA prohibits duplicate credit notes per original invoice."
         ),
         original_purchase_id: Optional[int] = None,
+        existing_credit_note_id: Optional[int] = None,
+        existing_cu_invoice_no: Optional[str] = None,
     ):
         super().__init__(message)
         self.original_purchase_id = original_purchase_id
+        # Populated from the middleware's 409 body ({existingCreditNoteId,
+        # existingCuInvoiceNo}) — the fields callers need to fetch the winner.
+        self.existing_credit_note_id = existing_credit_note_id
+        self.existing_cu_invoice_no = existing_cu_invoice_no
 
 
 class ZReportAlreadyIssuedError(KRAeTIMSError):

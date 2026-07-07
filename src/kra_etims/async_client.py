@@ -31,6 +31,7 @@ from .models import (
     StockItem,
     StockAdjustmentLine,
     StockAdjustmentRequest,
+    to_middleware_sale_payload,
 )
 
 # Maximum concurrent in-flight requests during offline-queue flush.
@@ -279,9 +280,12 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             "invoice.no": str(invoice.invcNo),
             "invoice.tin": invoice.tin,
         }):
+            # Transmit the middleware's flat sale schema — NOT the KRA-native
+            # SaleInvoice dump, which the middleware 400s. See
+            # models.to_middleware_sale_payload for the field mapping.
             return await self._request(
                 "POST", "/v2/etims/sale",
-                json=invoice.model_dump(mode="json", exclude_none=True),
+                json=to_middleware_sale_payload(invoice),
                 idempotency_key=idempotency_key,
             )
 

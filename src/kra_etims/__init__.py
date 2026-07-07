@@ -133,6 +133,7 @@ from .exceptions import (
     KRAInvalidBranchError,
     KRAServerError,
     CreditNoteConflictError,
+    ZReportAlreadyIssuedError,
 )
 
 try:
@@ -196,6 +197,7 @@ __all__ = [
     "KRAInvalidBranchError",
     "KRAServerError",
     "CreditNoteConflictError",
+    "ZReportAlreadyIssuedError",
     # GavaConnect
     "GavaConnectClient",
     "AsyncGavaConnectClient",

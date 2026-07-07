@@ -7,8 +7,8 @@ from kra_etims.models import SaleInvoice
 
 def test_payload_integrity_excludes_none(httpx_mock):
     """
-    Submit a SaleInvoice with optional fields (orgInvcNo, custPin) unset.
-    The raw JSON payload must not contain those keys (exclude_none=True).
+    Submit a B2C SaleInvoice (custPin unset). The transmitted middleware
+    payload must omit buyerPin/buyerName entirely (B2C sale).
     """
     client = KRAeTIMSClient("id", "secret", base_url="https://api.test")
     client._access_token = "mock"
@@ -32,6 +32,8 @@ def test_payload_integrity_excludes_none(httpx_mock):
     sent = httpx_mock.get_requests()[0]
     payload = json.loads(sent.content)
 
-    assert "orgInvcNo" not in payload
-    assert "custPin" not in payload
-    assert payload["invcNo"] == "1"
+    # v0.3.1 middleware schema: B2C omits buyer identity entirely.
+    assert "buyerPin" not in payload
+    assert "buyerName" not in payload
+    assert payload["supplierPin"] == "P1"
+    assert payload["invoiceDate"] == "2024-01-01"
