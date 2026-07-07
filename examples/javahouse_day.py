@@ -106,7 +106,8 @@ CATALOG = {
     "BEANS-500":  ("Roastery Coffee Beans 500g",   "50200000", "B", Decimal("1450.00")),
 }
 
-pos_counter = 7100          # POS receipt sequence (distinct from the 5400-block petrol run)
+pos_counter = 7300          # POS receipt sequence (7100-block consumed by the pre-fix run;
+                            # reusing keys would dedup into this morning's receipts)
 sold = []                   # (purchaseId, gross, band) for credit-note pick + recon
 expected = {b: {"taxbl": Decimal("0"), "tax": Decimal("0"), "gross": Decimal("0")}
             for b in "ABCDE"}
@@ -121,7 +122,7 @@ def next_receipt():
     return f"JH-{TODAY.replace('-', '')}-{pos_counter}"
 
 
-def make_invoice(rcpt_no, item_nm, band, gross):
+def make_invoice(rcpt_no, item_nm, band, gross, pmt="01"):
     """KRA-native SaleInvoice for the SDK flat path (single line)."""
     taxbl, tax = vat_split(gross, band)
     item = ItemDetail(
@@ -134,14 +135,14 @@ def make_invoice(rcpt_no, item_nm, band, gross):
         tin=TIN, bhfId=BHF, invcNo=rcpt_no,
         confirmDt=datetime.now().strftime("%Y%m%d%H%M%S"),
         totItemCnt=1, totTaxblAmt=taxbl, totTaxAmt=tax, totAmt=gross,
-        itemList=[item],
+        itemList=[item], pmtTyCd=pmt,
     )
 
 
-def flat_sale(client, actor, item_nm, band, gross, note=""):
+def flat_sale(client, actor, item_nm, band, gross, note="", pmt="01"):
     """Counter sale rung as a plain amount (SDK submit_sale path)."""
     rcpt = next_receipt()
-    inv = make_invoice(rcpt, item_nm, band, gross)
+    inv = make_invoice(rcpt, item_nm, band, gross, pmt=pmt)
     try:
         resp = client.submit_sale(inv, idempotency_key=rcpt)
         _track(resp, gross, band)
@@ -154,7 +155,7 @@ def flat_sale(client, actor, item_nm, band, gross, note=""):
 
 
 def itemized_sale(client, actor, lines, band, buyer=None, note="", track=True,
-                  idem_key=None):
+                  idem_key=None, pmt=None):
     """Ticket with registered SKU lines (middleware items[] path).
 
     lines: list of (sku, qty). `band` is the receipt-level band; per-line
@@ -182,6 +183,8 @@ def itemized_sale(client, actor, lines, band, buyer=None, note="", track=True,
     }
     if buyer:
         payload["buyerPin"], payload["buyerName"] = buyer
+    if pmt:
+        payload["pmtTyCd"] = pmt
     try:
         resp = client._request("POST", "/v2/etims/sale", json=payload,
                                idempotency_key=rcpt)
@@ -270,11 +273,21 @@ def main():
         pause(1.5, 3)
 
     # ---- 07:00-10:00 breakfast rush ----------------------------------------
-    itemized_sale(client, "ESTHER", [("JAVA-BFAST", Decimal("2")), ("CAPP-DBL", Decimal("2"))],
-                  "B", note="(table 4, couple)")
+    first_ticket, _ = itemized_sale(client, "ESTHER",
+                  [("JAVA-BFAST", Decimal("2")), ("CAPP-DBL", Decimal("2"))],
+                  "B", note="(table 4, couple)", pmt="06")
+    if first_ticket:
+        probe_results["self_sale_label"] = {
+            "type": first_ticket.get("type"),
+            "supplier": first_ticket.get("supplier"),
+            "fixed": first_ticket.get("type") == "SALE",
+        }
+        log("SYSTEM", "TYPE CHECK", f"normal sale labelled type={first_ticket.get('type')} "
+            f"supplier={first_ticket.get('supplier')!r} "
+            f"({'FIXED' if first_ticket.get('type') == 'SALE' else 'STILL MISLABELLED'})")
     pause(1.5, 4)
     flat_sale(client, "BRIAN", "Caffe Latte — takeaway", "B", Decimal("320.00"),
-              "(commuter, M-Pesa)")
+              "(commuter, M-Pesa)", pmt="06")
     pause(1.5, 4)
     itemized_sale(client, "BRIAN", [("AMERICANO", Decimal("1")), ("CAKE-BF", Decimal("1"))],
                   "B", note="(laptop customer)")
@@ -292,15 +305,26 @@ def main():
     pause(1.5, 4)
 
     # MIXED-BAND PROBE — one ticket carrying an A line + a B line.
-    # Receipt-level band sent as B; per-line taxTyCd is honest (A + B).
-    # Tracked separately: reconciliation reveals how aggregation handles it.
-    probe, _ = itemized_sale(client, "BRIAN",
+    # Pre-fix this signed and mis-booked the bread under band B (receipt /40).
+    # Post-fix (taxID 5b44b38) the middleware must reject it with 400 before
+    # anything is persisted or signed.
+    probe, probe_key = itemized_sale(client, "BRIAN",
                              [("BREAD-ORD", Decimal("1")), ("CAPP-DBL", Decimal("1"))],
                              "B", note="(!! mixed-band probe: A loaf + B coffee)",
                              track=False)
     if probe and probe.get("purchaseId"):
-        probe_results["mixed_band"] = probe
+        probe_results["mixed_band"] = {"rejected": False, "signed": probe}
         sold.append((probe["purchaseId"], Decimal("530.00"), "MIXED"))
+        log("SYSTEM", "MIXED PROBE", "!!! mixed-band ticket SIGNED — guard NOT active")
+    else:
+        err = failures.pop() if failures and failures[-1][0] == probe_key else ("", "")
+        # The SDK sanitizes unmapped 4xx to status-code-only messages (no server
+        # body), so match on the 400 itself; the server-side detail is
+        # "Mixed tax bands are not supported on one receipt" (curl to verify).
+        rejected = "400" in err[1]
+        probe_results["mixed_band"] = {"rejected": rejected, "error": err[1][:200]}
+        log("SYSTEM", "MIXED PROBE", "rejected with 400 — guard active (fix verified)"
+            if rejected else f"unexpected failure mode: {err[1][:120]}")
     pause(1.5, 4)
 
     # IDEMPOTENCY REPLAY PROBE — same key submitted twice; the second response
@@ -370,7 +394,7 @@ def main():
                                      ("OJ-LGE", Decimal("2"))], "B", note="(table 2)")
     pause(1.5, 4)
     itemized_sale(client, "DELIVERY", [("CHIC-BURG", Decimal("2")), ("SHAKE-VAN", Decimal("2"))],
-                  "B", note="(Glovo rider pickup — order GLV-83321)")
+                  "B", note="(Glovo rider pickup — order GLV-83321)", pmt="05")
     pause(1.5, 4)
     itemized_sale(client, "ESTHER", [("QTR-CHIPS", Decimal("2"))], "B", note="(table 7)")
     pause(1.5, 4)
@@ -435,33 +459,21 @@ def main():
             bands = {"A": (x0.band_a, x1.band_a), "B": (x0.band_b, x1.band_b),
                      "C": (x0.band_c, x1.band_c), "D": (x0.band_d, x1.band_d),
                      "E": (x0.band_e, x1.band_e)}
-            probe_gross = Decimal("530.00")
-            probe_taxbl_b, probe_tax_b = vat_split(probe_gross, "B")
             print(f"  receipts delta: {x1.invoice_count - x0.invoice_count} "
-                  f"(sales {len(sold)} incl. mixed probe + CN {len(credit_notes)})", flush=True)
+                  f"(sales {len(sold)} + CN {len(credit_notes)}; rejected mixed probe "
+                  f"must NOT appear)", flush=True)
+            all_match = True
             for b, (before, after) in bands.items():
                 d_taxbl = after.taxable_amount - before.taxable_amount
                 d_tax   = after.tax_amount - before.tax_amount
                 if d_taxbl == 0 and d_tax == 0 and expected[b]["gross"] == 0:
                     continue
                 ok = (d_taxbl == expected[b]["taxbl"] and d_tax == expected[b]["tax"])
+                all_match &= ok
                 print(f"  Band {b}: X-delta taxbl={d_taxbl} tax={d_tax} | tracked "
                       f"taxbl={expected[b]['taxbl']} tax={expected[b]['tax']} "
-                      f"{'MATCH' if ok else 'MISMATCH (mixed-band probe pending attribution)'}",
-                      flush=True)
-            # attribute the mixed probe: whole ticket under B, or split per line?
-            d_b_taxbl = bands["B"][1].taxable_amount - bands["B"][0].taxable_amount
-            whole_under_b = expected["B"]["taxbl"] + probe_taxbl_b
-            a_line, b_line = Decimal("180.00"), Decimal("350.00")
-            split_b = expected["B"]["taxbl"] + vat_split(b_line, "B")[0]
-            if d_b_taxbl == whole_under_b:
-                verdict = "whole ticket aggregated under receipt-level band B (per-line bands ignored)"
-            elif d_b_taxbl == split_b:
-                verdict = "per-line bands honoured (A line under Band A)"
-            else:
-                verdict = f"neither hypothesis: B delta {d_b_taxbl} vs whole-B {whole_under_b} vs split {split_b}"
-            probe_results["mixed_band_verdict"] = verdict
-            print(f"  MIXED-BAND PROBE: {verdict}", flush=True)
+                      f"{'MATCH' if ok else 'MISMATCH'}", flush=True)
+            probe_results["delta_reconciliation"] = "to the cent" if all_match else "MISMATCH"
     except Exception as e:
         failures.append(("x-final", str(e)))
         print(f"  final X failed: {e}", flush=True)
