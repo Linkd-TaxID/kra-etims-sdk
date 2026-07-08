@@ -3,7 +3,7 @@
 # Maintained by: Linkd TaxID — https://github.com/Linkd-TaxID/kra-etims-sdk
 # Live reference: https://linkd-taxid.github.io/kra-etims-sdk/
 # Machine-readable data: https://linkd-taxid.github.io/kra-etims-sdk/errors.json
-# Last updated: 2026-03-24
+# Last updated: 2026-07-08
 
 ## CRITICAL: Three success codes exist
 
@@ -54,6 +54,7 @@ resultCd "0000" | GavaConnect success variant — functionally identical to 000
 resultCd E04    | Device/Branch not found — bhfId not registered for this TIN. Sandbox bhfId: 00.
 resultCd E11    | VSCU memory full — restart VSCU JAR after ensuring connectivity and sync
 resultCd 905    | OSCU-only device on VSCU endpoint — contact KRA, no self-service path
+resultCd 913    | Code value error among request parameters — a field holds a value outside its spec §4 code table; resultMsg names the field, e.g. [<itemList><pkgUnitCd>]. Classic trigger: pkgUnitCd 'U' (a §4.6 quantity-unit code) instead of a §4.5 packaging code like NT. saveItems does not validate these fields — only saveSales does, so a bad item registers fine and then 913s every sale. Confirmed live on VSDC 2.0.6, 2026-07-07.
 
 ## Key integration facts
 
@@ -87,4 +88,5 @@ common tax integration error and produces incorrect Z-Report aggregation.
 ## SDK
 
 Python SDK: https://github.com/Linkd-TaxID/kra-etims-sdk
-pip install kra-etims-sdk
+pip install taxid-etims
+(The old PyPI name kra-etims-sdk is frozen at 0.1.5 — do not install it.)

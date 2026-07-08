@@ -309,6 +309,22 @@
     ]
   },
   {
+    "code": "913",
+    "title": "Code Value Error Among Request Parameters",
+    "category": "Production",
+    "description": "A field contains a value that is not in the KRA code table for that field. The resultMsg names the offending field path, e.g. 'Code value error among request parameters [<itemList><pkgUnitCd>]'.",
+    "causes": [
+      "pkgUnitCd populated with a quantity-unit code — 'U' (Unit) belongs to the quantity-unit table (spec §4.6), not the packaging-unit table (§4.5)",
+      "Any enumerated field (pkgUnitCd, qtyUnitCd, pmtTyCd, taxTyCd) populated with a value outside its spec §4 code table"
+    ],
+    "fix": "Read the field path in resultMsg, then re-check that field against its code table in spec §4. For pkgUnitCd use packaging-unit codes (§4.5, e.g. NT = Net); for qtyUnitCd use quantity-unit codes (§4.6, e.g. U = Unit). Confirmed live: pkgUnitCd 'U' fails saveSales with 913; 'NT' signs.",
+    "gotcha": "saveItems does NOT validate these code fields — only saveSales does. An item can register successfully with a bad pkgUnitCd and then 913 every sale that references it. Stock movements can also pass while sales fail, hiding the bad registry row. Confirmed live against VSDC 2.0.6, 2026-07-07.",
+    "related": [
+      "910",
+      "912"
+    ]
+  },
+  {
     "code": "921",
     "title": "Sales Invoice Sequence Violation",
     "category": "Official",

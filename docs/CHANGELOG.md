@@ -1,5 +1,15 @@
 # KRA eTIMS Error Code Reference — Changelog
 
+## 2026-07-08
+
+- Added resultCd 913 (Code Value Error Among Request Parameters) — production-observed
+  against VSDC 2.0.6 on 2026-07-07: pkgUnitCd 'U' (a §4.6 quantity-unit code) rejected
+  by saveSales; only saveSales validates these code fields, so a bad item registers
+  cleanly and then fails every sale. Added 913.html, errors.js/errors.json entries,
+  llms.txt line, and sitemap entry.
+- Corrected install command in llms.txt: `pip install taxid-etims` (the old PyPI name
+  kra-etims-sdk is frozen at 0.1.5).
+
 ## 2026-03-24
 
 - Added fuzzy search (Fuse.js 7) with match highlighting, URL sync (?q=), keyboard shortcuts

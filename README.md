@@ -1,4 +1,4 @@
-# KRA eTIMS SDK (Python) `v0.4.0`
+# KRA eTIMS SDK (Python) `v0.5.0`
 
 ```bash
 pip install taxid-etims               # core SDK
@@ -100,10 +100,36 @@ invoice = SaleInvoice(
     itemList=items, **build_invoice_totals(items),
 )
 response = client.submit_sale(invoice, idempotency_key="INV-2026-001")
-print(response["invoiceSignature"])
+print(response["cuInvoiceNumber"])   # e.g. "KRACU0100000001/152 NS"
 ```
 
 `confirmDt` format: `yyyyMMddHHmmss` — e.g. `"20260311120000"` = 2026-03-11 12:00:00.
+
+The middleware response also carries `receiptSignature`, `kraQrPayload`, `sdcId`, and
+`vscuTimestamp` — there is no `invoiceSignature` key.
+
+#### Mixed-band invoices (middleware V14+)
+
+A single receipt may span multiple tax bands (e.g. exempt bread, Band A, plus standard
+soda, Band B, on one grocery ticket). Set `itemClsCd` (UN/CEFACT commodity code) on
+**every** line of a mixed-band invoice — `submit_sale` raises `ValueError` if any line
+is missing it. The SDK then transmits a per-line `items[]` payload and the middleware
+books the per-band split into X/Z reports. Single-band invoices keep the flat payload
+and do not need `itemClsCd`.
+
+```python
+bread = calculate_item("Loaf bread", "BREAD", 120, "A")   # A = Exempt 0%
+soda  = calculate_item("Soda 500ml", "SODA",  140, "B")   # B = Standard 16%
+bread.itemClsCd = "50180000"
+soda.itemClsCd  = "50200000"
+
+invoice = SaleInvoice(
+    tin="P051234567X", bhfId="00", invcNo="INV-2026-002",
+    confirmDt="20260311120000",
+    itemList=[bread, soda], **build_invoice_totals([bread, soda]),
+)
+response = client.submit_sale(invoice, idempotency_key="INV-2026-002")
+```
 
 ---
 
@@ -295,7 +321,8 @@ except KRADuplicateInvoiceError:
 | `KRADuplicateInvoiceError` | Device already initialized (code 902); `is_idempotent_success=True` — existing `cmcKey` remains valid, do not re-initialize |
 | `KRAeTIMSError` | Device serial not approved (code 901) — contact timsupport@kra.go.ke |
 | `KRAeTIMSError` | VSCU sequence error (code 921) — `saveSales` must precede `saveInvoice`; cannot mix OSCU and VSCU paths |
-| `CreditNoteConflictError` | Credit note already issued for this sale (HTTP 409); carries `original_purchase_id` |
+| `CreditNoteExceedsOriginalError` | Credit note would exceed the receipt's reversible balance (HTTP 422, code `CREDIT_NOTE_EXCEEDS_ORIGINAL`); carries `original_purchase_id`, `already_reversed`, `remaining` |
+| `CreditNoteConflictError` | Generic HTTP 409 on a credit-note request (e.g. device not initialized); carries `original_purchase_id`. Since middleware V15 it no longer means "already reversed" — multiple credit notes per receipt are allowed |
 | `ZReportAlreadyIssuedError` | Z-report already submitted for this date (HTTP 409); VSCU day-reset is irreversible — do not retry; carries `report_date` |
 
 > `KRAeTIMSError` is the base class for all SDK exceptions. Unexpected HTTP 4xx/5xx responses not mapped to a subclass raise it directly — the message contains the status code only, never request URLs or PII.
@@ -503,20 +530,23 @@ z = await client.reports.get_daily_z("2026-03-11")
 
 ## Credit Notes (Category 7)
 
-Issue a credit note against a previously signed sale. The middleware sources the original amount from the signed receipt — callers cannot supply amounts, preventing manipulation.
+Issue a credit note against a previously signed sale. The middleware sources amounts from the signed receipt (full reversal) or from the summed line values (partial reversal) — callers never supply a raw amount, preventing manipulation.
+
+Since middleware V15, **multiple credit notes may be issued against one receipt** (e.g. items returned across separate visits), as long as the cumulative reversed amount does not exceed the original. Over-reversal raises `CreditNoteExceedsOriginalError` (HTTP 422).
 
 ```python
-from kra_etims import CreditNoteConflictError
-
-# Full reversal
+# Full reversal of the remaining balance
 result = client.issue_credit_note(original_purchase_id=42, reason="Customer return")
 print(result["cuInvoiceNumber"])   # Signed credit note CU number
 
-# Partial reversal — supply specific line items to reverse
+# Partial reversal — supply the specific lines to reverse.
+# Each line uses the middleware item schema: sku, itemNm, itemClsCd,
+# taxTyCd, qty, and unitPrice are all required.
 result = client.issue_credit_note(
     original_purchase_id=42,
     reason="Partial return",
-    items=[{"itemCd": "SKU-001", "qty": 1}],
+    items=[{"sku": "SODA", "itemNm": "Soda 500ml", "itemClsCd": "50200000",
+            "taxTyCd": "B", "qty": 1, "unitPrice": 140.00}],
 )
 
 # Async
@@ -524,15 +554,20 @@ result = await client.issue_credit_note(original_purchase_id=42, reason="Return"
 ```
 
 ```python
+from kra_etims import CreditNoteExceedsOriginalError
+
 try:
     client.issue_credit_note(original_purchase_id=42)
-except CreditNoteConflictError as exc:
-    # HTTP 409 — a non-FAILED credit note already exists for this sale.
-    # If a previous attempt failed terminally (VSCU rejection), it does NOT
-    # raise CreditNoteConflictError — the middleware allows re-issuance because
-    # KRA never received the failed attempt. The original receipt is still unreversed.
-    print(f"Already reversed: purchase {exc.original_purchase_id}")
+except CreditNoteExceedsOriginalError as exc:
+    # HTTP 422 — the reversal would exceed the receipt's reversible balance.
+    print(f"Already reversed {exc.already_reversed}, remaining {exc.remaining} "
+          f"on purchase {exc.original_purchase_id}")
 ```
+
+If a previous attempt failed terminally (VSCU rejection), it does not count against the
+reversible balance — KRA never received the failed attempt, so the middleware allows
+re-issuance. `CreditNoteConflictError` (HTTP 409) is now only the generic conflict
+carrier on this path — it no longer means "already reversed".
 
 > `submit_reverse_invoice()` is deprecated and targets a removed endpoint. Use `issue_credit_note()` instead.
 
