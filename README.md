@@ -89,7 +89,7 @@ The full platform adds KRA invoice submission, digital signing via the VSCU JAR,
 ```python
 from kra_etims import KRAeTIMSClient, SaleInvoice, calculate_item, build_invoice_totals
 
-client = KRAeTIMSClient(client_id="TIaaS_ID", client_secret="TIaaS_SEC")
+client = KRAeTIMSClient("", "", api_key="txd_sb_your_key")  # see Authentication below
 
 items   = [calculate_item("MacBook Pro M3", "HS847130", 5800, "B")]  # B = 16% Standard VAT
 invoice = SaleInvoice(
@@ -163,6 +163,9 @@ client = KRAeTIMSClient(client_id="ID", client_secret="SEC", api_key="your_key")
 # export TAXID_API_KEY=your_key
 
 # Mode 2: OAuth 2.0 Client Credentials (auto-refresh with 60s expiry buffer)
+# NOTE: the TIaaS middleware does not currently expose a /oauth/token endpoint —
+# this mode will raise KRAeTIMSAuthError against the real server today. Use
+# Mode 1 (api_key) until server-side OAuth2 support ships.
 client = KRAeTIMSClient(client_id="ID", client_secret="SEC")
 
 # Custom middleware URL (defaults to https://taxid-production.up.railway.app)
@@ -403,7 +406,7 @@ Full API parity with the sync client.
 from kra_etims import AsyncKRAeTIMSClient
 
 async def process_checkout(invoice):
-    async with AsyncKRAeTIMSClient(client_id="ID", client_secret="SEC") as client:
+    async with AsyncKRAeTIMSClient("", "", api_key="txd_sb_your_key") as client:
         return await client.submit_sale(invoice, idempotency_key="INV-001")
 ```
 
@@ -412,7 +415,7 @@ async def process_checkout(invoice):
 When your application loses connectivity and queues invoices locally, flush them once the middleware is reachable again. Uses `asyncio.gather` with `asyncio.Semaphore(50)` — a single failed invoice never aborts the batch.
 
 ```python
-async with AsyncKRAeTIMSClient("ID", "SEC") as client:
+async with AsyncKRAeTIMSClient("", "", api_key="txd_sb_your_key") as client:
     results = await client.flush_offline_queue(locally_queued_invoices)
     failed  = [r for r in results if r["status"] == "error"]
 ```

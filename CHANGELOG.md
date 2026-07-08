@@ -4,6 +4,22 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **`examples/basic_invoice.py` demonstrated a dead auth path and non-existent response
+  fields** — the constructor showed OAuth2 `client_id`/`client_secret` with no `api_key`,
+  and `response['invoiceSignature']` / `response.get('rcptNo')` / `response.get('qrCode')`
+  — none of which the middleware's sale response contains. Switched to the working
+  `api_key` mode (matching `examples/javahouse_day.py`/`petrol_station_day.py`) and the
+  real field names (`receiptSignature`, `cuInvoiceNumber`, `kraQrPayload`), confirmed
+  against `PurchaseService.buildResponse` in the middleware.
+- **README Track 3 / Async Client quickstarts showed the same dead OAuth2 path** — the
+  middleware has no `/oauth/token` route at all (`_authenticate()`'s POST to
+  `{base_url}/oauth/token` 401s/404s against the real server today). Quickstarts now use
+  `api_key`; the Authentication section's Mode 2 example is annotated with this caveat.
+- **`__version__` fallback string was `0.4.0`** — stale by one release; `pyproject.toml`
+  is `0.5.0` (matches the latest PyPI release). Only affects the `importlib.metadata`
+  lookup-failure fallback (e.g. running from source without installed package metadata).
+
 ## [0.5.0] — 2026-07-08
 
 ### Fixed

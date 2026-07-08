@@ -142,7 +142,7 @@ try:
     from importlib.metadata import version as _v
     __version__: str = _v("taxid-etims")
 except Exception:
-    __version__ = "0.4.0"
+    __version__ = "0.5.0"
 
 __all__ = [
     # Clients
