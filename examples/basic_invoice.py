@@ -8,12 +8,14 @@ required by the KRA eTIMS v2.0 spec — no manual arithmetic.
 confirmDt format: yyyyMMddHHmmss  (e.g. "20260311120000" = 2026-03-11 12:00:00)
 """
 
+import os
+
 from kra_etims import KRAeTIMSClient, SaleInvoice, calculate_item, build_invoice_totals
 
-client = KRAeTIMSClient(
-    client_id="YOUR_TIIMS_CLIENT_ID",
-    client_secret="YOUR_TIIMS_CLIENT_SECRET",
-)
+# API key (preferred B2B auth mode) — issued once via POST /v2/admin/tenants/{id}/api-keys
+# and never recoverable after that response. client_id/client_secret are only used for
+# the OAuth2 client_credentials fallback mode and can be left empty when using api_key.
+client = KRAeTIMSClient("", "", api_key=os.environ["TAXID_API_KEY"])
 
 # Pass retail price + tax band — the SDK handles all VAT arithmetic.
 # KRA eTIMS Tax Bands (VSCU/OSCU Specification v2.0 §4.1):
@@ -41,8 +43,8 @@ invoice = SaleInvoice(
 
 try:
     response = client.submit_sale(invoice, idempotency_key="INV-2026-001")
-    print(f"Signature : {response['invoiceSignature']}")
-    print(f"Receipt No: {response.get('rcptNo')}")
-    print(f"QR Code   : {response.get('qrCode')}")
+    print(f"Signature : {response['receiptSignature']}")
+    print(f"Receipt No: {response.get('cuInvoiceNumber')}")
+    print(f"QR Code   : {response.get('kraQrPayload')}")
 except Exception as e:
     print(f"Error: {e}")
