@@ -5,6 +5,13 @@ All notable changes to kra-etims-sdk are documented here.
 ## [Unreleased]
 
 ### Added
+- **`bulk_import_items(csv_path)`** (sync + async) — multipart upload to the middleware's
+  `POST /v2/etims/items/bulk-import` (Track C5). Per-row failures don't abort the upload;
+  check `failed`/`results` on the returned dict rather than the HTTP status alone.
+- **`get_sale_status(invc_no)`** (sync + async) — polls `GET /v2/etims/sales/{invcNo}/status`
+  (Track C4), the fallback for a `submit_sale()` that returned 202 PENDING_SYNC when no
+  webhook is configured or a delivery was missed. Raises `KRAeTIMSError` on 404 (no sale
+  with that `purchaseId` for the authenticated tenant).
 - **`OSCUUnavailableError`** — the middleware's `PurchaseService` can now sign through
   either VSCU or OSCU depending on a branch's `TenantDevice.controlUnitType` (TaxID
   V18 migration). OSCU is KRA-hosted and always-online-only — it has no 24-hour offline

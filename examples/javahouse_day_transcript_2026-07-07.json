@@ -1,0 +1,493 @@
+[
+  {
+    "x_report_baseline": {
+      "report_date": "2026-07-07",
+      "report_time": "2026-07-07T11:41:21.882835771Z",
+      "cu_serial": "",
+      "branch_id": "00",
+      "tin": "A008697103A",
+      "invoice_count": 51,
+      "band_a": {
+        "taxable_amount": "900.0",
+        "tax_amount": "0.0"
+      },
+      "band_b": {
+        "taxable_amount": "28343.77",
+        "tax_amount": "4506.23"
+      },
+      "band_c": {
+        "taxable_amount": "3150.0",
+        "tax_amount": "0.0"
+      },
+      "band_d": {
+        "taxable_amount": "0",
+        "tax_amount": "0"
+      },
+      "band_e": {
+        "taxable_amount": "70283.83",
+        "tax_amount": "5622.69"
+      },
+      "total_taxable": "102677.60",
+      "total_vat": "10128.92",
+      "total_amount": "112806.52"
+    }
+  },
+  {
+    "ts": "14:41:22",
+    "actor": "SYSTEM",
+    "action": "X-BASELINE",
+    "detail": "receipts=51 gross=112806.52 vat=10128.92"
+  },
+  {
+    "ts": "14:41:23",
+    "actor": "ESTHER",
+    "action": "SALE (ticket)",
+    "detail": "Full Java Breakfast x2; Double Cappuccino x2 = KSh 2500.00 (table 4, couple)",
+    "response": {
+      "purchaseId": 106,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/56 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "HSUP2IEZK2WZQHZD",
+      "kraQrPayload": "07072026#114122#KRACU0300003881#KRACU0300003881/56 NS#7VNWZLL3TAJ65BB2IM7VUKO6BE#HSUP2IEZK2WZQHZD",
+      "vscuTimestamp": "20260707114122"
+    }
+  },
+  {
+    "ts": "14:41:23",
+    "actor": "SYSTEM",
+    "action": "TYPE CHECK",
+    "detail": "normal sale labelled type=SALE supplier='Registered taxpayer A008697103A (self)' (FIXED)"
+  },
+  {
+    "ts": "14:41:27",
+    "actor": "BRIAN",
+    "action": "SALE (flat)",
+    "detail": "Caffe Latte \u2014 takeaway KSh 320.00 (commuter, M-Pesa)",
+    "response": {
+      "purchaseId": 107,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/57 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "5FJ3Y6PTM55MXKTK",
+      "kraQrPayload": "07072026#114127#KRACU0300003881#KRACU0300003881/57 NS#UYU76JZFH7XPA2DCVZDT5KYRSY#5FJ3Y6PTM55MXKTK",
+      "vscuTimestamp": "20260707114126"
+    }
+  },
+  {
+    "ts": "14:41:30",
+    "actor": "BRIAN",
+    "action": "SALE (ticket)",
+    "detail": "Americano x1; Black Forest Cake Slice x1 = KSh 680.00 (laptop customer)",
+    "response": {
+      "purchaseId": 108,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/58 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "PWMPZH34UOFXIYHJ",
+      "kraQrPayload": "07072026#114130#KRACU0300003881#KRACU0300003881/58 NS#HXLVKIJ65ZYXK5PSNXDCRNQ244#PWMPZH34UOFXIYHJ",
+      "vscuTimestamp": "20260707114130"
+    }
+  },
+  {
+    "ts": "14:41:32",
+    "actor": "ESTHER",
+    "action": "SALE (ticket)",
+    "detail": "Full Java Breakfast x10 = KSh 9000.00 (corporate order, PIN on invoice)",
+    "response": {
+      "purchaseId": 109,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/59 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "5Z6TUPBZ2U6LNK3B",
+      "kraQrPayload": "07072026#114132#KRACU0300003881#KRACU0300003881/59 NS#P7OLGFM5TF7VAS2KBXDJIMSJ5Y#5Z6TUPBZ2U6LNK3B",
+      "vscuTimestamp": "20260707114132"
+    }
+  },
+  {
+    "ts": "14:41:37",
+    "actor": "BRIAN",
+    "action": "SALE (ticket)",
+    "detail": "Ordinary Bread Loaf 400g x2 = KSh 360.00 (2 loaves takeaway \u2014 VAT-EXEMPT Band A)",
+    "response": {
+      "purchaseId": 110,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/60 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "556GNVDJZAJWHXTD",
+      "kraQrPayload": "07072026#114137#KRACU0300003881#KRACU0300003881/60 NS#YRV3PRAPQRUGSZQG776WQ455LI#556GNVDJZAJWHXTD",
+      "vscuTimestamp": "20260707114137"
+    }
+  },
+  {
+    "ts": "14:41:40",
+    "actor": "BRIAN",
+    "action": "SALE FAILED",
+    "detail": "Ordinary Bread Loaf 400g x1; Double Cappuccino x1: TIaaS returned HTTP 400"
+  },
+  {
+    "ts": "14:41:40",
+    "actor": "SYSTEM",
+    "action": "MIXED PROBE",
+    "detail": "rejected but with unexpected error: TIaaS returned HTTP 400"
+  },
+  {
+    "ts": "14:41:43",
+    "actor": "BRIAN",
+    "action": "SALE (flat)",
+    "detail": "Caffe Latte \u2014 takeaway KSh 320.00 (idempotency probe, 1st)",
+    "response": {
+      "purchaseId": 111,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/61 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "EI355P4QNNI5EBJI",
+      "kraQrPayload": "07072026#114143#KRACU0300003881#KRACU0300003881/61 NS#ZJXOBFELBXP6NJ225KNVXFOHJQ#EI355P4QNNI5EBJI",
+      "vscuTimestamp": "20260707114143"
+    }
+  },
+  {
+    "ts": "14:41:45",
+    "actor": "BRIAN",
+    "action": "IDEM REPLAY",
+    "detail": "same key -> same receipt: True",
+    "response": {
+      "purchaseId": 111,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/61 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "EI355P4QNNI5EBJI",
+      "kraQrPayload": "07072026#114143#KRACU0300003881#KRACU0300003881/61 NS#ZJXOBFELBXP6NJ225KNVXFOHJQ#EI355P4QNNI5EBJI",
+      "vscuTimestamp": "20260707114143"
+    }
+  },
+  {
+    "ts": "14:41:48",
+    "actor": "ESTHER",
+    "action": "SALE (ticket)",
+    "detail": "Fresh Orange Juice Large x2; Full Java Breakfast x1 = KSh 1620.00 (table 9)",
+    "response": {
+      "purchaseId": 112,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/62 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "L37QC6ECIZUADP2L",
+      "kraQrPayload": "07072026#114147#KRACU0300003881#KRACU0300003881/62 NS#7XFBPDZ6IPZ75RAKT26KTUL3AU#L37QC6ECIZUADP2L",
+      "vscuTimestamp": "20260707114147"
+    }
+  },
+  {
+    "ts": "14:41:52",
+    "actor": "ESTHER",
+    "action": "SALE (ticket)",
+    "detail": "Grilled Fillet Steak x10 = KSh 12200.00 (!! waiter mis-key: qty 10)",
+    "response": {
+      "purchaseId": 113,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/63 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "KVQ4VIRAQGPKGAHQ",
+      "kraQrPayload": "07072026#114152#KRACU0300003881#KRACU0300003881/63 NS#FFMFSQQWH525A2DEUTNXN3T2QM#KVQ4VIRAQGPKGAHQ",
+      "vscuTimestamp": "20260707114152"
+    }
+  },
+  {
+    "ts": "14:41:55",
+    "actor": "MUTHONI",
+    "action": "CREDIT NOTE",
+    "detail": "reversing sale id=113 (KSh 12200.00)",
+    "response": {
+      "creditNoteId": 114,
+      "originalPurchaseId": 113,
+      "status": "SIGNED",
+      "cuInvoiceNumber": "KRACU0300003881/64 NC",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "E7XOOCX7BAZ56Q5R",
+      "kraQrPayload": "07072026#114155#KRACU0300003881#KRACU0300003881/64 NC#43VLH5PJUUU2IPH73GEQPC6NL4#E7XOOCX7BAZ56Q5R",
+      "vscuTimestamp": "20260707114155",
+      "originalRcptNo": "KRACU0300003881/63 NS"
+    }
+  },
+  {
+    "ts": "14:41:58",
+    "actor": "ESTHER",
+    "action": "SALE (ticket)",
+    "detail": "Grilled Fillet Steak x1 = KSh 1220.00 (correct re-ring)",
+    "response": {
+      "purchaseId": 115,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/65 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "CW4E36SBRKB6HBUE",
+      "kraQrPayload": "07072026#114158#KRACU0300003881#KRACU0300003881/65 NS#5IV5HAFUO7W3LH6VF3IZBMTXW4#CW4E36SBRKB6HBUE",
+      "vscuTimestamp": "20260707114157"
+    }
+  },
+  {
+    "x_report_midday": {
+      "report_date": "2026-07-07",
+      "report_time": "2026-07-07T11:42:01.832774727Z",
+      "cu_serial": "",
+      "branch_id": "00",
+      "tin": "A008697103A",
+      "invoice_count": 61,
+      "band_a": {
+        "taxable_amount": "1260.0",
+        "tax_amount": "0.0"
+      },
+      "band_b": {
+        "taxable_amount": "41843.76",
+        "tax_amount": "6666.24"
+      },
+      "band_c": {
+        "taxable_amount": "3150.0",
+        "tax_amount": "0.0"
+      },
+      "band_d": {
+        "taxable_amount": "0",
+        "tax_amount": "0"
+      },
+      "band_e": {
+        "taxable_amount": "70283.83",
+        "tax_amount": "5622.69"
+      },
+      "total_taxable": "116537.59",
+      "total_vat": "12288.93",
+      "total_amount": "128826.52"
+    }
+  },
+  {
+    "ts": "14:42:01",
+    "actor": "MUTHONI",
+    "action": "X-REPORT",
+    "detail": "receipts=61 gross=128826.52 vat=12288.93 | B: taxbl=41843.76 vat=6666.24 | A: taxbl=1260.0"
+  },
+  {
+    "ts": "14:42:06",
+    "actor": "ESTHER",
+    "action": "SALE (ticket)",
+    "detail": "Classic Beef Burger x1; Grilled Chicken Burger x1; Fresh Orange Juice Large x2 = KSh 2360.00 (table 2)",
+    "response": {
+      "purchaseId": 116,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/66 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "TY445JF7YJWDP73B",
+      "kraQrPayload": "07072026#114206#KRACU0300003881#KRACU0300003881/66 NS#GTYYJPPDX52JMRXUARCLF2IBAE#TY445JF7YJWDP73B",
+      "vscuTimestamp": "20260707114206"
+    }
+  },
+  {
+    "ts": "14:42:09",
+    "actor": "DELIVERY",
+    "action": "SALE (ticket)",
+    "detail": "Grilled Chicken Burger x2; Classic Vanilla Shake x2 = KSh 2580.00 (Glovo rider pickup \u2014 order GLV-83321)",
+    "response": {
+      "purchaseId": 117,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/67 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "HBS5PXV3OKAB2XAE",
+      "kraQrPayload": "07072026#114209#KRACU0300003881#KRACU0300003881/67 NS#AHHYWCOP7WPMWG36EIA5WDKZIU#HBS5PXV3OKAB2XAE",
+      "vscuTimestamp": "20260707114209"
+    }
+  },
+  {
+    "ts": "14:42:13",
+    "actor": "ESTHER",
+    "action": "SALE (ticket)",
+    "detail": "Quarter Chicken and Chips x2 = KSh 1060.00 (table 7)",
+    "response": {
+      "purchaseId": 118,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/68 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "B45HJYX273AQGY5D",
+      "kraQrPayload": "07072026#114213#KRACU0300003881#KRACU0300003881/68 NS#DT5SO5M3XP5SYPDX2IKQSWJSCU#B45HJYX273AQGY5D",
+      "vscuTimestamp": "20260707114213"
+    }
+  },
+  {
+    "ts": "14:42:17",
+    "actor": "DELIVERY",
+    "action": "SALE (ticket)",
+    "detail": "Full Java Breakfast x1; Caffe Latte x1 = KSh 1220.00 (Uber Eats \u2014 order UE-99102)",
+    "response": {
+      "purchaseId": 119,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/69 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "LMBNWVYY2NHMFXFG",
+      "kraQrPayload": "07072026#114217#KRACU0300003881#KRACU0300003881/69 NS#GP43KQWM4CXSCO7OMO43OSKH5U#LMBNWVYY2NHMFXFG",
+      "vscuTimestamp": "20260707114217"
+    }
+  },
+  {
+    "ts": "14:42:22",
+    "actor": "BRIAN",
+    "action": "SALE (ticket)",
+    "detail": "Roastery Coffee Beans 500g x1 = KSh 1450.00 (retail: beans bag to go)",
+    "response": {
+      "purchaseId": 120,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/70 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "DOIHDB5D6AYQZOEX",
+      "kraQrPayload": "07072026#114221#KRACU0300003881#KRACU0300003881/70 NS#XEH6QJW3BX7DJUGRK5UC66LI5U#DOIHDB5D6AYQZOEX",
+      "vscuTimestamp": "20260707114221"
+    }
+  },
+  {
+    "ts": "14:42:24",
+    "actor": "BRIAN",
+    "action": "SALE (ticket)",
+    "detail": "Ordinary Bread Loaf 400g x3 = KSh 540.00 (3 loaves \u2014 school run mum)",
+    "response": {
+      "purchaseId": 121,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/71 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "5HT2PPN6MIDBKTR7",
+      "kraQrPayload": "07072026#114224#KRACU0300003881#KRACU0300003881/71 NS#FFMCHQBFW32UQSM4CD3EIGKA5Q#5HT2PPN6MIDBKTR7",
+      "vscuTimestamp": "20260707114223"
+    }
+  },
+  {
+    "ts": "14:42:28",
+    "actor": "ESTHER",
+    "action": "SALE (ticket)",
+    "detail": "Black Forest Cake Slice x2; Caffe Latte x2 = KSh 1440.00 (table 11, birthday)",
+    "response": {
+      "purchaseId": 122,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/72 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "LDG6P7VEEPARIMC5",
+      "kraQrPayload": "07072026#114228#KRACU0300003881#KRACU0300003881/72 NS#HTZZDQII5EJTEYF24D2JGY3UDQ#LDG6P7VEEPARIMC5",
+      "vscuTimestamp": "20260707114228"
+    }
+  },
+  {
+    "ts": "14:42:33",
+    "actor": "BRIAN",
+    "action": "SALE (flat)",
+    "detail": "Double Cappuccino KSh 350.00 (walk-in)",
+    "response": {
+      "purchaseId": 123,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/73 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "H5W5WRZJCB6EZRZ6",
+      "kraQrPayload": "07072026#114233#KRACU0300003881#KRACU0300003881/73 NS#ZVHSCACKJYNETLJZFLPAJRJ43I#H5W5WRZJCB6EZRZ6",
+      "vscuTimestamp": "20260707114232"
+    }
+  },
+  {
+    "ts": "14:42:37",
+    "actor": "MUTHONI",
+    "action": "STOCK-OUT",
+    "detail": "Write-off 6 expired loaves",
+    "response": {
+      "movementId": 38,
+      "sarNo": 6,
+      "status": "SYNCED",
+      "tin": "A008697103A",
+      "bhfId": "00",
+      "totAmt": 690.0,
+      "totTaxAmt": 0.0,
+      "syncedAt": "2026-07-07T11:42:36.953827014Z"
+    }
+  },
+  {
+    "ts": "14:42:40",
+    "actor": "BRIAN",
+    "action": "SALE (flat)",
+    "detail": "Americano \u2014 last takeaway KSh 280.00 (closing)",
+    "response": {
+      "purchaseId": 124,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/74 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "R23TFI5SQLPKJCDX",
+      "kraQrPayload": "07072026#114240#KRACU0300003881#KRACU0300003881/74 NS#JVETHXDPBZBO6MS3JUEB27EZZU#R23TFI5SQLPKJCDX",
+      "vscuTimestamp": "20260707114240"
+    }
+  },
+  {
+    "ts": "14:42:42",
+    "actor": "MUTHONI",
+    "action": "Z-REPORT",
+    "detail": "409 ZReportAlreadyIssuedError \u2014 single-issuance enforced (day was closed at 10:26 EAT)"
+  },
+  {
+    "x_report_final": {
+      "report_date": "2026-07-07",
+      "report_time": "2026-07-07T11:42:43.074928279Z",
+      "cu_serial": "",
+      "branch_id": "00",
+      "tin": "A008697103A",
+      "invoice_count": 70,
+      "band_a": {
+        "taxable_amount": "1800.0",
+        "tax_amount": "0.0"
+      },
+      "band_b": {
+        "taxable_amount": "51102.37",
+        "tax_amount": "8147.63"
+      },
+      "band_c": {
+        "taxable_amount": "3150.0",
+        "tax_amount": "0.0"
+      },
+      "band_d": {
+        "taxable_amount": "0",
+        "tax_amount": "0"
+      },
+      "band_e": {
+        "taxable_amount": "70283.83",
+        "tax_amount": "5622.69"
+      },
+      "total_taxable": "126336.20",
+      "total_vat": "13770.32",
+      "total_amount": "140106.52"
+    }
+  }
+]

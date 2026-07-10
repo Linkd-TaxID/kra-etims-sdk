@@ -170,6 +170,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         path: str,
         json: Optional[Dict[str, Any]] = None,
         idempotency_key: Optional[str] = None,
+        files: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Core request dispatcher with resilience mapping."""
         _attrs: Dict[str, Any] = {"http.method": method, "http.path": path}
@@ -182,7 +183,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             headers = self._build_auth_headers(idempotency_key)
 
             try:
-                resp = self._http.request(method, url, json=json, headers=headers)
+                resp = self._http.request(method, url, json=json, files=files, headers=headers)
                 return self._parse_response(resp, method, idempotency_key)
 
             except httpx.ConnectError:
@@ -253,6 +254,26 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             json=to_middleware_item_payload(data),
         )
 
+    def bulk_import_items(self, csv_path: str) -> Dict[str, Any]:
+        """
+        Bulk-register a catalog of items from a CSV file (middleware Track C5).
+
+        Posts multipart to ``POST /v2/etims/items/bulk-import``. Each row is
+        validated and registered independently — a bad row doesn't abort the
+        upload. The response's ``results`` list carries one entry per row with
+        its own success/failure; check ``failed`` on the returned dict rather
+        than relying on the HTTP status code alone (207 means "some rows
+        failed", not "the whole upload failed" — this call does not raise for
+        a 207, only for a structural rejection like a missing column, an empty
+        file, or more than the server's row-count ceiling, which the
+        middleware reports as a 400).
+        """
+        with open(csv_path, "rb") as fh:
+            return self._request(
+                "POST", "/v2/etims/items/bulk-import",
+                files={"file": (csv_path, fh, "text/csv")},
+            )
+
     # ------------------------------------------------------------------
     # Category 6 — Sales Invoices
     # ------------------------------------------------------------------
@@ -293,6 +314,22 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
                 json=to_middleware_sale_payload(invoice),
                 idempotency_key=idempotency_key,
             )
+
+    def get_sale_status(self, invc_no: int) -> Dict[str, Any]:
+        """
+        Poll the ground-truth outcome of a sale that returned 202 PENDING_SYNC
+        from :meth:`submit_sale` (middleware Track C4).
+
+        ``invc_no`` is the ``purchaseId`` from the original :meth:`submit_sale`
+        response, not the KRA ``invcNo`` sequence number. Prefer a registered
+        ``receipt.signed``/``receipt.failed`` webhook over polling this in a
+        loop; this endpoint is the authoritative fallback for tenants with no
+        webhook configured or a missed delivery.
+
+        :raises KRAeTIMSError: HTTP 404 — no sale with this ``purchaseId`` for
+            the authenticated tenant.
+        """
+        return self._request("GET", f"/v2/etims/sales/{invc_no}/status")
 
     # ------------------------------------------------------------------
     # Category 7 — Credit Notes

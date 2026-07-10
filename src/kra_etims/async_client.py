@@ -177,6 +177,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         path: str,
         json: Optional[Dict[str, Any]] = None,
         idempotency_key: Optional[str] = None,
+        files: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Core async request dispatcher with resilience mapping."""
         _attrs: Dict[str, Any] = {"http.method": method, "http.path": path}
@@ -189,7 +190,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             headers = self._build_auth_headers(idempotency_key)
 
             try:
-                resp = await self._http.request(method, url, json=json, headers=headers)
+                resp = await self._http.request(method, url, json=json, files=files, headers=headers)
                 return self._parse_response(resp, method, idempotency_key)
 
             except (httpx.ConnectError, httpx.ConnectTimeout):
@@ -248,6 +249,20 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             json=data.model_dump(mode="json", exclude_none=True),
         )
 
+    async def bulk_import_items(self, csv_path: str) -> Dict[str, Any]:
+        """
+        Bulk-register a catalog of items from a CSV file (middleware Track C5).
+
+        See :meth:`KRAeTIMSClient.bulk_import_items` for the full semantics —
+        a 207 response means some rows failed independently, not that the
+        whole upload was rejected; check ``failed`` on the returned dict.
+        """
+        with open(csv_path, "rb") as fh:
+            return await self._request(
+                "POST", "/v2/etims/items/bulk-import",
+                files={"file": (csv_path, fh, "text/csv")},
+            )
+
     # ------------------------------------------------------------------
     # Category 6 — Sales Invoices
     # ------------------------------------------------------------------
@@ -288,6 +303,17 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
                 json=to_middleware_sale_payload(invoice),
                 idempotency_key=idempotency_key,
             )
+
+    async def get_sale_status(self, invc_no: int) -> Dict[str, Any]:
+        """
+        Poll the ground-truth outcome of a sale that returned 202 PENDING_SYNC
+        from :meth:`submit_sale` (middleware Track C4). See
+        :meth:`KRAeTIMSClient.get_sale_status` for full semantics.
+
+        :raises KRAeTIMSError: HTTP 404 — no sale with this ``purchaseId`` for
+            the authenticated tenant.
+        """
+        return await self._request("GET", f"/v2/etims/sales/{invc_no}/status")
 
     # ------------------------------------------------------------------
     # Category 7 — Credit Notes
