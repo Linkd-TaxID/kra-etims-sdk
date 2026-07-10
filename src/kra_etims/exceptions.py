@@ -75,6 +75,41 @@ class KRAConnectivityTimeoutError(KRAeTIMSError):
         super().__init__(message)
 
 
+class OSCUUnavailableError(KRAeTIMSError):
+    """
+    OSCU (KRA-hosted, always-online-only control unit) signing failed
+    transiently (HTTP 503 from TIaaS).
+
+    Distinct from :class:`KRAConnectivityTimeoutError` on purpose: OSCU has
+    no 24-hour offline ceiling — it has zero offline tolerance by design
+    (there is no local JAR to fall back to while KRA is unreachable, unlike
+    VSCU). "OSCU is briefly unreachable" and "the 24-hour VSCU ceiling was
+    breached" are unrelated failure conditions that happen to share the same
+    HTTP status code from the middleware — conflating them (as every 503 did
+    before this exception existed) misdiagnoses the failure for anyone
+    building alerting or retry logic around the specific exception type.
+
+    ``oscu_code`` carries the raw KRA OSCU Specification v2.0 §4.18 result
+    code (e.g. ``"894"`` communication error, ``"990"`` rate limit exceeded)
+    when the middleware's response body includes it (TaxID's
+    ``GlobalExceptionHandler.handleOscuSigning`` sets this as the
+    ``oscu_code`` property on its RFC 9457 ``ProblemDetail`` body).
+    """
+
+    def __init__(
+        self,
+        message: str = (
+            "OSCU Temporarily Unavailable: KRA's OSCU server could not be "
+            "reached or returned a transient error. This is unrelated to the "
+            "24-hour VSCU offline ceiling — OSCU has no such ceiling by "
+            "design. Safe to retry with backoff."
+        ),
+        oscu_code: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.oscu_code = oscu_code
+
+
 class KRAeTIMSAuthError(KRAeTIMSError):
     """
     Authentication failed (HTTP 401) — invalid API key, missing key,

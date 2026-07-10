@@ -4,7 +4,23 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+### Added
+- **`OSCUUnavailableError`** — the middleware's `PurchaseService` can now sign through
+  either VSCU or OSCU depending on a branch's `TenantDevice.controlUnitType` (TaxID
+  V18 migration). OSCU is KRA-hosted and always-online-only — it has no 24-hour offline
+  ceiling at all, unlike VSCU. A 503 from a transient OSCU failure is therefore not the
+  same condition as `KRAConnectivityTimeoutError` and needed its own exception. Carries
+  `oscu_code` (the raw KRA OSCU Spec v2.0 §4.18 result code, e.g. `"894"`) when the
+  middleware's response body includes it.
+
 ### Fixed
+- **Every 503 from TIaaS was raised as `KRAConnectivityTimeoutError`, unconditionally,
+  without reading the response body** — correct for VSCU's 24-hour offline ceiling, wrong
+  the moment a transient OSCU failure also returns 503. `_raise_for_503()` now checks the
+  response body for an `oscu_code` property (set by the middleware's
+  `GlobalExceptionHandler.handleOscuSigning`) and raises `OSCUUnavailableError` instead
+  when present. Falls back to the historical behavior for any 503 without that marker —
+  a bare 503 with no body, or a `vscu_code` body, is unaffected.
 - **`examples/basic_invoice.py` demonstrated a dead auth path and non-existent response
   fields** — the constructor showed OAuth2 `client_id`/`client_secret` with no `api_key`,
   and `response['invoiceSignature']` / `response.get('rcptNo')` / `response.get('qrCode')`

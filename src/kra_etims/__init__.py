@@ -38,6 +38,7 @@ Exceptions
 - ``KRAeTIMSError``           — root exception
 - ``KRAeTIMSAuthError``       — bad credentials / token refresh failure
 - ``KRAConnectivityTimeoutError`` — 24-hour VSCU offline ceiling breached
+- ``OSCUUnavailableError``    — OSCU transient failure (HTTP 503, but NOT the VSCU ceiling — OSCU has no offline ceiling)
 - ``TIaaSUnavailableError``   — Railway instance unreachable
 - ``TIaaSAmbiguousStateError``— Schrödinger's Invoice (retry with same key)
 - ``KRAValidationError``      — schema / business-rule validation failure
@@ -124,6 +125,7 @@ from .exceptions import (
     KRAeTIMSAuthError,
     KRAAuthorizationError,
     KRAConnectivityTimeoutError,
+    OSCUUnavailableError,
     TIaaSUnavailableError,
     TIaaSAmbiguousStateError,
     KRAValidationError,
@@ -189,6 +191,7 @@ __all__ = [
     "KRAeTIMSAuthError",
     "KRAAuthorizationError",
     "KRAConnectivityTimeoutError",
+    "OSCUUnavailableError",
     "TIaaSUnavailableError",
     "TIaaSAmbiguousStateError",
     "KRAValidationError",

@@ -24,6 +24,7 @@ from .exceptions import (
     KRAeTIMSAuthError,
     KRAAuthorizationError,
     KRAeTIMSError,
+    OSCUUnavailableError,
 )
 
 # KRA eTIMS success result codes — two officially documented variants:
@@ -158,6 +159,39 @@ class _BaseKRAeTIMSClient(ABC):
     # Called by _request() in both sync and async subclasses after transport returns.
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _raise_for_503(resp: httpx.Response) -> None:
+        """
+        Discriminates a 503 between two unrelated conditions that happen to
+        share an HTTP status code: the 24-hour VSCU offline ceiling (VSCU
+        Spec §2.2 Policy 4) and a transient OSCU-side failure (OSCU Spec
+        v2.0 §4.18 — OSCU has zero offline tolerance by design, so it has
+        no 24-hour-ceiling concept at all). Every 503 was treated as the
+        former until this method existed; that stopped being safe once the
+        middleware could actually sign through OSCU.
+
+        TIaaS's ``GlobalExceptionHandler`` puts an ``oscu_code`` property on
+        the response body specifically for OSCU failures (``vscu_code`` for
+        VSCU ones) — presence of ``oscu_code`` is the discriminator. Falls
+        back to the historical ``KRAConnectivityTimeoutError`` behavior if
+        the body doesn't parse or doesn't carry either marker, so an older
+        middleware version (or a 503 from something other than a signing
+        call) doesn't change behavior.
+        """
+        try:
+            body = resp.json()
+        except Exception:
+            body = {}
+        if isinstance(body, dict) and "oscu_code" in body:
+            raise OSCUUnavailableError(
+                message=body.get("detail") or (
+                    f"OSCU Temporarily Unavailable (code {body.get('oscu_code')}): "
+                    f"{body.get('title', 'no further detail')}"
+                ),
+                oscu_code=body.get("oscu_code"),
+            )
+        raise KRAConnectivityTimeoutError()
+
     def _parse_response(
         self,
         resp: httpx.Response,
@@ -172,16 +206,17 @@ class _BaseKRAeTIMSClient(ABC):
         """
         from .exceptions import TIaaSAmbiguousStateError, TIaaSUnavailableError  # noqa: F401
 
-        # 503 from TIaaS signals the 24-hour KRA connectivity ceiling (VSCU Spec §2.2 Policy 4).
+        # 503 from TIaaS signals either the 24-hour VSCU offline ceiling or a
+        # transient OSCU failure — see _raise_for_503's docstring.
         if resp.status_code == 503:
-            raise KRAConnectivityTimeoutError()
+            self._raise_for_503(resp)
 
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             sc = exc.response.status_code
             if sc == 503:
-                raise KRAConnectivityTimeoutError()
+                self._raise_for_503(exc.response)
             if sc == 409:
                 try:
                     body = exc.response.json()

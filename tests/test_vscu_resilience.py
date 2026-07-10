@@ -2,7 +2,7 @@ import pytest
 from decimal import Decimal
 from kra_etims.client import KRAeTIMSClient
 from kra_etims.async_client import AsyncKRAeTIMSClient
-from kra_etims.exceptions import KRAConnectivityTimeoutError, KRAeTIMSError
+from kra_etims.exceptions import KRAConnectivityTimeoutError, KRAeTIMSError, OSCUUnavailableError
 from kra_etims.models import SaleInvoice, ReceiptLabel, TaxType
 
 
@@ -23,6 +23,72 @@ def test_vscu_503_mapping(httpx_mock):
         method="GET",
         url="https://api.test.co.ke/v2/etims/compliance/P000000000X",
         status_code=503,
+    )
+
+    with pytest.raises(KRAConnectivityTimeoutError):
+        client.check_compliance("P000000000X")
+
+
+def test_oscu_503_mapping_is_not_confused_with_vscu_ceiling(httpx_mock):
+    """
+    Scenario: TIaaS returns 503 with an `oscu_code` body (GlobalExceptionHandler.
+    handleOscuSigning) -- an OSCU transient failure, NOT the 24-hour VSCU ceiling
+    (OSCU has no such ceiling; this is what _raise_for_503 exists to discriminate).
+    Assertion: raises OSCUUnavailableError, not KRAConnectivityTimeoutError, and
+    carries the raw oscu_code through for programmatic handling.
+    """
+    client = KRAeTIMSClient(
+        client_id="test_id",
+        client_secret="test_secret",
+        base_url="https://api.test.co.ke"
+    )
+    client._access_token = "mock_token"
+    client._token_expiry = 9999999999
+
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.test.co.ke/v2/etims/compliance/P000000000X",
+        status_code=503,
+        json={
+            "type": "https://docs.taxid.co.ke/errors/oscu-signing",
+            "title": "OSCU Temporarily Unavailable",
+            "status": 503,
+            "detail": "OSCU error 894 — An error regarding server communication occurred",
+            "oscu_code": "894",
+            "transient": True,
+        },
+    )
+
+    with pytest.raises(OSCUUnavailableError) as exc_info:
+        client.check_compliance("P000000000X")
+    assert exc_info.value.oscu_code == "894"
+
+
+def test_vscu_503_with_json_body_but_no_oscu_code_still_raises_connectivity_timeout(httpx_mock):
+    """
+    Scenario: a 503 body IS present (VSCU's own ProblemDetail shape has
+    `vscu_code`, not `oscu_code`) -- must not be misread as an OSCU failure.
+    Assertion: still raises KRAConnectivityTimeoutError, matching pre-OSCU behavior.
+    """
+    client = KRAeTIMSClient(
+        client_id="test_id",
+        client_secret="test_secret",
+        base_url="https://api.test.co.ke"
+    )
+    client._access_token = "mock_token"
+    client._token_expiry = 9999999999
+
+    httpx_mock.add_response(
+        method="GET",
+        url="https://api.test.co.ke/v2/etims/compliance/P000000000X",
+        status_code=503,
+        json={
+            "type": "https://docs.taxid.co.ke/errors/vscu-signing",
+            "title": "VSCU Temporarily Unavailable",
+            "status": 503,
+            "vscu_code": "90",
+            "transient": True,
+        },
     )
 
     with pytest.raises(KRAConnectivityTimeoutError):
