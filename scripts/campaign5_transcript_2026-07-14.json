@@ -1,0 +1,1560 @@
+[
+  {
+    "ts": "10:50:56.929",
+    "phase": "warmup",
+    "actor": "SYSTEM",
+    "action": "X-BASELINE",
+    "detail": "receipts=32 gross=6732.99",
+    "latency_ms": null
+  },
+  {
+    "ts": "10:50:57.294",
+    "phase": "terminals",
+    "actor": "POS-1",
+    "action": "SALE FAILED",
+    "detail": "CAPP-DBL x1 = KSh 350.00 (concurrent terminal 1, txn 1/5)",
+    "latency_ms": 365.0122580002062,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:57.420",
+    "phase": "terminals",
+    "actor": "POS-4",
+    "action": "SALE FAILED",
+    "detail": "LATTE x1 = KSh 320.00 (concurrent terminal 4, txn 1/5)",
+    "latency_ms": 489.36916100001326,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:57.424",
+    "phase": "terminals",
+    "actor": "POS-5",
+    "action": "SALE FAILED",
+    "detail": "CAKE-BF x1 = KSh 400.00 (concurrent terminal 5, txn 1/5)",
+    "latency_ms": 492.51812600004996,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:57.424",
+    "phase": "terminals",
+    "actor": "POS-6",
+    "action": "SALE FAILED",
+    "detail": "LATTE x3 = KSh 960.00 (concurrent terminal 6, txn 1/5)",
+    "latency_ms": 492.70072000035725,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:57.554",
+    "phase": "terminals",
+    "actor": "POS-3",
+    "action": "SALE FAILED",
+    "detail": "LATTE x1 = KSh 320.00 (concurrent terminal 3, txn 1/5)",
+    "latency_ms": 623.6476569997649,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:57.652",
+    "phase": "terminals",
+    "actor": "POS-1",
+    "action": "SALE FAILED",
+    "detail": "CAPP-DBL x2 = KSh 700.00 (concurrent terminal 1, txn 2/5)",
+    "latency_ms": 357.78228299977854,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:57.778",
+    "phase": "terminals",
+    "actor": "POS-4",
+    "action": "SALE FAILED",
+    "detail": "CAKE-BF x1 = KSh 400.00 (concurrent terminal 4, txn 2/5)",
+    "latency_ms": 357.69182800004273,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:57.780",
+    "phase": "terminals",
+    "actor": "POS-6",
+    "action": "SALE FAILED",
+    "detail": "QTR-CHIPS x3 = KSh 1590.00 (concurrent terminal 6, txn 2/5)",
+    "latency_ms": 356.36159499972564,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:57.910",
+    "phase": "terminals",
+    "actor": "POS-3",
+    "action": "SALE FAILED",
+    "detail": "CAKE-BF x2 = KSh 800.00 (concurrent terminal 3, txn 2/5)",
+    "latency_ms": 355.64426500013724,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.119",
+    "phase": "terminals",
+    "actor": "POS-1",
+    "action": "SALE FAILED",
+    "detail": "CAPP-DBL x3 = KSh 1050.00 (concurrent terminal 1, txn 3/5)",
+    "latency_ms": 466.20852200021545,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.119",
+    "phase": "terminals",
+    "actor": "POS-5",
+    "action": "SALE FAILED",
+    "detail": "AMERICANO x1 = KSh 280.00 (concurrent terminal 5, txn 2/5)",
+    "latency_ms": 695.4295980003735,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.136",
+    "phase": "terminals",
+    "actor": "POS-4",
+    "action": "SALE FAILED",
+    "detail": "AMERICANO x1 = KSh 280.00 (concurrent terminal 4, txn 3/5)",
+    "latency_ms": 357.73033300029056,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.140",
+    "phase": "terminals",
+    "actor": "POS-6",
+    "action": "SALE FAILED",
+    "detail": "CHIC-BURG x2 = KSh 1640.00 (concurrent terminal 6, txn 3/5)",
+    "latency_ms": 359.51638400001684,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.342",
+    "phase": "terminals",
+    "actor": "POS-3",
+    "action": "SALE FAILED",
+    "detail": "BEANS-500 x2 = KSh 2900.00 (concurrent terminal 3, txn 3/5)",
+    "latency_ms": 432.06549000024097,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.513",
+    "phase": "terminals",
+    "actor": "POS-6",
+    "action": "SALE FAILED",
+    "detail": "BREAD-ORD x1 = KSh 180.00 (concurrent terminal 6, txn 4/5)",
+    "latency_ms": 373.25444999987667,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.514",
+    "phase": "terminals",
+    "actor": "POS-1",
+    "action": "SALE FAILED",
+    "detail": "CAPP-DBL x1 = KSh 350.00 (concurrent terminal 1, txn 4/5)",
+    "latency_ms": 395.1563979999264,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.514",
+    "phase": "terminals",
+    "actor": "POS-5",
+    "action": "SALE FAILED",
+    "detail": "LATTE x3 = KSh 960.00 (concurrent terminal 5, txn 3/5)",
+    "latency_ms": 395.08652199992866,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.515",
+    "phase": "terminals",
+    "actor": "POS-4",
+    "action": "SALE FAILED",
+    "detail": "CHIC-BURG x2 = KSh 1640.00 (concurrent terminal 4, txn 4/5)",
+    "latency_ms": 378.9885390001473,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.711",
+    "phase": "terminals",
+    "actor": "POS-3",
+    "action": "SALE FAILED",
+    "detail": "JAVA-BFAST x2 = KSh 1800.00 (concurrent terminal 3, txn 4/5)",
+    "latency_ms": 368.69781099994725,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.945",
+    "phase": "terminals",
+    "actor": "POS-5",
+    "action": "SALE FAILED",
+    "detail": "CAPP-DBL x2 = KSh 700.00 (concurrent terminal 5, txn 4/5)",
+    "latency_ms": 430.52878400021655,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.947",
+    "phase": "terminals",
+    "actor": "POS-6",
+    "action": "SALE FAILED",
+    "detail": "JAVA-BFAST x2 = KSh 1800.00 (concurrent terminal 6, txn 5/5)",
+    "latency_ms": 433.85910799997873,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:58.948",
+    "phase": "terminals",
+    "actor": "POS-4",
+    "action": "SALE FAILED",
+    "detail": "BEANS-500 x2 = KSh 2900.00 (concurrent terminal 4, txn 5/5)",
+    "latency_ms": 432.80079300029684,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:50:59.141",
+    "phase": "terminals",
+    "actor": "POS-3",
+    "action": "SALE FAILED",
+    "detail": "LATTE x1 = KSh 320.00 (concurrent terminal 3, txn 5/5)",
+    "latency_ms": 430.75491399986277,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 422"
+  },
+  {
+    "ts": "10:51:00.017",
+    "phase": "terminals",
+    "actor": "POS-1",
+    "action": "SALE",
+    "detail": "JAVA-BFAST x1 = KSh 900.00 (concurrent terminal 1, txn 5/5)",
+    "latency_ms": 1503.1356609997601,
+    "response": {
+      "purchaseId": 316,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/228 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "XHAHVJZAJNTEOHWA",
+      "kraQrPayload": "14072026#075058#KRACU0300003881#KRACU0300003881/228 NS#6NV65S7XUCAEMPYOQ4QFRWCZJM#XHAHVJZAJNTEOHWA",
+      "vscuTimestamp": "20260714075058"
+    }
+  },
+  {
+    "ts": "10:51:00.373",
+    "phase": "terminals",
+    "actor": "POS-5",
+    "action": "SALE",
+    "detail": "CAPP-DBL x2 = KSh 700.00 (concurrent terminal 5, txn 5/5)",
+    "latency_ms": 1427.9562639999313,
+    "response": {
+      "purchaseId": 317,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/229 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "STZU6LLRGFJSMVX5",
+      "kraQrPayload": "14072026#075059#KRACU0300003881#KRACU0300003881/229 NS#777T5GYFW2OU6UJA5PSFVITBDU#STZU6LLRGFJSMVX5",
+      "vscuTimestamp": "20260714075059"
+    }
+  },
+  {
+    "ts": "10:51:28.147",
+    "phase": "terminals",
+    "actor": "POS-2",
+    "action": "SALE FAILED",
+    "detail": "BEANS-500 x1 = KSh 1450.00 (concurrent terminal 2, txn 1/5)",
+    "latency_ms": 31217.636761999984,
+    "error": "TIaaSUnavailableError: TIaaS Service Unavailable: The Railway instance is unreachable."
+  },
+  {
+    "ts": "10:51:30.517",
+    "phase": "terminals",
+    "actor": "POS-2",
+    "action": "SALE",
+    "detail": "LATTE x2 = KSh 640.00 (concurrent terminal 2, txn 2/5)",
+    "latency_ms": 2369.542225999794,
+    "response": {
+      "purchaseId": 318,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/230 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "EEUL4PZDUGWEMVKC",
+      "kraQrPayload": "14072026#075129#KRACU0300003881#KRACU0300003881/230 NS#SIW65HC26JERC2ZLZKNDTC24KE#EEUL4PZDUGWEMVKC",
+      "vscuTimestamp": "20260714075129"
+    }
+  },
+  {
+    "ts": "10:51:31.525",
+    "phase": "terminals",
+    "actor": "POS-2",
+    "action": "SALE",
+    "detail": "JAVA-BFAST x3 = KSh 2700.00 (concurrent terminal 2, txn 3/5)",
+    "latency_ms": 1007.8608210001221,
+    "response": {
+      "purchaseId": 319,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/231 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "THOQ4E4DFQ2VACJS",
+      "kraQrPayload": "14072026#075130#KRACU0300003881#KRACU0300003881/231 NS#LXMUJKVTRUDRBVKCUBOT6ILEII#THOQ4E4DFQ2VACJS",
+      "vscuTimestamp": "20260714075130"
+    }
+  },
+  {
+    "ts": "10:51:32.471",
+    "phase": "terminals",
+    "actor": "POS-2",
+    "action": "SALE",
+    "detail": "QTR-CHIPS x1 = KSh 530.00 (concurrent terminal 2, txn 4/5)",
+    "latency_ms": 946.1662560001969,
+    "response": {
+      "purchaseId": 320,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/232 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "DNKR3IHRB6XCYIWC",
+      "kraQrPayload": "14072026#075131#KRACU0300003881#KRACU0300003881/232 NS#ZO3LC2YFFHHQO7Z3IH4MPGRDG4#DNKR3IHRB6XCYIWC",
+      "vscuTimestamp": "20260714075131"
+    }
+  },
+  {
+    "ts": "10:51:33.343",
+    "phase": "terminals",
+    "actor": "POS-2",
+    "action": "SALE",
+    "detail": "BEANS-500 x3 = KSh 4350.00 (concurrent terminal 2, txn 5/5)",
+    "latency_ms": 871.9342449999203,
+    "response": {
+      "purchaseId": 321,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/233 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "M7UCQDFC4PLO3CJT",
+      "kraQrPayload": "14072026#075132#KRACU0300003881#KRACU0300003881/233 NS#R3J2VZG4UCFOGYR72KFRO5E4WM#M7UCQDFC4PLO3CJT",
+      "vscuTimestamp": "20260714075132"
+    }
+  },
+  {
+    "ts": "10:51:34.236",
+    "phase": "petrol",
+    "actor": "PUMP-1",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x20 = KSh 3584.00 (pump 1, txn 1/5)",
+    "latency_ms": 892.8462079998098,
+    "response": {
+      "purchaseId": 322,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/234 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "6SW6ZRVMS4W5BEGP",
+      "kraQrPayload": "14072026#075133#KRACU0300003881#KRACU0300003881/234 NS#A6URXA4PRQBGRBGNMO5WUDM5XI#6SW6ZRVMS4W5BEGP",
+      "vscuTimestamp": "20260714075133"
+    }
+  },
+  {
+    "ts": "10:51:34.777",
+    "phase": "petrol",
+    "actor": "PUMP-2",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x30 = KSh 5376.00 (pump 2, txn 1/5)",
+    "latency_ms": 1433.3361849999164,
+    "response": {
+      "purchaseId": 323,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/235 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "O6WN4IV3TCO25DRO",
+      "kraQrPayload": "14072026#075134#KRACU0300003881#KRACU0300003881/235 NS#QJCXDE5WHI4U5YDYODYJOU262A#O6WN4IV3TCO25DRO",
+      "vscuTimestamp": "20260714075134"
+    }
+  },
+  {
+    "ts": "10:51:35.187",
+    "phase": "petrol",
+    "actor": "PUMP-4",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x25 = KSh 4480.00 (pump 4, txn 1/5)",
+    "latency_ms": 1842.9589389998,
+    "response": {
+      "purchaseId": 324,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/236 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "DAX5C4RIA5M7RJSD",
+      "kraQrPayload": "14072026#075134#KRACU0300003881#KRACU0300003881/236 NS#GYDNXGSRZG5CAFALKOFK2ICISY#DAX5C4RIA5M7RJSD",
+      "vscuTimestamp": "20260714075134"
+    }
+  },
+  {
+    "ts": "10:51:35.825",
+    "phase": "petrol",
+    "actor": "PUMP-1",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x30 = KSh 5376.00 (pump 1, txn 2/5)",
+    "latency_ms": 1588.0599150000307,
+    "response": {
+      "purchaseId": 325,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/237 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "T6VOQV53PH45S3JY",
+      "kraQrPayload": "14072026#075135#KRACU0300003881#KRACU0300003881/237 NS#5UKPHD3PJ2JEQWRP4ASOR6EJ4I#T6VOQV53PH45S3JY",
+      "vscuTimestamp": "20260714075135"
+    }
+  },
+  {
+    "ts": "10:51:36.414",
+    "phase": "petrol",
+    "actor": "FLEET",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x150 = KSh 26880.00 (B2B fleet fill 1/4)",
+    "latency_ms": 3069.963229000223,
+    "response": {
+      "purchaseId": 326,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/238 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "MRI4MB3DSYBK67RW",
+      "kraQrPayload": "14072026#075135#KRACU0300003881#KRACU0300003881/238 NS#YBE5L43QD2XOZVFGVPTN3QAZGA#MRI4MB3DSYBK67RW",
+      "vscuTimestamp": "20260714075135"
+    }
+  },
+  {
+    "ts": "10:51:36.928",
+    "phase": "petrol",
+    "actor": "PUMP-2",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x30 = KSh 5376.00 (pump 2, txn 2/5)",
+    "latency_ms": 2150.169162000111,
+    "response": {
+      "purchaseId": 327,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/239 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "CQ3FVJCWPTX4LJBK",
+      "kraQrPayload": "14072026#075136#KRACU0300003881#KRACU0300003881/239 NS#7FYJ6JVOSPVWF2GBZAGEHC3E7A#CQ3FVJCWPTX4LJBK",
+      "vscuTimestamp": "20260714075136"
+    }
+  },
+  {
+    "ts": "10:51:37.633",
+    "phase": "petrol",
+    "actor": "PUMP-4",
+    "action": "SALE",
+    "detail": "PMS-SUPER x10 = KSh 1945.00 (pump 4, txn 2/5)",
+    "latency_ms": 2445.5362069998046,
+    "response": {
+      "purchaseId": 328,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/240 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "YERGIAW46JJHXYJM",
+      "kraQrPayload": "14072026#075136#KRACU0300003881#KRACU0300003881/240 NS#TPMDEVRRCCTW5SFXK7TIP5OEFI#YERGIAW46JJHXYJM",
+      "vscuTimestamp": "20260714075136"
+    }
+  },
+  {
+    "ts": "10:51:38.189",
+    "phase": "petrol",
+    "actor": "PUMP-1",
+    "action": "SALE",
+    "detail": "PMS-SUPER x10 = KSh 1945.00 (pump 1, txn 3/5)",
+    "latency_ms": 2364.32863500022,
+    "response": {
+      "purchaseId": 329,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/241 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "QW3WNEFTBDFWWLFD",
+      "kraQrPayload": "14072026#075137#KRACU0300003881#KRACU0300003881/241 NS#WXDCU4GWOKDAKPWCJ4KCPGUPGA#QW3WNEFTBDFWWLFD",
+      "vscuTimestamp": "20260714075137"
+    }
+  },
+  {
+    "ts": "10:51:38.725",
+    "phase": "petrol",
+    "actor": "PUMP-3",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x10 = KSh 1792.00 (pump 3, txn 1/5)",
+    "latency_ms": 5380.74390499969,
+    "response": {
+      "purchaseId": 330,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/242 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "IRNQ2LUGX3VALL4G",
+      "kraQrPayload": "14072026#075138#KRACU0300003881#KRACU0300003881/242 NS#E64ZGJNXXLRNFDV44R76DXJOEA#IRNQ2LUGX3VALL4G",
+      "vscuTimestamp": "20260714075138"
+    }
+  },
+  {
+    "ts": "10:51:39.172",
+    "phase": "petrol",
+    "actor": "FLEET",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x150 = KSh 26880.00 (B2B fleet fill 2/4)",
+    "latency_ms": 2757.384469000044,
+    "response": {
+      "purchaseId": 331,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/243 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "M7G5VLLXBYVZGUEO",
+      "kraQrPayload": "14072026#075138#KRACU0300003881#KRACU0300003881/243 NS#CKO7VGHLV726CJWCG4T5DB2SIY#M7G5VLLXBYVZGUEO",
+      "vscuTimestamp": "20260714075138"
+    }
+  },
+  {
+    "ts": "10:51:39.757",
+    "phase": "petrol",
+    "actor": "PUMP-2",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x20 = KSh 3584.00 (pump 2, txn 3/5)",
+    "latency_ms": 2829.0275289996316,
+    "response": {
+      "purchaseId": 332,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/244 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "UP27LWLUCJPX4MWS",
+      "kraQrPayload": "14072026#075139#KRACU0300003881#KRACU0300003881/244 NS#MDWNAARSO5FFKOK72LZBB6DNMQ#UP27LWLUCJPX4MWS",
+      "vscuTimestamp": "20260714075139"
+    }
+  },
+  {
+    "ts": "10:51:40.305",
+    "phase": "petrol",
+    "actor": "PUMP-4",
+    "action": "SALE",
+    "detail": "PMS-SUPER x25 = KSh 4862.50 (pump 4, txn 3/5)",
+    "latency_ms": 2671.923882000101,
+    "response": {
+      "purchaseId": 333,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/245 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "MRGYGFFU7CEHKQCH",
+      "kraQrPayload": "14072026#075139#KRACU0300003881#KRACU0300003881/245 NS#ILT73QYERCM3CIGVZQVYTXFILU#MRGYGFFU7CEHKQCH",
+      "vscuTimestamp": "20260714075139"
+    }
+  },
+  {
+    "ts": "10:51:40.735",
+    "phase": "petrol",
+    "actor": "PUMP-1",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x15 = KSh 2688.00 (pump 1, txn 4/5)",
+    "latency_ms": 2545.8689830002186,
+    "response": {
+      "purchaseId": 334,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/246 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "GMR5PBBIVTOEZB7H",
+      "kraQrPayload": "14072026#075140#KRACU0300003881#KRACU0300003881/246 NS#SKBACUNBWTOJURWA5JN4EME5JE#GMR5PBBIVTOEZB7H",
+      "vscuTimestamp": "20260714075140"
+    }
+  },
+  {
+    "ts": "10:51:41.189",
+    "phase": "petrol",
+    "actor": "PUMP-3",
+    "action": "SALE",
+    "detail": "PMS-SUPER x30 = KSh 5835.00 (pump 3, txn 2/5)",
+    "latency_ms": 2463.9342360001137,
+    "response": {
+      "purchaseId": 335,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/247 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "5CUODLNI5I74ST7M",
+      "kraQrPayload": "14072026#075140#KRACU0300003881#KRACU0300003881/247 NS#JF3YS4WUUWYDJP4BCBANBK7SFE#5CUODLNI5I74ST7M",
+      "vscuTimestamp": "20260714075140"
+    }
+  },
+  {
+    "ts": "10:51:41.869",
+    "phase": "petrol",
+    "actor": "FLEET",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x100 = KSh 17920.00 (B2B fleet fill 3/4)",
+    "latency_ms": 2696.65536399998,
+    "response": {
+      "purchaseId": 336,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/248 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "TPRT5VYW5QGT6PUD",
+      "kraQrPayload": "14072026#075141#KRACU0300003881#KRACU0300003881/248 NS#TSHFJV7W75I25TFDAE7BGYWNG4#TPRT5VYW5QGT6PUD",
+      "vscuTimestamp": "20260714075141"
+    }
+  },
+  {
+    "ts": "10:51:42.462",
+    "phase": "petrol",
+    "actor": "PUMP-2",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x30 = KSh 5376.00 (pump 2, txn 4/5)",
+    "latency_ms": 2705.3796999998667,
+    "response": {
+      "purchaseId": 337,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/249 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "XACZ4MTH7N5C5MMV",
+      "kraQrPayload": "14072026#075141#KRACU0300003881#KRACU0300003881/249 NS#SUKSUCE3H4XUKE2TL7PIT4QZWY#XACZ4MTH7N5C5MMV",
+      "vscuTimestamp": "20260714075141"
+    }
+  },
+  {
+    "ts": "10:51:42.954",
+    "phase": "petrol",
+    "actor": "PUMP-4",
+    "action": "SALE",
+    "detail": "PMS-SUPER x20 = KSh 3890.00 (pump 4, txn 4/5)",
+    "latency_ms": 2649.240677999842,
+    "response": {
+      "purchaseId": 338,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/250 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "NGWUCOSOTOO223LM",
+      "kraQrPayload": "14072026#075142#KRACU0300003881#KRACU0300003881/250 NS#FO7Q7HTFNDQ2L5CTXA4QHO7HDE#NGWUCOSOTOO223LM",
+      "vscuTimestamp": "20260714075142"
+    }
+  },
+  {
+    "ts": "10:51:43.398",
+    "phase": "petrol",
+    "actor": "PUMP-1",
+    "action": "SALE",
+    "detail": "PMS-SUPER x10 = KSh 1945.00 (pump 1, txn 5/5)",
+    "latency_ms": 2662.7596869998342,
+    "response": {
+      "purchaseId": 339,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/251 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "W6GV5VGR2JYFTHZJ",
+      "kraQrPayload": "14072026#075142#KRACU0300003881#KRACU0300003881/251 NS#4MFM7TPKTTCGVYJF2F7GGZQ7NY#W6GV5VGR2JYFTHZJ",
+      "vscuTimestamp": "20260714075142"
+    }
+  },
+  {
+    "ts": "10:51:43.959",
+    "phase": "petrol",
+    "actor": "PUMP-3",
+    "action": "SALE",
+    "detail": "PMS-SUPER x25 = KSh 4862.50 (pump 3, txn 3/5)",
+    "latency_ms": 2770.4294350000964,
+    "response": {
+      "purchaseId": 340,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/252 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "YC2Q3WYG2I32BA4Z",
+      "kraQrPayload": "14072026#075143#KRACU0300003881#KRACU0300003881/252 NS#5BET3EWZOU7ICOG3EQUOJFUYNA#YC2Q3WYG2I32BA4Z",
+      "vscuTimestamp": "20260714075143"
+    }
+  },
+  {
+    "ts": "10:51:44.378",
+    "phase": "petrol",
+    "actor": "FLEET",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x150 = KSh 26880.00 (B2B fleet fill 4/4)",
+    "latency_ms": 2509.2527389997485,
+    "response": {
+      "purchaseId": 341,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/253 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "5KYGC4SZSNMDH5OZ",
+      "kraQrPayload": "14072026#075143#KRACU0300003881#KRACU0300003881/253 NS#ENACY42INNCAY5U3T3JBTEM6QI#5KYGC4SZSNMDH5OZ",
+      "vscuTimestamp": "20260714075143"
+    }
+  },
+  {
+    "ts": "10:51:44.675",
+    "phase": "petrol",
+    "actor": "PUMP-2",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x15 = KSh 2688.00 (pump 2, txn 5/5)",
+    "latency_ms": 2212.526963000073,
+    "response": {
+      "purchaseId": 342,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/254 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "6SYJ452R5SKA2HQ3",
+      "kraQrPayload": "14072026#075144#KRACU0300003881#KRACU0300003881/254 NS#SQP62F43R3A5Z4CBGXJ2YFUE6E#6SYJ452R5SKA2HQ3",
+      "vscuTimestamp": "20260714075144"
+    }
+  },
+  {
+    "ts": "10:51:44.994",
+    "phase": "petrol",
+    "actor": "PUMP-4",
+    "action": "SALE",
+    "detail": "AGO-DIESEL x10 = KSh 1792.00 (pump 4, txn 5/5)",
+    "latency_ms": 2039.8363399999653,
+    "response": {
+      "purchaseId": 343,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/255 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "QGVLGWIKFTQ6UBPU",
+      "kraQrPayload": "14072026#075144#KRACU0300003881#KRACU0300003881/255 NS#ALBMDEBBFXZWGYRE52FRK5SDFU#QGVLGWIKFTQ6UBPU",
+      "vscuTimestamp": "20260714075144"
+    }
+  },
+  {
+    "ts": "10:51:45.387",
+    "phase": "petrol",
+    "actor": "PUMP-3",
+    "action": "SALE",
+    "detail": "PMS-SUPER x10 = KSh 1945.00 (pump 3, txn 4/5)",
+    "latency_ms": 1427.4755399997048,
+    "response": {
+      "purchaseId": 344,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/256 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "7LFLCJONW46TOJZG",
+      "kraQrPayload": "14072026#075144#KRACU0300003881#KRACU0300003881/256 NS#EBH4YCZEMBJC2N6AWVBPNSUS7Y#7LFLCJONW46TOJZG",
+      "vscuTimestamp": "20260714075144"
+    }
+  },
+  {
+    "ts": "10:51:46.066",
+    "phase": "petrol",
+    "actor": "PUMP-3",
+    "action": "SALE",
+    "detail": "PMS-SUPER x30 = KSh 5835.00 (pump 3, txn 5/5)",
+    "latency_ms": 679.0857490000235,
+    "response": {
+      "purchaseId": 345,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/257 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "VUHW7GCMHGJOXEA3",
+      "kraQrPayload": "14072026#075145#KRACU0300003881#KRACU0300003881/257 NS#S7XOTWM2W7MT5WVF32IEG5XIVU#VUHW7GCMHGJOXEA3",
+      "vscuTimestamp": "20260714075145"
+    }
+  },
+  {
+    "ts": "10:52:16.098",
+    "phase": "bulk_import",
+    "actor": "SYSTEM",
+    "action": "BULK-IMPORT FAILED",
+    "detail": "220 rows",
+    "latency_ms": null,
+    "error": "TIaaSAmbiguousStateError: TIaaS Ambiguous State: Request sent but connection dropped before response. Retry with the same idempotency key \u2014 the middleware will deduplicate it safely."
+  },
+  {
+    "ts": "10:52:16.549",
+    "phase": "b2b_export",
+    "actor": "SYSTEM",
+    "action": "ITEM REG FAILED",
+    "detail": "EXP-TEA-50KG",
+    "latency_ms": null,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 400"
+  },
+  {
+    "ts": "10:52:16.854",
+    "phase": "b2b_export",
+    "actor": "SYSTEM",
+    "action": "ITEM REG FAILED",
+    "detail": "EXP-COFFEE-60KG",
+    "latency_ms": null,
+    "error": "KRAeTIMSError: TIaaS returned HTTP 400"
+  },
+  {
+    "ts": "10:52:17.841",
+    "phase": "b2b_export",
+    "actor": "POS-DOM",
+    "action": "SALE",
+    "detail": "CHIC-BURG x1 = KSh 820.00 (domestic filler 1, concurrent w/ export)",
+    "latency_ms": 984.692031999657,
+    "response": {
+      "purchaseId": 346,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/258 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "6EBKQ3JYUBWNT3K2",
+      "kraQrPayload": "14072026#075217#KRACU0300003881#KRACU0300003881/258 NS#4OSKZALZP3RJ2PCYICMLSBU3DY#6EBKQ3JYUBWNT3K2",
+      "vscuTimestamp": "20260714075217"
+    }
+  },
+  {
+    "ts": "10:52:18.268",
+    "phase": "b2b_export",
+    "actor": "POS-DOM",
+    "action": "SALE",
+    "detail": "LATTE x1 = KSh 320.00 (domestic filler 5, concurrent w/ export)",
+    "latency_ms": 1410.3638379997392,
+    "response": {
+      "purchaseId": 348,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/259 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "YZ5PRFBNRWQGEN2R",
+      "kraQrPayload": "14072026#075217#KRACU0300003881#KRACU0300003881/259 NS#INKT5SUNH62ISKUA4I5WRIOUMQ#YZ5PRFBNRWQGEN2R",
+      "vscuTimestamp": "20260714075217"
+    }
+  },
+  {
+    "ts": "10:52:23.950",
+    "phase": "b2b_export",
+    "actor": "POS-DOM",
+    "action": "SALE",
+    "detail": "CHIC-BURG x1 = KSh 820.00 (domestic filler 3, concurrent w/ export)",
+    "latency_ms": 7092.472864999763,
+    "response": {
+      "purchaseId": 347,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/260 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "B4UU54BVPWR7SNER",
+      "kraQrPayload": "14072026#075218#KRACU0300003881#KRACU0300003881/260 NS#Z2JM7X5HD4PVGCMQAMPAYXEIMU#B4UU54BVPWR7SNER",
+      "vscuTimestamp": "20260714075218"
+    }
+  },
+  {
+    "ts": "10:52:24.317",
+    "phase": "b2b_export",
+    "actor": "POS-DOM",
+    "action": "SALE",
+    "detail": "BREAD-ORD x1 = KSh 180.00 (domestic filler 4, concurrent w/ export)",
+    "latency_ms": 7459.820059000322,
+    "response": {
+      "purchaseId": 349,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/261 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "FEFT5F4SA3T625WL",
+      "kraQrPayload": "14072026#075223#KRACU0300003881#KRACU0300003881/261 NS#VIJLJIHN7ROWTS7KN3EDQVKXFA#FEFT5F4SA3T625WL",
+      "vscuTimestamp": "20260714075223"
+    }
+  },
+  {
+    "ts": "10:52:24.703",
+    "phase": "b2b_export",
+    "actor": "EXPORT-DESK",
+    "action": "SALE",
+    "detail": "EXP-TEA-50KG x2 = KSh 37000.00 (export B2B 1)",
+    "latency_ms": 7848.871118000261,
+    "response": {
+      "purchaseId": 350,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/262 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "4CXI7XHKKDHUJYC2",
+      "kraQrPayload": "14072026#075224#KRACU0300003881#KRACU0300003881/262 NS#HGJROOEKSZ52NURNQKVAAR6X7Q#4CXI7XHKKDHUJYC2",
+      "vscuTimestamp": "20260714075224"
+    }
+  },
+  {
+    "ts": "10:52:25.046",
+    "phase": "b2b_export",
+    "actor": "EXPORT-DESK",
+    "action": "SALE",
+    "detail": "EXP-COFFEE-60KG x2 = KSh 48000.00 (export B2B 2)",
+    "latency_ms": 8190.648479999709,
+    "response": {
+      "purchaseId": 351,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/263 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "2UQOOZ7O6ALYB5LF",
+      "kraQrPayload": "14072026#075224#KRACU0300003881#KRACU0300003881/263 NS#V6YBG7JSOATFA2UE3B5UO7FMRQ#2UQOOZ7O6ALYB5LF",
+      "vscuTimestamp": "20260714075224"
+    }
+  },
+  {
+    "ts": "10:52:25.396",
+    "phase": "b2b_export",
+    "actor": "EXPORT-DESK",
+    "action": "SALE",
+    "detail": "EXP-TEA-50KG x2 = KSh 37000.00 (export B2B 5)",
+    "latency_ms": 8540.346024999963,
+    "response": {
+      "purchaseId": 352,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/264 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "RTXJMZGYBGZYP4ZM",
+      "kraQrPayload": "14072026#075224#KRACU0300003881#KRACU0300003881/264 NS#VYEVL7Z3JZZTXZNE7PJK5Q6RJM#RTXJMZGYBGZYP4ZM",
+      "vscuTimestamp": "20260714075224"
+    }
+  },
+  {
+    "ts": "10:52:25.788",
+    "phase": "b2b_export",
+    "actor": "EXPORT-DESK",
+    "action": "SALE",
+    "detail": "EXP-TEA-50KG x1 = KSh 18500.00 (export B2B 3)",
+    "latency_ms": 8932.3510979998,
+    "response": {
+      "purchaseId": 353,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/265 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "KUXOBY3R6UUQG6LO",
+      "kraQrPayload": "14072026#075225#KRACU0300003881#KRACU0300003881/265 NS#O3Q6YT7QLBWVEWNAQCQ6IIIEQI#KUXOBY3R6UUQG6LO",
+      "vscuTimestamp": "20260714075225"
+    }
+  },
+  {
+    "ts": "10:52:26.160",
+    "phase": "b2b_export",
+    "actor": "EXPORT-DESK",
+    "action": "SALE",
+    "detail": "EXP-TEA-50KG x3 = KSh 55500.00 (export B2B 4)",
+    "latency_ms": 9304.179974999897,
+    "response": {
+      "purchaseId": 379,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/266 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "BTX544GEE4EI2X2Q",
+      "kraQrPayload": "14072026#075225#KRACU0300003881#KRACU0300003881/266 NS#F4BGW54OEVKVNZBX3CCLPXVENA#BTX544GEE4EI2X2Q",
+      "vscuTimestamp": "20260714075225"
+    }
+  },
+  {
+    "ts": "10:52:46.957",
+    "phase": "b2b_export",
+    "actor": "POS-DOM",
+    "action": "SALE FAILED",
+    "detail": "CAPP-DBL x1 = KSh 350.00 (domestic filler 2, concurrent w/ export)",
+    "latency_ms": 30100.01382900009,
+    "error": "TIaaSUnavailableError: TIaaS Service Unavailable: The Railway instance is unreachable."
+  },
+  {
+    "ts": "10:52:48.365",
+    "phase": "credit_storm",
+    "actor": "ESTHER",
+    "action": "SALE",
+    "detail": "FILLET-STK x2 = KSh 2440.00 (target sale for CN storm)",
+    "latency_ms": 1408.4784629999376,
+    "response": {
+      "purchaseId": 380,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/267 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "MYGA6D3PM2XSTLXW",
+      "kraQrPayload": "14072026#075247#KRACU0300003881#KRACU0300003881/267 NS#U4RKEUP5SN2OTGMLOFIAQHO4E4#MYGA6D3PM2XSTLXW",
+      "vscuTimestamp": "20260714075247"
+    }
+  },
+  {
+    "ts": "10:52:49.011",
+    "phase": "credit_storm",
+    "actor": "CN-1",
+    "action": "CREDIT NOTE OK",
+    "detail": "sale id=380",
+    "latency_ms": 645.6668159999026,
+    "response": {
+      "creditNoteId": 381,
+      "originalPurchaseId": 380,
+      "status": "SIGNED",
+      "cuInvoiceNumber": "KRACU0300003881/268 NC",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "ZBGFBNG3OIF7YSGH",
+      "kraQrPayload": "14072026#075248#KRACU0300003881#KRACU0300003881/268 NC#A5FRNSBCSNVDZFX7DQT3NLPS44#ZBGFBNG3OIF7YSGH",
+      "vscuTimestamp": "20260714075248",
+      "originalRcptNo": "KRACU0300003881/267 NS"
+    }
+  },
+  {
+    "ts": "10:52:49.018",
+    "phase": "credit_storm",
+    "actor": "CN-4",
+    "action": "CREDIT NOTE REJECTED (expected)",
+    "detail": "sale id=380",
+    "latency_ms": 650.3996890000963,
+    "error": "CreditNoteExceedsOriginalError: Credit note of 2440.00 would exceed the reversible balance of original purchaseId=380: original amount 2440.00, already reversed 2440.00, remaining 0.00."
+  },
+  {
+    "ts": "10:52:49.022",
+    "phase": "credit_storm",
+    "actor": "CN-2",
+    "action": "CREDIT NOTE REJECTED (expected)",
+    "detail": "sale id=380",
+    "latency_ms": 656.2932419997196,
+    "error": "CreditNoteExceedsOriginalError: Credit note of 2440.00 would exceed the reversible balance of original purchaseId=380: original amount 2440.00, already reversed 2440.00, remaining 0.00."
+  },
+  {
+    "ts": "10:52:49.027",
+    "phase": "credit_storm",
+    "actor": "CN-3",
+    "action": "CREDIT NOTE REJECTED (expected)",
+    "detail": "sale id=380",
+    "latency_ms": 660.1043929999832,
+    "error": "CreditNoteExceedsOriginalError: Credit note of 2440.00 would exceed the reversible balance of original purchaseId=380: original amount 2440.00, already reversed 2440.00, remaining 0.00."
+  },
+  {
+    "ts": "10:52:49.291",
+    "phase": "credit_storm",
+    "actor": "CN-5",
+    "action": "CREDIT NOTE REJECTED (expected)",
+    "detail": "sale id=380",
+    "latency_ms": 923.2113960001698,
+    "error": "CreditNoteExceedsOriginalError: Credit note of 2440.00 would exceed the reversible balance of original purchaseId=380: original amount 2440.00, already reversed 2440.00, remaining 0.00."
+  },
+  {
+    "ts": "10:52:49.502",
+    "phase": "credit_storm",
+    "actor": "CN-6",
+    "action": "CREDIT NOTE REJECTED (expected)",
+    "detail": "sale id=380",
+    "latency_ms": 1133.9633719999256,
+    "error": "CreditNoteExceedsOriginalError: Credit note of 2440.00 would exceed the reversible balance of original purchaseId=380: original amount 2440.00, already reversed 2440.00, remaining 0.00."
+  },
+  {
+    "ts": "10:52:49.502",
+    "phase": "credit_storm",
+    "actor": "SYSTEM",
+    "action": "STORM RESULT",
+    "detail": "sale id=380: 1/6 succeeded (PASS \u2014 exactly one winner)",
+    "latency_ms": null
+  },
+  {
+    "ts": "10:52:50.201",
+    "phase": "idem_race",
+    "actor": "RACER-1",
+    "action": "RACE RESULT",
+    "detail": "",
+    "latency_ms": 698.2254310000826,
+    "response": {
+      "purchaseId": 382,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/269 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "ZUJQCVERLBHIPFUL",
+      "kraQrPayload": "14072026#075249#KRACU0300003881#KRACU0300003881/269 NS#VSZ4BYJDSS34IKHZHOLKFQZV2I#ZUJQCVERLBHIPFUL",
+      "vscuTimestamp": "20260714075249"
+    }
+  },
+  {
+    "ts": "10:52:50.212",
+    "phase": "idem_race",
+    "actor": "RACER-3",
+    "action": "RACE RESULT",
+    "detail": "",
+    "latency_ms": 707.9239259996939,
+    "response": {
+      "purchaseId": 382,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/269 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "ZUJQCVERLBHIPFUL",
+      "kraQrPayload": "14072026#075249#KRACU0300003881#KRACU0300003881/269 NS#VSZ4BYJDSS34IKHZHOLKFQZV2I#ZUJQCVERLBHIPFUL",
+      "vscuTimestamp": "20260714075249"
+    }
+  },
+  {
+    "ts": "10:52:50.218",
+    "phase": "idem_race",
+    "actor": "RACER-7",
+    "action": "RACE RESULT",
+    "detail": "",
+    "latency_ms": 711.7597619999287,
+    "response": {
+      "purchaseId": 382,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/269 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "ZUJQCVERLBHIPFUL",
+      "kraQrPayload": "14072026#075249#KRACU0300003881#KRACU0300003881/269 NS#VSZ4BYJDSS34IKHZHOLKFQZV2I#ZUJQCVERLBHIPFUL",
+      "vscuTimestamp": "20260714075249"
+    }
+  },
+  {
+    "ts": "10:52:50.218",
+    "phase": "idem_race",
+    "actor": "RACER-6",
+    "action": "RACE RESULT",
+    "detail": "",
+    "latency_ms": 713.0956440000773,
+    "response": {
+      "purchaseId": 382,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/269 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "ZUJQCVERLBHIPFUL",
+      "kraQrPayload": "14072026#075249#KRACU0300003881#KRACU0300003881/269 NS#VSZ4BYJDSS34IKHZHOLKFQZV2I#ZUJQCVERLBHIPFUL",
+      "vscuTimestamp": "20260714075249"
+    }
+  },
+  {
+    "ts": "10:52:50.221",
+    "phase": "idem_race",
+    "actor": "RACER-4",
+    "action": "RACE RESULT",
+    "detail": "",
+    "latency_ms": 716.8373770000471,
+    "response": {
+      "purchaseId": 382,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/269 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "ZUJQCVERLBHIPFUL",
+      "kraQrPayload": "14072026#075249#KRACU0300003881#KRACU0300003881/269 NS#VSZ4BYJDSS34IKHZHOLKFQZV2I#ZUJQCVERLBHIPFUL",
+      "vscuTimestamp": "20260714075249"
+    }
+  },
+  {
+    "ts": "10:52:50.238",
+    "phase": "idem_race",
+    "actor": "RACER-5",
+    "action": "RACE RESULT",
+    "detail": "",
+    "latency_ms": 733.3408040003633,
+    "response": {
+      "purchaseId": 382,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/269 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "ZUJQCVERLBHIPFUL",
+      "kraQrPayload": "14072026#075249#KRACU0300003881#KRACU0300003881/269 NS#VSZ4BYJDSS34IKHZHOLKFQZV2I#ZUJQCVERLBHIPFUL",
+      "vscuTimestamp": "20260714075249"
+    }
+  },
+  {
+    "ts": "10:52:50.239",
+    "phase": "idem_race",
+    "actor": "RACER-8",
+    "action": "RACE RESULT",
+    "detail": "",
+    "latency_ms": 732.6478889999635,
+    "response": {
+      "purchaseId": 382,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/269 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "ZUJQCVERLBHIPFUL",
+      "kraQrPayload": "14072026#075249#KRACU0300003881#KRACU0300003881/269 NS#VSZ4BYJDSS34IKHZHOLKFQZV2I#ZUJQCVERLBHIPFUL",
+      "vscuTimestamp": "20260714075249"
+    }
+  },
+  {
+    "ts": "10:52:50.240",
+    "phase": "idem_race",
+    "actor": "RACER-2",
+    "action": "RACE RESULT",
+    "detail": "",
+    "latency_ms": 737.2055979999459,
+    "response": {
+      "purchaseId": 382,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/269 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "ZUJQCVERLBHIPFUL",
+      "kraQrPayload": "14072026#075249#KRACU0300003881#KRACU0300003881/269 NS#VSZ4BYJDSS34IKHZHOLKFQZV2I#ZUJQCVERLBHIPFUL",
+      "vscuTimestamp": "20260714075249"
+    }
+  },
+  {
+    "ts": "10:52:50.240",
+    "phase": "idem_race",
+    "actor": "SYSTEM",
+    "action": "RACE SUMMARY",
+    "detail": "key=IDEMRACE-20260714-00066: 1 distinct purchaseId(s) across 8 concurrent identical requests (PASS)",
+    "latency_ms": null
+  },
+  {
+    "ts": "10:52:50.856",
+    "phase": "rounding",
+    "actor": "ROUND-2",
+    "action": "SALE FAILED",
+    "detail": "ROUND-SKU x7 = KSh 1049.65 (rounding stress: 7 x 149.95 band E)",
+    "latency_ms": 614.4279959999039,
+    "error": "TIaaSAmbiguousStateError: TIaaS Ambiguous State: Request sent but connection dropped before response. Retry with the same idempotency key \u2014 the middleware will deduplicate it safely."
+  },
+  {
+    "ts": "10:52:50.861",
+    "phase": "rounding",
+    "actor": "ROUND-12",
+    "action": "SALE FAILED",
+    "detail": "ROUND-SKU x3 = KSh 900.09 (rounding stress: 3 x 300.03 band C)",
+    "latency_ms": 614.8133249998864,
+    "error": "TIaaSAmbiguousStateError: TIaaS Ambiguous State: Request sent but connection dropped before response. Retry with the same idempotency key \u2014 the middleware will deduplicate it safely."
+  },
+  {
+    "ts": "10:52:50.862",
+    "phase": "rounding",
+    "actor": "ROUND-15",
+    "action": "SALE FAILED",
+    "detail": "ROUND-SKU x5 = KSh 1500.15 (rounding stress: 5 x 300.03 band A)",
+    "latency_ms": 613.5379620000094,
+    "error": "TIaaSAmbiguousStateError: TIaaS Ambiguous State: Request sent but connection dropped before response. Retry with the same idempotency key \u2014 the middleware will deduplicate it safely."
+  },
+  {
+    "ts": "10:52:50.862",
+    "phase": "rounding",
+    "actor": "ROUND-7",
+    "action": "SALE FAILED",
+    "detail": "ROUND-SKU x3 = KSh 26.64 (rounding stress: 3 x 8.88 band A)",
+    "latency_ms": 617.9156759999387,
+    "error": "TIaaSAmbiguousStateError: TIaaS Ambiguous State: Request sent but connection dropped before response. Retry with the same idempotency key \u2014 the middleware will deduplicate it safely."
+  },
+  {
+    "ts": "10:52:50.862",
+    "phase": "rounding",
+    "actor": "ROUND-18",
+    "action": "SALE FAILED",
+    "detail": "ROUND-SKU x1 = KSh 8.88 (rounding stress: 1 x 8.88 band C)",
+    "latency_ms": 612.5062480000452,
+    "error": "TIaaSAmbiguousStateError: TIaaS Ambiguous State: Request sent but connection dropped before response. Retry with the same idempotency key \u2014 the middleware will deduplicate it safely."
+  },
+  {
+    "ts": "10:52:50.862",
+    "phase": "rounding",
+    "actor": "ROUND-5",
+    "action": "SALE FAILED",
+    "detail": "ROUND-SKU x5 = KSh 4.95 (rounding stress: 5 x 0.99 band C)",
+    "latency_ms": 619.5089630000439,
+    "error": "TIaaSAmbiguousStateError: TIaaS Ambiguous State: Request sent but connection dropped before response. Retry with the same idempotency key \u2014 the middleware will deduplicate it safely."
+  },
+  {
+    "ts": "10:52:50.863",
+    "phase": "rounding",
+    "actor": "ROUND-1",
+    "action": "SALE FAILED",
+    "detail": "ROUND-SKU x5 = KSh 1500.15 (rounding stress: 5 x 300.03 band C)",
+    "latency_ms": 622.0283719999316,
+    "error": "TIaaSAmbiguousStateError: TIaaS Ambiguous State: Request sent but connection dropped before response. Retry with the same idempotency key \u2014 the middleware will deduplicate it safely."
+  },
+  {
+    "ts": "10:52:50.863",
+    "phase": "rounding",
+    "actor": "ROUND-11",
+    "action": "SALE FAILED",
+    "detail": "ROUND-SKU x2 = KSh 35.54 (rounding stress: 2 x 17.77 band A)",
+    "latency_ms": 617.115420999653,
+    "error": "TIaaSAmbiguousStateError: TIaaS Ambiguous State: Request sent but connection dropped before response. Retry with the same idempotency key \u2014 the middleware will deduplicate it safely."
+  },
+  {
+    "ts": "10:52:51.262",
+    "phase": "rounding",
+    "actor": "ROUND-8",
+    "action": "SALE",
+    "detail": "ROUND-SKU x5 = KSh 1500.15 (rounding stress: 5 x 300.03 band C)",
+    "latency_ms": 1017.6847990001079,
+    "response": {
+      "purchaseId": 383,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/270 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "H3IZJ5PYYZLWX5RZ",
+      "kraQrPayload": "14072026#075250#KRACU0300003881#KRACU0300003881/270 NS#6RR7IAHKBXYNWQSFTBJNEBFIOI#H3IZJ5PYYZLWX5RZ",
+      "vscuTimestamp": "20260714075250"
+    }
+  },
+  {
+    "ts": "10:52:51.970",
+    "phase": "rounding",
+    "actor": "ROUND-20",
+    "action": "SALE",
+    "detail": "ROUND-SKU x1 = KSh 149.95 (rounding stress: 1 x 149.95 band E)",
+    "latency_ms": 1719.5387570000094,
+    "response": {
+      "purchaseId": 385,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/271 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "TEMUWDFRODQTGEZE",
+      "kraQrPayload": "14072026#075251#KRACU0300003881#KRACU0300003881/271 NS#CBTCZNSVXTFMRCUF7OIB53BQUY#TEMUWDFRODQTGEZE",
+      "vscuTimestamp": "20260714075251"
+    }
+  },
+  {
+    "ts": "10:52:52.417",
+    "phase": "rounding",
+    "actor": "ROUND-17",
+    "action": "SALE",
+    "detail": "ROUND-SKU x3 = KSh 2.97 (rounding stress: 3 x 0.99 band B)",
+    "latency_ms": 2167.9553009998926,
+    "response": {
+      "purchaseId": 384,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/272 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "TL4TTQ6XM34UY5FR",
+      "kraQrPayload": "14072026#075251#KRACU0300003881#KRACU0300003881/272 NS#OYS7QBXYYMEMOJCALJE7KVG4WI#TL4TTQ6XM34UY5FR",
+      "vscuTimestamp": "20260714075251"
+    }
+  },
+  {
+    "ts": "10:52:52.800",
+    "phase": "rounding",
+    "actor": "ROUND-9",
+    "action": "SALE",
+    "detail": "ROUND-SKU x1 = KSh 17.77 (rounding stress: 1 x 17.77 band A)",
+    "latency_ms": 2554.8037759999715,
+    "response": {
+      "purchaseId": 386,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/273 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "OIE4W24ISLQQEBE4",
+      "kraQrPayload": "14072026#075252#KRACU0300003881#KRACU0300003881/273 NS#EXLLYHSQZU7B7VYO5RVETTX6SE#OIE4W24ISLQQEBE4",
+      "vscuTimestamp": "20260714075252"
+    }
+  },
+  {
+    "ts": "10:52:53.102",
+    "phase": "rounding",
+    "actor": "ROUND-3",
+    "action": "SALE",
+    "detail": "ROUND-SKU x5 = KSh 88.85 (rounding stress: 5 x 17.77 band B)",
+    "latency_ms": 2859.9596199996995,
+    "response": {
+      "purchaseId": 388,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/274 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "TZD7NBMBUT3FKRQQ",
+      "kraQrPayload": "14072026#075252#KRACU0300003881#KRACU0300003881/274 NS#K7LGT5LZAVGHCVFU4A4K7ZSDVA#TZD7NBMBUT3FKRQQ",
+      "vscuTimestamp": "20260714075252"
+    }
+  },
+  {
+    "ts": "10:52:53.463",
+    "phase": "rounding",
+    "actor": "ROUND-6",
+    "action": "SALE",
+    "detail": "ROUND-SKU x5 = KSh 6170.05 (rounding stress: 5 x 1234.01 band C)",
+    "latency_ms": 3219.2431449998367,
+    "response": {
+      "purchaseId": 387,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/275 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "6JN7WSVRDNPCTROL",
+      "kraQrPayload": "14072026#075252#KRACU0300003881#KRACU0300003881/275 NS#Q2EGJUAOTRVWYYAHLQVTRKLC3M#6JN7WSVRDNPCTROL",
+      "vscuTimestamp": "20260714075252"
+    }
+  },
+  {
+    "ts": "10:52:53.832",
+    "phase": "rounding",
+    "actor": "ROUND-19",
+    "action": "SALE",
+    "detail": "ROUND-SKU x1 = KSh 233.33 (rounding stress: 1 x 233.33 band E)",
+    "latency_ms": 3582.1805810001024,
+    "response": {
+      "purchaseId": 389,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/276 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "SCFIH63OVJLE3EKG",
+      "kraQrPayload": "14072026#075253#KRACU0300003881#KRACU0300003881/276 NS#L5TTJ5TTGF7YM5WIQAZOLZH5JI#SCFIH63OVJLE3EKG",
+      "vscuTimestamp": "20260714075253"
+    }
+  },
+  {
+    "ts": "10:52:54.168",
+    "phase": "rounding",
+    "actor": "ROUND-13",
+    "action": "SALE",
+    "detail": "ROUND-SKU x2 = KSh 600.06 (rounding stress: 2 x 300.03 band B)",
+    "latency_ms": 3921.413012999892,
+    "response": {
+      "purchaseId": 390,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/277 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "HVOBRISX2ZYJNENZ",
+      "kraQrPayload": "14072026#075253#KRACU0300003881#KRACU0300003881/277 NS#IGWWJL7ELKYYSYWN5ZD5SBW5KQ#HVOBRISX2ZYJNENZ",
+      "vscuTimestamp": "20260714075253"
+    }
+  },
+  {
+    "ts": "10:52:54.503",
+    "phase": "rounding",
+    "actor": "ROUND-4",
+    "action": "SALE",
+    "detail": "ROUND-SKU x5 = KSh 1500.15 (rounding stress: 5 x 300.03 band C)",
+    "latency_ms": 4260.632219999934,
+    "response": {
+      "purchaseId": 391,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/278 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "HPQCPGRARKJV2QGU",
+      "kraQrPayload": "14072026#075254#KRACU0300003881#KRACU0300003881/278 NS#XCC2KDQGEIUHIMWZI3OHXIS6VE#HPQCPGRARKJV2QGU",
+      "vscuTimestamp": "20260714075254"
+    }
+  },
+  {
+    "ts": "10:52:56.100",
+    "phase": "rounding",
+    "actor": "ROUND-10",
+    "action": "SALE",
+    "detail": "ROUND-SKU x3 = KSh 26.64 (rounding stress: 3 x 8.88 band A)",
+    "latency_ms": 5854.942465000022,
+    "response": {
+      "purchaseId": 392,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/279 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "ZT5RCUI6LQEBRPNQ",
+      "kraQrPayload": "14072026#075255#KRACU0300003881#KRACU0300003881/279 NS#XLUH3RDWRKQEIIQFQNOK7A3XEE#ZT5RCUI6LQEBRPNQ",
+      "vscuTimestamp": "20260714075255"
+    }
+  },
+  {
+    "ts": "10:53:01.733",
+    "phase": "rounding",
+    "actor": "ROUND-16",
+    "action": "SALE",
+    "detail": "ROUND-SKU x3 = KSh 53.31 (rounding stress: 3 x 17.77 band B)",
+    "latency_ms": 11484.240548999878,
+    "response": {
+      "purchaseId": 393,
+      "status": "SIGNED",
+      "type": "SALE",
+      "supplier": "Registered taxpayer A008697103A (self)",
+      "cuInvoiceNumber": "KRACU0300003881/280 NS",
+      "sdcId": "KRACU0300003881",
+      "receiptSignature": "6TLLFXSNMVLYZ4K3",
+      "kraQrPayload": "14072026#075301#KRACU0300003881#KRACU0300003881/280 NS#SCDHDWUKVXXDGQMBRYFCJYZEPA#6TLLFXSNMVLYZ4K3",
+      "vscuTimestamp": "20260714075301"
+    }
+  },
+  {
+    "ts": "10:53:20.361",
+    "phase": "rounding",
+    "actor": "ROUND-14",
+    "action": "SALE FAILED",
+    "detail": "ROUND-SKU x5 = KSh 88.85 (rounding stress: 5 x 17.77 band C)",
+    "latency_ms": 30113.714898000126,
+    "error": "TIaaSUnavailableError: TIaaS Service Unavailable: The Railway instance is unreachable."
+  },
+  {
+    "ts": "10:53:52.481",
+    "phase": "ratelimit",
+    "actor": "SYSTEM",
+    "action": "BURST RESULT",
+    "detail": "130 unpaced requests: 108 ok, breakdown={'TIaaSUnavailableError': 13, 'KRAeTIMSError': 9}",
+    "latency_ms": null
+  },
+  {
+    "ts": "10:54:08.618",
+    "phase": "ratelimit",
+    "actor": "SYSTEM",
+    "action": "RECOVERY CHECK",
+    "detail": "single request after burst succeeded (PASS)",
+    "latency_ms": null
+  }
+]

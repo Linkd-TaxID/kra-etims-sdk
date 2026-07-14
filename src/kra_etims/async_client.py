@@ -31,6 +31,7 @@ from .models import (
     StockItem,
     StockAdjustmentLine,
     StockAdjustmentRequest,
+    to_middleware_item_payload,
     to_middleware_sale_payload,
 )
 
@@ -243,10 +244,19 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     # ------------------------------------------------------------------
 
     async def save_item(self, data: ItemSave) -> Dict[str, Any]:
-        """Category 4: Save or update item master data."""
+        """
+        Category 4: Save or update item master data.
+
+        Posts the middleware's ``POST /v2/etims/items`` registry schema — the
+        same mapping as the sync client (:func:`kra_etims.models.to_middleware_item_payload`).
+        The async client previously posted the KRA-native ``ItemSave`` dump to the
+        deprecated ``/v2/etims/item`` endpoint, diverging from the sync client and
+        failing with 400 against middleware versions that bound that endpoint to the
+        sale-line schema (campaign-5 finding, 2026-07-14).
+        """
         return await self._request(
-            "POST", "/v2/etims/item",
-            json=data.model_dump(mode="json", exclude_none=True),
+            "POST", "/v2/etims/items",
+            json=to_middleware_item_payload(data),
         )
 
     async def bulk_import_items(self, csv_path: str) -> Dict[str, Any]:
