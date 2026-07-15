@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "taxid-etims"
-version = "0.5.0"
+version = "0.5.1"
 description = "Enterprise Python SDK for KRA eTIMS via TIaaS Middleware — idempotency engine with offline resilience"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,6 +34,12 @@ dependencies = [
     # httpx.AsyncClient (async). requests is no longer a dependency.
     "httpx>=0.25.0",
 ]
+
+[project.urls]
+Homepage = "https://taxid.co.ke"
+Documentation = "https://linkd-taxid.github.io/kra-etims-sdk/"
+Repository = "https://github.com/Linkd-TaxID/kra-etims-sdk"
+Changelog = "https://github.com/Linkd-TaxID/kra-etims-sdk/blob/main/CHANGELOG.md"
 
 [project.scripts]
 etims = "kra_etims.cli.main:main"

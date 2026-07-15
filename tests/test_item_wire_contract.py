@@ -15,7 +15,7 @@ from kra_etims.models import ItemSave, ItemType, TaxType, to_middleware_item_pay
 
 def _fuel_item(**overrides):
     kwargs = dict(
-        tin="A008697103A",
+        tin="A000000000Z",
         bhfId="00",
         itemCd="PMS-SUPER",
         itemClsCd="15101506",

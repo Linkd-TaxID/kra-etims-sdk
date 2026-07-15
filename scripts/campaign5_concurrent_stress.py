@@ -9,14 +9,16 @@ not a single sequential actor. Target: find what only shows up under real
 concurrent load — idempotency races, credit-note-lock races, rate-limiter
 behavior, and Decimal/rounding drift at volume.
 
-Tenant: single real KRA-sandbox-registered device (TIN A008697103A, bhf 00) —
-the same one used by javahouse_day.py / petrol_station_day.py. There is no
-second real tenant, so no cross-tenant isolation scenario runs here (see
-memory: that dimension was already covered in campaign 3/4 with the same
-tenant across time, not concurrently across tenants).
+Tenant: a single KRA-sandbox-registered device, the same one used by
+javahouse_day.py / petrol_station_day.py. There is no second real tenant, so
+no cross-tenant isolation scenario runs here (see memory: that dimension was
+already covered in campaign 3/4 with the same tenant across time, not
+concurrently across tenants).
 
 Usage:
-    export SANDBOX_SDK_KEY=...
+    export SANDBOX_SDK_KEY=...        # tenant-bound SDK key
+    export SANDBOX_TIN=A000000000Z    # the sandbox device's KRA PIN
+    export SANDBOX_BHF=00             # branch id
     python3 scripts/campaign5_concurrent_stress.py [--phase NAME ...]
 
 Phases: warmup terminals petrol bulk_import b2b_export credit_storm
@@ -46,7 +48,9 @@ from kra_etims.models import ItemSave, ItemType, TaxType
 
 BASE_URL = os.environ.get("TIAAS_URL", "https://api.taxid.co.ke")
 API_KEY = os.environ["SANDBOX_SDK_KEY"]
-TIN, BHF = "A008697103A", "00"
+# Never hardcode a real KRA PIN in a public repo — it is identifying data.
+TIN = os.environ.get("SANDBOX_TIN", "A000000000Z")
+BHF = os.environ.get("SANDBOX_BHF", "00")
 TODAY = datetime.now().strftime("%Y-%m-%d")
 
 RATE_LIMIT_PER_MIN = 90  # headroom under the 100/min/key Bucket4J ceiling

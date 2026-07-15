@@ -34,7 +34,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 BASE_URL = os.environ.get("TIAAS_URL", "https://api.taxid.co.ke")
 API_KEY  = os.environ["SANDBOX_SDK_KEY"]
-TIN, BHF = "A008697103A", "00"
+TIN, BHF = "A000000000Z", "00"
 TODAY    = datetime.now().strftime("%Y-%m-%d")
 
 FAST   = "--fast" in sys.argv        # skip jitter for smoke runs

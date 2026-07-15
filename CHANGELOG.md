@@ -2,6 +2,19 @@
 
 All notable changes to kra-etims-sdk are documented here.
 
+## [0.5.1]
+
+### Changed
+- Published package metadata: added `[project.urls]` (Homepage, Documentation,
+  Repository, Changelog) so the PyPI project page links to the docs and source
+  instead of showing bare/`None` fields.
+
+### Security / hygiene
+- Removed a hardcoded real KRA taxpayer PIN from the example day-scripts, test
+  fixtures, and the concurrent-stress harness; the stress script now reads the
+  PIN from `SANDBOX_TIN`. Campaign/day transcripts (which embed real KRA receipt
+  signatures) are no longer tracked and are git-ignored going forward.
+
 ## [Unreleased]
 
 ### Added

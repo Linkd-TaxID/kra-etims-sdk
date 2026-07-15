@@ -37,7 +37,7 @@ def test_submit_sale_live():
     )
 
     invoice = SaleInvoice(
-        tin="A008697103A",
+        tin="A000000000Z",
         bhfId="00",
         invcNo=f"INV-{int(time.time())}",
         custNm="Test Client",

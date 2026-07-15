@@ -16,3 +16,6 @@ build/
 # Local agent instructions — internal audit notes, never publish
 CLAUDE.md
 .claude/
+
+# Campaign/day transcripts embed real KRA receipt signatures — never commit
+*_transcript_*.json
