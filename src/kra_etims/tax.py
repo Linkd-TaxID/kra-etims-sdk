@@ -76,7 +76,7 @@ def calculate_item(
     qty: Union[Decimal, float, int, str] = Decimal("1"),
     *,
     price_is_inclusive: bool = True,
-    pkg_unit_cd: str = "UNT",
+    pkg_unit_cd: str = "NT",
     qty_unit_cd: str = "U",
 ) -> ItemDetail:
     """
@@ -101,7 +101,8 @@ def calculate_item(
     price_is_inclusive:
         Pricing convention.  POS systems typically use inclusive (default).
     pkg_unit_cd / qty_unit_cd:
-        KRA unit codes.  Defaults to "UNT" / "U".
+        KRA unit codes.  Defaults to "NT" / "U".  The VSCU rejects "UNT" with
+        error 913 ("Code value error"); "NT" is KRA's valid packaging-unit code.
 
     Returns
     -------
