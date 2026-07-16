@@ -17,6 +17,21 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-07-16
+
+### Fixed
+- **`calculate_item()` default `pkg_unit_cd` was `"UNT"`, which the KRA VSCU
+  rejects with error 913 ("Code value error [pkgUnitCd]")** — every itemised
+  sale built with the default packaging-unit code failed to sign. The valid KRA
+  packaging-unit code is `"NT"` (also the middleware's own default), now the
+  SDK default. Callers who explicitly passed `pkg_unit_cd="NT"` are unaffected.
+
+### Added
+- **`examples/pos_basket_demo.py`** — end-to-end itemised POS demo: builds a
+  mixed-band basket (Band A + Band B) with `calculate_item`, signs it live via
+  `submit_sale`, and renders a fiscal receipt (per-band VAT breakdown, SCU
+  signature block, QR) from the real signed response.
+
 ### Added
 - **`bulk_import_items(csv_path)`** (sync + async) — multipart upload to the middleware's
   `POST /v2/etims/items/bulk-import` (Track C5). Per-row failures don't abort the upload;
