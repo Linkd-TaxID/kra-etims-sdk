@@ -1,4 +1,14 @@
-# KRA eTIMS SDK (Python) `v0.5.0`
+# KRA eTIMS SDK (Python) `v0.5.3`
+
+### Sign a KRA eTIMS receipt in one call. No OAuth. No eTIMS. No tax math.
+
+Your POS or ERP sends a sale; you get a KRA-signed receipt back — signature, QR,
+and all — in the same response. The SDK splits the VAT, holds the correct tax band
+(A is Exempt, **B** is the 16% standard rate — the reversal that breaks most
+integrations), and queues the sale if KRA is down. **You never learn eTIMS.**
+
+> **Neutral infrastructure.** We power your product; we never sell to your customers.
+> TaxID is the eTIMS rail — not a platform that competes with you for the merchant.
 
 ```bash
 pip install taxid-etims               # core SDK

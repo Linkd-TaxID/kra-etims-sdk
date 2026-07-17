@@ -17,6 +17,14 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-07-17
+
+### Changed
+- **README hero rewritten** to lead with the provable positioning — sign a KRA
+  eTIMS receipt in one call (no OAuth, no eTIMS internals, no tax math), and the
+  neutral-infrastructure stance (we power your product, we never sell to your
+  customers). Docs-only; no API or behaviour changes.
+
 ## [0.5.2] - 2026-07-16
 
 ### Fixed
