@@ -233,7 +233,7 @@ def test_retry_with_idempotency_key_returns_cached_receipt_not_new_signing(httpx
     # Verify the idempotency key was sent in the retry request
     sent_requests = httpx_mock.get_requests()
     assert len(sent_requests) == 1
-    sent_key = sent_requests[0].headers.get("X-TIaaS-Idempotency-Key")
+    sent_key = sent_requests[0].headers.get("Idempotency-Key")
     assert sent_key == "idem-retry-001", (
         f"Retry must send the SAME idempotency key. Got: {sent_key!r}"
     )

@@ -132,26 +132,18 @@ def calculate_item(
     rate = _EXCLUSIVE_RATE[band]
 
     if price_is_inclusive:
-        # Retail price already includes VAT — back-calculate net amount.
-        # KRA formula: taxblAmt = totAmt / (1 + rate)
-        taxable_unit = _q(price / _INCLUSIVE_DIVISOR[band])
-        tax_unit = _q(price - taxable_unit)
-        gross_unit = price  # == taxable + tax by construction
+        gross_unit = price
     else:
-        # Net (exclusive) price supplied — add VAT to arrive at gross.
-        taxable_unit = price
-        tax_unit = _q(price * rate)
-        gross_unit = _q(price + tax_unit)
+        # Net (exclusive) price supplied — gross it up per unit for uprc.
+        gross_unit = _q(price * (Decimal("1") + rate))
 
-    # Line totals = unit amounts × quantity
+    # Derive VAT from the LINE total, never unit VAT x qty: per-unit rounding
+    # drifts by up to qty x 0.005 and the middleware recomputes
+    # tax = gross x rate / (1 + rate) at line/receipt level (0.02 tolerance),
+    # rejecting SDK-built sales from qty 6 upward.
     tot_amt = _q(gross_unit * quantity)
-    taxbl_amt = _q(taxable_unit * quantity)
-    tax_amt = _q(tax_unit * quantity)
-
-    # Ensure rounding doesn't leave a 1-cent gap: assign residual to taxAmt.
-    rounding_residual = tot_amt - taxbl_amt - tax_amt
-    if rounding_residual != Decimal("0"):
-        tax_amt = _q(tax_amt + rounding_residual)
+    taxbl_amt = _q(tot_amt / _INCLUSIVE_DIVISOR[band])
+    tax_amt = tot_amt - taxbl_amt
 
     return ItemDetail(
         itemCd=item_code,

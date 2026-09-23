@@ -80,7 +80,7 @@ def test_api_key_sent_as_x_api_key_header(httpx_mock) -> None:
     )
     runner.invoke(app, ["sandbox", "ping"])
     req = httpx_mock.get_requests()[0]
-    assert req.headers.get("x-api-key") == _API_KEY
+    assert req.headers.get("authorization") == f"Bearer {_API_KEY}"
 
 
 @pytest.mark.integration
@@ -223,7 +223,7 @@ def test_invoice_submit_idempotency_key_in_header(httpx_mock, tmp_path) -> None:
         "invoice", "submit", str(f), "--idempotency-key", "idem-test-abc",
     ])
     req = httpx_mock.get_requests()[0]
-    assert req.headers.get("x-tiaas-idempotency-key") == "idem-test-abc"
+    assert req.headers.get("idempotency-key") == "idem-test-abc"
 
 
 @pytest.mark.integration
@@ -344,4 +344,4 @@ def test_env_var_api_key_sent_in_header(httpx_mock, monkeypatch: pytest.MonkeyPa
     )
     runner.invoke(app, ["sandbox", "ping"])
     req = httpx_mock.get_requests()[0]
-    assert req.headers.get("x-api-key") == "env-key-xyz-999"
+    assert req.headers.get("authorization") == "Bearer env-key-xyz-999"

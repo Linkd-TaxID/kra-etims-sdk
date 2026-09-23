@@ -79,5 +79,5 @@ async def test_async_idempotency_key_passed(httpx_mock):
     await client.submit_sale(invoice, idempotency_key="async-req-123")
 
     request = httpx_mock.get_request()
-    assert request.headers["X-TIaaS-Idempotency-Key"] == "async-req-123"
+    assert request.headers["Idempotency-Key"] == "async-req-123"
     await client.aclose()

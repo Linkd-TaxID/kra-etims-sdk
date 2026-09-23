@@ -54,25 +54,59 @@ from __future__ import annotations
 import asyncio
 import time
 import random
+import uuid
+import warnings
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Union
 
-import httpx
 from pydantic import BaseModel, Field
+
+from .exceptions import OSCUUnavailableError, TIaaSUnavailableError
 
 if TYPE_CHECKING:
     from .client import KRAeTIMSClient
     from .async_client import AsyncKRAeTIMSClient
 
-# HTTP status codes that indicate a transient upstream failure — safe to retry.
-_TRANSIENT_STATUS_CODES = frozenset({503, 504})
-
 # Maximum number of retry attempts (3 retries = 4 total attempts).
 _MAX_RETRIES = 3
 
-# Base delay in seconds; doubles per attempt: 0.5s, 1.0s, 2.0s.
+# Backoff cap in seconds doubles per attempt: 0.5s, 1.0s, 2.0s (full jitter).
 _BASE_DELAY = 0.5
+
+
+def _is_retryable(exc: Exception, method: str, idempotency_key: Optional[str]) -> bool:
+    """
+    Retry only what cannot have produced a side effect.
+
+    TIaaSUnavailableError means the request never left the client (or was a
+    read). An OSCU 503 is a server-declared transient failure, retried for a
+    mutation only under an idempotency key. The VSCU 24h ceiling
+    (KRAConnectivityTimeoutError) lasts hours and is never retried here, nor
+    is TIaaSAmbiguousStateError, which needs reconciliation, not a resend.
+    """
+    if isinstance(exc, TIaaSUnavailableError):
+        return True
+    if isinstance(exc, OSCUUnavailableError):
+        return method.upper() == "GET" or idempotency_key is not None
+    return False
+
+
+def _backoff(attempt: int) -> float:
+    # Full jitter de-correlates many POS terminals recovering from one outage.
+    return random.uniform(0, _BASE_DELAY * (2 ** attempt))
+
+
+def _money(amount: Union[Decimal, float, int, str]) -> str:
+    if isinstance(amount, float):
+        warnings.warn(
+            "Passing a float amount is deprecated; pass Decimal or str. "
+            f"{amount!r} was rounded to cents.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return str(Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    return str(Decimal(str(amount)))
 
 
 # ---------------------------------------------------------------------------
@@ -213,51 +247,20 @@ class TaxIDSupplierGateway:
         idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Wraps ``_client._request`` with exponential-backoff retry for transient
-        failures (connection errors, HTTP 503, HTTP 504).
-
-        Retry policy:
-        - Up to ``_MAX_RETRIES`` retries (3); total of 4 attempts.
-        - Delays: ``_BASE_DELAY × 2^attempt`` ± 10 % jitter → 0.5 s, 1.0 s, 2.0 s.
-        - Retries: ``requests.ConnectionError``, ``requests.Timeout``, HTTP 503/504.
-        - Never retried: HTTP 4xx (client errors), HTTP 409 (already processed),
-          ``TIaaSAmbiguousStateError`` (Schrodinger receipt — unknown state).
-
-        Thread-safe: no shared mutable state; each call is self-contained.
+        Wraps ``_client._request`` with bounded, full-jitter retry for failures
+        that cannot have had a server-side effect — see ``_is_retryable``.
+        Up to ``_MAX_RETRIES`` retries (4 attempts in total).
         """
-        from .exceptions import KRAConnectivityTimeoutError, TIaaSAmbiguousStateError, KRAeTIMSError
-
-        last_exc: Optional[Exception] = None
+        from .exceptions import KRAeTIMSError
 
         for attempt in range(_MAX_RETRIES + 1):
             try:
                 return self._client._request(method, path, json=json, idempotency_key=idempotency_key)
-
-            except TIaaSAmbiguousStateError:
-                # Network dropped after bytes left the socket — receipt may or may
-                # not have been issued. Never retry; surface to caller immediately.
-                raise
-
-            except KRAConnectivityTimeoutError as exc:
-                # HTTP 503 — VSCU offline ceiling. Transient; retry.
-                last_exc = exc
-
             except KRAeTIMSError as exc:
-                # HTTP 4xx or non-503 error — client error or permanent rejection.
-                # Do not retry; re-raise immediately.
-                raise
-
-            except (httpx.ConnectError, httpx.TimeoutException) as exc:
-                # TCP-level transient failure — retry.
-                last_exc = exc
-
-            if attempt < _MAX_RETRIES:
-                delay = _BASE_DELAY * (2 ** attempt)
-                jitter = delay * random.uniform(-0.1, 0.1)
-                time.sleep(delay + jitter)
-
-        # All attempts exhausted — re-raise the last transient exception.
-        raise last_exc  # type: ignore[misc]
+                if attempt == _MAX_RETRIES or not _is_retryable(exc, method, idempotency_key):
+                    raise
+            time.sleep(_backoff(attempt))
+        raise AssertionError("unreachable")
 
     def onboard_supplier(
         self,
@@ -295,7 +298,7 @@ class TaxIDSupplierGateway:
             "buyerPin":  buyer_pin,
             "buyerName": buyer_name,
             "phone":     phone.strip(),
-            "amount":    str(Decimal(str(amount))),
+            "amount":    _money(amount),
         }
         if item_description:
             payload["itemDescription"] = item_description
@@ -304,7 +307,7 @@ class TaxIDSupplierGateway:
             "POST",
             "/v2/gateway/supplier-onboarding/single",
             json=payload,
-            idempotency_key=idempotency_key,
+            idempotency_key=idempotency_key or str(uuid.uuid4()),
         )
         return SupplierOnboardingResponse.from_api(raw)
 
@@ -337,7 +340,7 @@ class TaxIDSupplierGateway:
             "suppliers": [
                 {
                     "phone":  s.phone.strip(),
-                    "amount": str(Decimal(str(s.amount))),
+                    "amount": _money(s.amount),
                     **({"itemDescription": s.item_description}
                        if s.item_description else {}),
                 }
@@ -385,40 +388,17 @@ class AsyncTaxIDSupplierGateway:
         json: Optional[Dict[str, Any]] = None,
         idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Async equivalent of ``TaxIDSupplierGateway._execute``.
-
-        Same retry policy: up to 3 retries on transient errors (503, 504,
-        connection/timeout). 4xx and ``TIaaSAmbiguousStateError`` are never
-        retried. Backoff delays use ``asyncio.sleep`` — non-blocking.
-        """
-        from .exceptions import KRAConnectivityTimeoutError, TIaaSAmbiguousStateError, KRAeTIMSError
-        import httpx
-
-        last_exc: Optional[Exception] = None
+        """Async equivalent of ``TaxIDSupplierGateway._execute``."""
+        from .exceptions import KRAeTIMSError
 
         for attempt in range(_MAX_RETRIES + 1):
             try:
                 return await self._client._request(method, path, json=json, idempotency_key=idempotency_key)
-
-            except TIaaSAmbiguousStateError:
-                raise
-
-            except KRAConnectivityTimeoutError as exc:
-                last_exc = exc
-
-            except KRAeTIMSError:
-                raise
-
-            except (httpx.ConnectError, httpx.TimeoutException) as exc:
-                last_exc = exc
-
-            if attempt < _MAX_RETRIES:
-                delay = _BASE_DELAY * (2 ** attempt)
-                jitter = delay * random.uniform(-0.1, 0.1)
-                await asyncio.sleep(delay + jitter)
-
-        raise last_exc  # type: ignore[misc]
+            except KRAeTIMSError as exc:
+                if attempt == _MAX_RETRIES or not _is_retryable(exc, method, idempotency_key):
+                    raise
+            await asyncio.sleep(_backoff(attempt))
+        raise AssertionError("unreachable")
 
     async def onboard_supplier(
         self,
@@ -435,7 +415,7 @@ class AsyncTaxIDSupplierGateway:
             "buyerPin":  buyer_pin,
             "buyerName": buyer_name,
             "phone":     phone.strip(),
-            "amount":    str(Decimal(str(amount))),
+            "amount":    _money(amount),
         }
         if item_description:
             payload["itemDescription"] = item_description
@@ -444,7 +424,7 @@ class AsyncTaxIDSupplierGateway:
             "POST",
             "/v2/gateway/supplier-onboarding/single",
             json=payload,
-            idempotency_key=idempotency_key,
+            idempotency_key=idempotency_key or str(uuid.uuid4()),
         )
         return SupplierOnboardingResponse.from_api(raw)
 
@@ -462,7 +442,7 @@ class AsyncTaxIDSupplierGateway:
             "suppliers": [
                 {
                     "phone":  s.phone.strip(),
-                    "amount": str(Decimal(str(s.amount))),
+                    "amount": _money(s.amount),
                     **({"itemDescription": s.item_description}
                        if s.item_description else {}),
                 }

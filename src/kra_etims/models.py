@@ -110,7 +110,8 @@ class ItemDetail(BaseSchema):
     # invoice so the middleware can book each line under its own band (V14 per-band
     # aggregation). Verify against the middleware's commodity_codes cache.
     itemClsCd: Optional[str] = Field(default=None, description="UN/CEFACT commodity classification code")
-    pkgUnitCd: str = "UNT"
+    # "NT" per spec §4.5; the VSCU rejects "UNT" with 913 on item auto-registration.
+    pkgUnitCd: str = "NT"
     pkg: Decimal = Decimal("1.0")
     qtyUnitCd: str = "U"
     qty: Decimal = Field(..., description="Quantity")
@@ -126,6 +127,20 @@ class ItemDetail(BaseSchema):
     taxTyCd: TaxType = Field(..., description="Tax Type Code (A/B/C/D/E)")
     taxblAmt: Decimal = Field(..., description="Taxable Amount (net, VAT-exclusive)")
     taxAmt: Decimal = Field(..., description="Tax Amount")
+
+    @field_validator('pkg', 'qty', 'uprc', 'splyAmt', 'dcRt', 'dcAmt',
+                     'totAmt', 'taxblAmt', 'taxAmt', mode='before')
+    @classmethod
+    def reject_float(cls, v):
+        # A float has already lost precision before pydantic sees it
+        # (0.1 + 0.2 -> Decimal('0.3000000000000000444...')). Strings such as
+        # "300.30" and ints are unaffected.
+        if isinstance(v, float):
+            raise ValueError(
+                f"float {v!r} is not accepted for monetary/quantity fields; "
+                "pass Decimal or str (e.g. Decimal('300.30'))."
+            )
+        return v
 
     @model_validator(mode='after')
     def validate_math(self) -> 'ItemDetail':
@@ -345,6 +360,17 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
     - ``buyerPin`` / ``buyerName`` ← ``custPin`` / ``custNm`` (B2B only;
       omitted entirely for B2C, where ``custPin`` is ``None``)
     """
+    discounted = [i.itemCd for i in invoice.itemList if i.dcRt or i.dcAmt]
+    if discounted:
+        # This mapper does not carry discounts yet; dropping them would sign the
+        # pre-discount total and overstate VAT.
+        raise ValueError(
+            f"SaleInvoice {invoice.invcNo!r}: line(s) {discounted} carry dcRt/dcAmt, which "
+            "the SDK does not transmit yet. Price the line at the net (post-discount) unit "
+            "price, e.g. calculate_item(..., total_price=net_unit_price), or send "
+            "items[].discount / items[].discountRate to POST /v2/etims/sale directly."
+        )
+
     dt = invoice.confirmDt
     invoice_date = f"{dt[0:4]}-{dt[4:6]}-{dt[6:8]}"
 
@@ -372,7 +398,14 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
             )
         payload["items"] = [_to_middleware_sale_line(i) for i in invoice.itemList]
     else:
-        payload["taxBand"] = bands.pop() if bands else "B"
+        band = bands.pop() if bands else "B"
+        payload["taxBand"] = band
+        # Flat path: the middleware books and validates VAT on the receipt
+        # total (amount x rate / (1 + rate), HALF_UP). Summed per-line
+        # rounding drifts past its 0.02 tolerance on multi-line tickets.
+        from .tax import _EXCLUSIVE_RATE, _q
+        rate = _EXCLUSIVE_RATE[band]
+        payload["taxAmount"] = str(_q(invoice.totAmt * rate / (1 + rate)))
 
     if invoice.custPin:
         payload["buyerPin"]  = invoice.custPin

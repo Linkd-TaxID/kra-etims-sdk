@@ -312,3 +312,31 @@ these releases were published without cutting changelog sections at the time.
 - Full exception taxonomy mapping KRA result codes to typed Python exceptions
 - Category support: sales (OSCU + VSCU paths), purchases, stock, item registry,
   customer registry, branch management, notices
+## 0.6.0
+
+- Parse both TaxID v2 flat errors (`status`, `code`, `message`) and RFC 9457
+  Problem Details (`type`, `title`, `status`, `detail`, plus extensions).
+- Preserve compatibility with the legacy authentication and idempotency
+  headers while the server introduces their standard aliases.
+- Requires a middleware that accepts `Authorization: Bearer` and
+  `Idempotency-Key`; deploy the server first.
+- Fix: `client.reports`, `client.gateway` and OAuth token refresh raised
+  `AttributeError` after the lock split.
+- Fix: `calculate_item` derives VAT from the line total instead of unit VAT x
+  qty, and the flat sale path sends receipt-level `taxAmount`. SDK-built sales
+  from qty 6 upward were rejected by the middleware's 0.02 tolerance.
+- Fix: one transport-error classifier for sync and async. Only connect/pool
+  failures are "not sent"; a dropped POST after send (including "server
+  disconnected") and 502/504 on mutations are `TIaaSAmbiguousStateError`.
+- `flush_offline_queue` rows add `ambiguous`, `retryable`, `idempotency_key`,
+  `exception`, `signed` and `sale_status`. PENDING_SYNC/OUTCOME_UNKNOWN are no
+  longer indistinguishable from signed. Async flush concurrency defaults to 4
+  (`concurrency=`).
+- Gateway retries only failures with no server-side effect (full jitter,
+  4 attempts); the 24h VSCU ceiling is no longer retried; single onboarding
+  POSTs carry a generated idempotency key; float amounts are rounded to cents
+  with a DeprecationWarning.
+- W3C trace context is injected on every request; spans no longer export the
+  taxpayer PIN.
+- `ItemDetail` rejects floats, defaults `pkgUnitCd` to `NT`, and non-zero
+  `dcRt`/`dcAmt` raise instead of being silently dropped.

@@ -35,7 +35,7 @@ def test_sync_idempotency_header_injection(httpx_mock):
     client.submit_sale(_minimal_invoice(), idempotency_key="unique_123")
 
     sent = httpx_mock.get_requests()[0]
-    assert sent.headers.get("X-TIaaS-Idempotency-Key") == "unique_123"
+    assert sent.headers.get("Idempotency-Key") == "unique_123"
 
 
 def test_sync_ambiguous_state_on_post():

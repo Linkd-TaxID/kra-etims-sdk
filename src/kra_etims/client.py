@@ -6,6 +6,7 @@ Auth:      API key (preferred) or OAuth2 client_credentials with threading.Lock.
 """
 
 import threading
+import hashlib
 import time
 import warnings
 from typing import Any, Dict, List, Optional
@@ -13,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from ._base_client import _BaseKRAeTIMSClient
-from ._telemetry import span as _span
+from ._telemetry import inject_trace_context, span as _span
 from .exceptions import (
     KRAConnectivityTimeoutError,
     KRADuplicateInvoiceError,
@@ -69,7 +70,8 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             headers={"X-TIaaS-Service": "Handshake"},
             timeout=30.0,
         )
-        self._lock = threading.Lock()   # guards OAuth2 token refresh only
+        self._auth_lock = threading.Lock()   # guards OAuth2 token refresh
+        self._init_lock = threading.Lock()   # guards lazy interface init
         self._reports = None
         self._gateway = None
 
@@ -95,7 +97,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
     def reports(self):
         """Access reporting interface: client.reports.get_daily_z(...)"""
         if self._reports is None:
-            with self._lock:
+            with self._init_lock:
                 if self._reports is None:
                     from .reports import ReportsInterface
                     self._reports = ReportsInterface(self)
@@ -105,7 +107,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
     def gateway(self):
         """Access gateway interface: client.gateway.request_reverse_invoice(...)"""
         if self._gateway is None:
-            with self._lock:
+            with self._init_lock:
                 if self._gateway is None:
                     from .gateway import TaxIDSupplierGateway
                     self._gateway = TaxIDSupplierGateway(self)
@@ -131,7 +133,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         if self._access_token and (self._token_expiry - now) >= 60:
             return
 
-        with self._lock:
+        with self._auth_lock:
             now = time.time()  # re-read: time elapsed while waiting for lock
             if not self._access_token or (self._token_expiry - now) < 60:
                 try:
@@ -175,33 +177,20 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         """Core request dispatcher with resilience mapping."""
         _attrs: Dict[str, Any] = {"http.method": method, "http.path": path}
         if idempotency_key:
-            _attrs["idempotency_key"] = idempotency_key
+            # Default keys embed the taxpayer PIN; export a correlatable digest only.
+            _attrs["idempotency_key.sha256"] = hashlib.sha256(idempotency_key.encode()).hexdigest()[:16]
 
         with _span("kra_etims.request", _attrs):
             self._authenticate()
             url     = self._build_url(path)
             headers = self._build_auth_headers(idempotency_key)
+            inject_trace_context(headers)
 
             try:
                 resp = self._http.request(method, url, json=json, files=files, headers=headers)
-                return self._parse_response(resp, method, idempotency_key)
-
-            except httpx.ConnectError:
-                # TCP handshake never completed — request was never sent.
-                raise TIaaSUnavailableError()
-            except httpx.ConnectTimeout:
-                # TCP handshake never completed — request was never sent.
-                raise TIaaSUnavailableError()
-            except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout,
-                    httpx.ReadError):
-                # Request was sent (or partially sent/received) — state is ambiguous
-                # for mutating methods (POST/PUT/DELETE/PATCH). The server may have
-                # committed the change before the connection dropped.
-                if method.upper() in {"POST", "PUT", "DELETE", "PATCH"}:
-                    raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
-                raise TIaaSUnavailableError()
             except httpx.RequestError as exc:
-                raise TIaaSUnavailableError() from exc
+                raise self._transport_error(exc, method, idempotency_key) from exc
+            return self._parse_response(resp, method, idempotency_key)
 
     # ------------------------------------------------------------------
     # Category 1 — Device Initialisation
@@ -304,7 +293,6 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             )
         with _span("kra_etims.submit_sale", {
             "invoice.no": str(invoice.invcNo),
-            "invoice.tin": invoice.tin,
         }):
             # Transmit the middleware's flat sale schema — NOT the KRA-native
             # SaleInvoice dump, which the middleware 400s. See
@@ -474,20 +462,10 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             for invoice in invoices:
                 idem_key = f"{invoice.tin}:{invoice.invcNo}"
                 try:
-                    res = self.submit_sale(invoice, idempotency_key=idem_key)
-                    results.append(
-                        {"invoice_no": invoice.invcNo, "status": "success", "data": res}
-                    )
-                except KRADuplicateInvoiceError:
-                    # Code 12 = already processed on a prior attempt.  The fiscal
-                    # record exists on KRA — this is a safe idempotent success.
-                    results.append(
-                        {"invoice_no": invoice.invcNo, "status": "already_processed"}
-                    )
-                except Exception as exc:
-                    results.append(
-                        {"invoice_no": invoice.invcNo, "status": "error", "message": str(exc)}
-                    )
+                    outcome: Any = self.submit_sale(invoice, idempotency_key=idem_key)
+                except Exception as exc:  # one bad invoice must not abort the batch
+                    outcome = exc
+                results.append(self._flush_outcome(invoice.invcNo, idem_key, outcome))
             return results
 
     # ------------------------------------------------------------------

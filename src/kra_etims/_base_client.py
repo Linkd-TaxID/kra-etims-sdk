@@ -18,6 +18,7 @@ import httpx
 
 from .exceptions import (
     KRA_ERROR_MAP,
+    KRADuplicateInvoiceError,
     CreditNoteConflictError,
     CreditNoteExceedsOriginalError,
     KRAConnectivityTimeoutError,
@@ -25,6 +26,8 @@ from .exceptions import (
     KRAAuthorizationError,
     KRAeTIMSError,
     OSCUUnavailableError,
+    TIaaSAmbiguousStateError,
+    TIaaSUnavailableError,
 )
 
 # KRA eTIMS success result codes — two officially documented variants:
@@ -41,6 +44,25 @@ _KRA_SUCCESS_CODES: frozenset = frozenset({"0", "00", "000", "0000", "001"})
 
 _DEFAULT_BASE_URL = "https://taxid-production.up.railway.app"
 
+_MUTATING_METHODS: frozenset = frozenset({"POST", "PUT", "DELETE", "PATCH"})
+
+# Sale body states where TaxID holds a receipt that is not (yet) signed.
+_UNSETTLED_SALE_STATES: frozenset = frozenset(
+    {"PENDING_SYNC", "OUTCOME_UNKNOWN", "RECONCILIATION_REQUIRED"}
+)
+
+# Exceptions after which re-submitting with the SAME idempotency key is safe.
+_RETRYABLE_ERRORS = (
+    TIaaSUnavailableError,
+    TIaaSAmbiguousStateError,
+    OSCUUnavailableError,
+    KRAConnectivityTimeoutError,
+)
+
+# Failures where the request provably never reached the server: no TCP/TLS
+# connection was established, or no pooled connection became free in time.
+_NOT_SENT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
+
 
 class _BaseKRAeTIMSClient(ABC):
     """
@@ -51,7 +73,7 @@ class _BaseKRAeTIMSClient(ABC):
       - _KRA_SUCCESS_CODES, _is_kra_success(), _handle_error_response()
       - _parse_response()     — httpx.Response → Dict, raises typed exceptions
       - _build_url()          — path → absolute URL
-      - _build_auth_headers() — produces X-API-Key or Bearer header dict
+      - _build_auth_headers() — produces standard Bearer and Idempotency-Key headers
       - __repr__ / __str__
 
     Abstract methods (implemented differently per transport):
@@ -73,7 +95,9 @@ class _BaseKRAeTIMSClient(ABC):
         raw_url = env_url or base_url or _DEFAULT_BASE_URL
         self.base_url = raw_url.strip().rstrip("/").strip()
 
-        # API key takes priority over OAuth2 (env var overrides constructor arg).
+        # Opaque TaxID credential takes priority over OAuth2 token acquisition
+        # (env var overrides constructor arg). Both use the standard Bearer
+        # transport; the server continues accepting X-API-Key for older SDKs.
         self._api_key: Optional[str] = os.getenv("TAXID_API_KEY") or api_key
 
         # OAuth2 token state — written under subclass-specific lock.
@@ -147,17 +171,41 @@ class _BaseKRAeTIMSClient(ABC):
         self, idempotency_key: Optional[str] = None
     ) -> Dict[str, str]:
         if self._api_key:
-            headers: Dict[str, str] = {"X-API-Key": self._api_key}
+            headers: Dict[str, str] = {"Authorization": f"Bearer {self._api_key}"}
         else:
             headers = {"Authorization": f"Bearer {self._access_token}"}
         if idempotency_key:
-            headers["X-TIaaS-Idempotency-Key"] = idempotency_key
+            headers["Idempotency-Key"] = idempotency_key
         return headers
 
     # ------------------------------------------------------------------
     # Response parsing — httpx.Response is the same type from both transports.
     # Called by _request() in both sync and async subclasses after transport returns.
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _error_fields(resp: httpx.Response) -> tuple[dict, str, Optional[str]]:
+        """Read both TaxID v2 flat errors and RFC 9457 Problem Details.
+
+        Returns the original body, a human-readable message, and the stable
+        machine code when one is present. Unknown/non-JSON responses remain
+        usable through their bounded response text.
+        """
+        try:
+            parsed = resp.json()
+            body = parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            body = {}
+        message = (
+            body.get("message")
+            or body.get("detail")
+            or body.get("error")
+            or body.get("title")
+            or resp.text[:200]
+            or f"HTTP {resp.status_code}"
+        )
+        code = body.get("code") or body.get("errorCode")
+        return body, str(message), str(code) if code is not None else None
 
     @staticmethod
     def _raise_for_503(resp: httpx.Response) -> None:
@@ -178,13 +226,10 @@ class _BaseKRAeTIMSClient(ABC):
         middleware version (or a 503 from something other than a signing
         call) doesn't change behavior.
         """
-        try:
-            body = resp.json()
-        except Exception:
-            body = {}
+        body, message, _ = _BaseKRAeTIMSClient._error_fields(resp)
         if isinstance(body, dict) and "oscu_code" in body:
             raise OSCUUnavailableError(
-                message=body.get("detail") or (
+                message=message or (
                     f"OSCU Temporarily Unavailable (code {body.get('oscu_code')}): "
                     f"{body.get('title', 'no further detail')}"
                 ),
@@ -204,8 +249,6 @@ class _BaseKRAeTIMSClient(ABC):
         This method is synchronous and pure — it performs no I/O. Both the sync
         and async _request() implementations call it after receiving the httpx.Response.
         """
-        from .exceptions import TIaaSAmbiguousStateError, TIaaSUnavailableError  # noqa: F401
-
         # 503 from TIaaS signals either the 24-hour VSCU offline ceiling or a
         # transient OSCU failure — see _raise_for_503's docstring.
         if resp.status_code == 503:
@@ -218,12 +261,7 @@ class _BaseKRAeTIMSClient(ABC):
             if sc == 503:
                 self._raise_for_503(exc.response)
             if sc == 409:
-                try:
-                    body = exc.response.json()
-                    msg  = body.get("message") or body.get("error") or exc.response.text[:200]
-                except Exception:
-                    body = {}
-                    msg  = exc.response.text[:200]
+                body, msg, _ = self._error_fields(exc.response)
                 raise CreditNoteConflictError(
                     msg,
                     existing_credit_note_id=body.get("existingCreditNoteId"),
@@ -232,40 +270,50 @@ class _BaseKRAeTIMSClient(ABC):
             if sc == 422:
                 # 422 covers VSCU terminal rejections AND the credit-note
                 # over-reversal guard (middleware V15). Discriminate by body code.
-                try:
-                    body = exc.response.json()
-                except Exception:
-                    body = {}
-                if body.get("code") == "CREDIT_NOTE_EXCEEDS_ORIGINAL":
+                body, msg, code = self._error_fields(exc.response)
+                if code == "CREDIT_NOTE_EXCEEDS_ORIGINAL":
                     raise CreditNoteExceedsOriginalError(
-                        body.get("message") or exc.response.text[:200],
+                        msg,
                         remaining=body.get("remaining"),
                         already_reversed=body.get("alreadyReversed"),
                     ) from exc
                 # Other 422s fall through to the generic handler below.
             if sc == 401:
+                _, message, code = self._error_fields(exc.response)
+                detail = f" [{code}]" if code else ""
                 raise KRAeTIMSAuthError(
-                    "Authentication failed (HTTP 401): invalid or missing API key. "
-                    "Verify TAXID_API_KEY is set and the key is active."
+                    f"Authentication failed (HTTP 401){detail}: {message}. "
+                    "Verify TAXID_API_KEY is set and the credential is active."
                 ) from exc
             if sc == 403:
+                _, message, code = self._error_fields(exc.response)
+                detail = f" [{code}]" if code else ""
                 raise KRAAuthorizationError(
-                    "Authorization denied (HTTP 403): the credential is valid but "
-                    "lacks the required role for this endpoint."
+                    f"Authorization denied (HTTP 403){detail}: {message}"
                 ) from exc
             if sc == 404:
+                _, message, code = self._error_fields(exc.response)
+                detail = f" [{code}]" if code else ""
                 raise KRAeTIMSError(
-                    f"Resource not found (HTTP 404): {exc.response.text[:200]}"
+                    f"Resource not found (HTTP 404){detail}: {message}"
                 ) from exc
+            if sc in (502, 504):
+                # Gateway failures from an edge proxy: the upstream may have
+                # committed before the proxy gave up.
+                if method.upper() in _MUTATING_METHODS:
+                    raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key) from exc
+                raise TIaaSUnavailableError() from exc
             if sc == 500:
                 # 500 on a mutating method: server received the request and may have
                 # committed before erroring — state is ambiguous, not safe to retry
                 # without an idempotency key.
-                if method.upper() in {"POST", "PUT", "DELETE", "PATCH"}:
+                if method.upper() in _MUTATING_METHODS:
                     raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key) from exc
                 # 500 on a read-only method: server-side error with no side-effect.
                 raise TIaaSUnavailableError() from exc
-            raise KRAeTIMSError(f"TIaaS returned HTTP {sc}") from exc
+            _, message, code = self._error_fields(exc.response)
+            suffix = f" [{code}]" if code else ""
+            raise KRAeTIMSError(f"TIaaS returned HTTP {sc}{suffix}: {message}") from exc
 
         try:
             response_data = resp.json()
@@ -276,6 +324,59 @@ class _BaseKRAeTIMSClient(ABC):
 
         self._handle_error_response(response_data)
         return response_data
+
+    @staticmethod
+    def _flush_outcome(invoice_no: str, idem_key: str, outcome: Any) -> Dict[str, Any]:
+        """
+        One flush_offline_queue result row.
+
+        status keeps its historical values (success / already_processed /
+        error); the added keys let callers tell a Schrodinger receipt from a
+        rejection instead of parsing message. idempotency_key must be
+        reused verbatim on any resubmission.
+        """
+        if isinstance(outcome, KRADuplicateInvoiceError):
+            return {"invoice_no": invoice_no, "status": "already_processed",
+                    "idempotency_key": idem_key}
+        if isinstance(outcome, BaseException):
+            return {
+                "invoice_no":      invoice_no,
+                "status":          "error",
+                "message":         str(outcome),
+                "error_type":      type(outcome).__name__,
+                "ambiguous":       isinstance(outcome, TIaaSAmbiguousStateError),
+                "retryable":       isinstance(outcome, _RETRYABLE_ERRORS),
+                "idempotency_key": idem_key,
+                "exception":       outcome,
+            }
+        sale_state = outcome.get("status") if isinstance(outcome, dict) else None
+        return {
+            "invoice_no":      invoice_no,
+            "status":          "success",
+            "data":            outcome,
+            "signed":          sale_state not in _UNSETTLED_SALE_STATES,
+            "sale_status":     sale_state,
+            "idempotency_key": idem_key,
+        }
+
+    @staticmethod
+    def _transport_error(
+        exc: httpx.RequestError, method: str, idempotency_key: Optional[str]
+    ) -> KRAeTIMSError:
+        """
+        Map an httpx transport failure to the SDK's retry-safety taxonomy.
+
+        Only connect/pool failures prove the request never left the client.
+        Anything later (read/write timeouts, resets, "server disconnected
+        without sending a response") may follow a committed mutation, so a
+        mutating call is ambiguous and must be reconciled with the same
+        idempotency key, never re-issued under a new one.
+        """
+        if isinstance(exc, _NOT_SENT_ERRORS):
+            return TIaaSUnavailableError()
+        if method.upper() in _MUTATING_METHODS:
+            return TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
+        return TIaaSUnavailableError()
 
     # ------------------------------------------------------------------
     # Abstract transport interface

@@ -140,11 +140,7 @@ from .exceptions import (
     ZReportAlreadyIssuedError,
 )
 
-try:
-    from importlib.metadata import version as _v
-    __version__: str = _v("taxid-etims")
-except Exception:
-    __version__ = "0.5.3"
+__version__ = "0.6.0"
 
 __all__ = [
     # Clients

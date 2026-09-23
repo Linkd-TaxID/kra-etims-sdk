@@ -18,6 +18,7 @@ from typing import Any, Generator, Optional
 
 try:
     from opentelemetry import trace
+    from opentelemetry.propagate import inject as _inject
     from opentelemetry.trace import StatusCode
 
     _tracer = trace.get_tracer("kra_etims", "0.2.0")
@@ -25,6 +26,18 @@ try:
 except ImportError:
     _tracer = None  # type: ignore[assignment]
     _OTEL_AVAILABLE = False
+
+
+def inject_trace_context(headers: dict[str, str]) -> None:
+    """
+    Write the active context into outgoing headers using the globally
+    configured propagator (W3C ``traceparent``/``tracestate`` by default), so
+    the TaxID server span joins the caller's trace. If the application also
+    instruments httpx, its CLIENT span re-injects over these values, which
+    keeps the chain intact without nesting two CLIENT spans.
+    """
+    if _OTEL_AVAILABLE:
+        _inject(headers)
 
 
 @contextmanager

@@ -60,9 +60,9 @@ def _client_no_api_key() -> KRAeTIMSClient:
 # Test 1: X-API-Key header is sent when api_key is configured
 # ---------------------------------------------------------------------------
 
-def test_api_key_sent_in_x_api_key_header(httpx_mock):
+def test_api_key_sent_in_bearer_header(httpx_mock):
     """
-    When api_key is provided, every request must carry X-API-Key, not Authorization.
+    An opaque api_key uses the standard Authorization Bearer transport.
     """
     httpx_mock.add_response(
         url=HANDSHAKE_URL,
@@ -76,10 +76,9 @@ def test_api_key_sent_in_x_api_key_header(httpx_mock):
 
     sent = httpx_mock.get_requests()
     assert len(sent) == 1
-    assert sent[0].headers.get("X-API-Key") == "my-secret-key", \
-        "X-API-Key header must be present and match the configured key"
-    assert "Authorization" not in sent[0].headers, \
-        "No Bearer token should be sent in API key mode"
+    assert sent[0].headers.get("Authorization") == "Bearer my-secret-key", \
+        "Authorization Bearer must carry the configured opaque key"
+    assert "X-API-Key" not in sent[0].headers
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +127,7 @@ def test_env_var_TAXID_API_KEY_is_used(httpx_mock):
         client.initialize_device_handshake()
 
     sent = httpx_mock.get_requests()
-    assert sent[0].headers.get("X-API-Key") == "env-injected-key"
+    assert sent[0].headers.get("Authorization") == "Bearer env-injected-key"
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +173,7 @@ def test_env_var_takes_priority_over_constructor_api_key(httpx_mock):
         client.initialize_device_handshake()
 
     sent = httpx_mock.get_requests()
-    assert sent[0].headers.get("X-API-Key") == "env-wins", \
+    assert sent[0].headers.get("Authorization") == "Bearer env-wins", \
         "Env var TAXID_API_KEY must take priority over constructor api_key"
 
 

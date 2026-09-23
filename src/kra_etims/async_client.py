@@ -6,6 +6,7 @@ Auth:      API key (preferred) or OAuth2 client_credentials with asyncio.Lock.
 """
 
 import asyncio
+import hashlib
 import time
 import warnings
 from typing import Any, Dict, List, Optional
@@ -13,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from ._base_client import _BaseKRAeTIMSClient
-from ._telemetry import span as _span
+from ._telemetry import inject_trace_context, span as _span
 from .exceptions import (
     KRAConnectivityTimeoutError,
     KRADuplicateInvoiceError,
@@ -35,9 +36,11 @@ from .models import (
     to_middleware_sale_payload,
 )
 
-# Maximum concurrent in-flight requests during offline-queue flush.
-# Chosen to respect typical rate limits without stalling the event loop.
-_FLUSH_CONCURRENCY = 50
+# Default in-flight requests during offline-queue flush. TaxID serialises
+# signing per tenant (fair lock, vscu.sign.lockwait.ms admission), so extra
+# parallelism only hides RTT; beyond a few, waiters are diverted to the
+# server-side queue and come back PENDING_SYNC instead of signed.
+_FLUSH_CONCURRENCY = 4
 
 
 class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
@@ -183,30 +186,20 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         """Core async request dispatcher with resilience mapping."""
         _attrs: Dict[str, Any] = {"http.method": method, "http.path": path}
         if idempotency_key:
-            _attrs["idempotency_key"] = idempotency_key
+            # Default keys embed the taxpayer PIN; export a correlatable digest only.
+            _attrs["idempotency_key.sha256"] = hashlib.sha256(idempotency_key.encode()).hexdigest()[:16]
 
         with _span("kra_etims.request", _attrs):
             await self._authenticate()
             url     = self._build_url(path)
             headers = self._build_auth_headers(idempotency_key)
+            inject_trace_context(headers)
 
             try:
                 resp = await self._http.request(method, url, json=json, files=files, headers=headers)
-                return self._parse_response(resp, method, idempotency_key)
-
-            except (httpx.ConnectError, httpx.ConnectTimeout):
-                # TCP handshake never completed — request was never sent.
-                raise TIaaSUnavailableError()
-            except (
-                httpx.ReadTimeout,
-                httpx.WriteTimeout,
-                httpx.PoolTimeout,
-                httpx.RequestError,
-            ):
-                # Request was sent; response never arrived — state is ambiguous.
-                if method.upper() in {"POST", "PUT", "DELETE", "PATCH"}:
-                    raise TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
-                raise TIaaSUnavailableError()
+            except httpx.RequestError as exc:
+                raise self._transport_error(exc, method, idempotency_key) from exc
+            return self._parse_response(resp, method, idempotency_key)
 
     # ------------------------------------------------------------------
     # Category 1 — Device Initialisation
@@ -303,7 +296,6 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             )
         with _span("kra_etims.submit_sale", {
             "invoice.no": str(invoice.invcNo),
-            "invoice.tin": invoice.tin,
         }):
             # Transmit the middleware's flat sale schema — NOT the KRA-native
             # SaleInvoice dump, which the middleware 400s. See
@@ -441,7 +433,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     # ------------------------------------------------------------------
 
     async def flush_offline_queue(
-        self, invoices: List[SaleInvoice]
+        self, invoices: List[SaleInvoice], *, concurrency: int = _FLUSH_CONCURRENCY
     ) -> List[Dict[str, Any]]:
         """
         Concurrently submit a batch of offline-queued invoices once
@@ -449,13 +441,13 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
 
         Uses ``asyncio.gather`` with ``return_exceptions=True`` so a single
         failed invoice never aborts the batch, and ``asyncio.Semaphore``
-        (limit: 50) to prevent rate-limit violations on the TIaaS backend.
+        (concurrency, default 4) to bound load on the tenant's signing lock.
 
         Returns a list of per-invoice result dicts in the same order as the
         input list.
         """
         with _span("kra_etims.flush_offline_queue", {"queue.size": len(invoices)}):
-            semaphore = asyncio.Semaphore(_FLUSH_CONCURRENCY)
+            semaphore = asyncio.Semaphore(concurrency)
 
             async def _submit_one(invoice: SaleInvoice) -> Dict[str, Any]:
                 async with semaphore:
@@ -465,28 +457,10 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             tasks      = [_submit_one(inv) for inv in invoices]
             raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            results: List[Dict[str, Any]] = []
-            for invoice, outcome in zip(invoices, raw_results):
-                if isinstance(outcome, KRADuplicateInvoiceError):
-                    # Code 12 = already processed on a prior attempt.  The fiscal
-                    # record exists on KRA — this is a safe idempotent success.
-                    results.append({
-                        "invoice_no": invoice.invcNo,
-                        "status":     "already_processed",
-                    })
-                elif isinstance(outcome, Exception):
-                    results.append({
-                        "invoice_no": invoice.invcNo,
-                        "status":     "error",
-                        "message":    str(outcome),
-                    })
-                else:
-                    results.append({
-                        "invoice_no": invoice.invcNo,
-                        "status":     "success",
-                        "data":       outcome,
-                    })
-            return results
+            return [
+                self._flush_outcome(inv.invcNo, f"{inv.tin}:{inv.invcNo}", outcome)
+                for inv, outcome in zip(invoices, raw_results)
+            ]
 
     # ------------------------------------------------------------------
     # Compliance
