@@ -116,14 +116,14 @@ class ItemDetail(BaseSchema):
     qtyUnitCd: str = "U"
     qty: Decimal = Field(..., description="Quantity")
     uprc: Decimal = Field(..., description="Unit Price")
-    # Supply amount = qty × uprc before discount. Default 0 for non-discounted items.
-    # Mirrors Java ResolvedItemDto.splyAmt — required by the VSCU JAR salesList contract.
+    # Supply amount = qty × uprc before discount. Informational; the middleware derives it.
     splyAmt: Decimal = Field(default=Decimal("0.00"), description="Supply amount (qty * uprc, pre-discount)")
-    # Discount rate as a percentage (e.g. 10.00 for 10%). Default 0 for no discount.
+    # Line discount, as a percentage of qty × uprc and/or an amount in KES. When both are
+    # set, dcAmt must equal round(qty × uprc × dcRt / 100, 2). Sent to the middleware as
+    # items[].discount (or items[].discountRate when only dcRt is set).
     dcRt: Decimal = Field(default=Decimal("0.00"), description="Discount rate (%)")
-    # Discount amount in KES. Default 0. dcAmt = splyAmt * (dcRt / 100).
     dcAmt: Decimal = Field(default=Decimal("0.00"), description="Discount amount (KES)")
-    totAmt: Decimal = Field(..., description="Total Amount (splyAmt - dcAmt, tax-inclusive)")
+    totAmt: Decimal = Field(..., description="Total Amount (qty * uprc - discount, tax-inclusive)")
     taxTyCd: TaxType = Field(..., description="Tax Type Code (A/B/C/D/E)")
     taxblAmt: Decimal = Field(..., description="Taxable Amount (net, VAT-exclusive)")
     taxAmt: Decimal = Field(..., description="Tax Amount")
@@ -142,16 +142,42 @@ class ItemDetail(BaseSchema):
             )
         return v
 
+    def discount(self) -> Decimal:
+        """Line discount in KES: ``dcAmt``, or ``qty × uprc × dcRt / 100`` when only a rate is set."""
+        if self.dcAmt:
+            return self.dcAmt
+        gross = (self.qty * self.uprc).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return (gross * self.dcRt / 100).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
     @model_validator(mode='after')
     def validate_math(self) -> 'ItemDetail':
-        # 1. Total Amount = Qty * Price (when no discount is applied splyAmt == totAmt)
-        expected_tot = (self.qty * self.uprc).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        gross = (self.qty * self.uprc).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-        # Strict check: input must match expected_tot EXACTLY.
+        if self.dcRt < 0 or self.dcAmt < 0:
+            raise ValueError("dcRt and dcAmt must not be negative.")
+        if self.dcRt > 100:
+            raise ValueError(f"dcRt ({self.dcRt}) must not exceed 100.")
+        for name, value in (("dcRt", self.dcRt), ("dcAmt", self.dcAmt)):
+            if value.normalize().as_tuple().exponent < -2:
+                raise ValueError(f"{name} ({value}) must have at most 2 decimal places.")
+        if self.dcAmt and self.dcRt:
+            from_rate = (gross * self.dcRt / 100).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            if self.dcAmt != from_rate:
+                raise ValueError(
+                    f"dcAmt ({self.dcAmt}) must equal qty * uprc * dcRt / 100 = {from_rate}; "
+                    "set only one of them to let the other be derived."
+                )
+        discount = self.discount()
+        if discount > gross:
+            raise ValueError(f"Discount {discount} exceeds the line amount qty * uprc = {gross}.")
+
+        # Strict check: input must match the expected total EXACTLY.
         # This catches float drift because Decimal("300.3000...04") != Decimal("300.30")
+        expected_tot = gross - discount
         if self.totAmt != expected_tot:
+            rule = "qty * uprc" if not discount else f"qty * uprc - discount ({gross} - {discount})"
             raise ValueError(
-                f"Math Error: totAmt ({self.totAmt}) must be exactly qty * uprc = {expected_tot}. "
+                f"Math Error: totAmt ({self.totAmt}) must be exactly {rule} = {expected_tot}. "
                 "Detected precision drift or mismatch."
             )
 
@@ -351,25 +377,15 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
     - ``amount``       ← ``invoice.totAmt``
     - ``invoiceDate``  ← ``invoice.confirmDt`` (``yyyyMMddHHmmss`` → ISO date)
     - ``taxBand``      ← the single band shared by every line, for a single-band
-      invoice. **Mixed-band invoices** are supported (middleware V14 per-band
-      aggregation): the SDK emits the ``items`` array so each line is booked
-      under its own band, and omits the receipt-level ``taxBand``. Each line then
+      invoice. **Mixed-band or discounted invoices** send the ``items`` array
+      instead (middleware V14 per-band aggregation; per-line ``discount`` /
+      ``discountRate``), and omit the receipt-level ``taxBand``. Each line then
       requires ``itemClsCd`` — a :class:`ValueError` is raised if any is missing.
     - ``taxAmount``    ← ``invoice.totTaxAmt``
     - ``pmtTyCd``      ← ``invoice.pmtTyCd`` (KRA §4.7: 01 cash … 06 mobile money)
     - ``buyerPin`` / ``buyerName`` ← ``custPin`` / ``custNm`` (B2B only;
       omitted entirely for B2C, where ``custPin`` is ``None``)
     """
-    discounted = [i.itemCd for i in invoice.itemList if i.dcRt or i.dcAmt]
-    if discounted:
-        # This mapper does not carry discounts yet; dropping them would sign the
-        # pre-discount total and overstate VAT.
-        raise ValueError(
-            f"SaleInvoice {invoice.invcNo!r}: line(s) {discounted} carry dcRt/dcAmt, which "
-            "the SDK does not transmit. Price the line at the net (post-discount) unit "
-            "price instead, e.g. calculate_item(..., total_price=net_unit_price)."
-        )
-
     dt = invoice.confirmDt
     invoice_date = f"{dt[0:4]}-{dt[4:6]}-{dt[6:8]}"
 
@@ -385,15 +401,18 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
         "pmtTyCd":         invoice.pmtTyCd,
     }
 
-    if len(bands) > 1:
-        # Mixed-band: send the line items so the middleware books each under its own
-        # band. Receipt-level taxBand is omitted (it is only a label for the flat path).
+    discounted = any(i.dcRt or i.dcAmt for i in invoice.itemList)
+    if len(bands) > 1 or discounted:
+        # Itemised: each line is booked under its own band and carries its own
+        # discount; the flat path has nowhere to put either. Receipt-level taxBand is
+        # omitted (it is only a label for the flat path).
+        reason = f"mixed-band ({sorted(bands)})" if len(bands) > 1 else "discounted"
         missing = [i.itemCd for i in invoice.itemList if not i.itemClsCd]
         if missing:
             raise ValueError(
-                f"SaleInvoice {invoice.invcNo!r} is mixed-band ({sorted(bands)}) but line(s) "
-                f"{missing} have no itemClsCd. A commodity classification code is required on "
-                "every line of a mixed-band invoice so the middleware can book each per band."
+                f"SaleInvoice {invoice.invcNo!r} is {reason} but line(s) {missing} have no "
+                "itemClsCd. A commodity classification code is required on every line of an "
+                "itemised (mixed-band or discounted) invoice."
             )
         payload["items"] = [_to_middleware_sale_line(i) for i in invoice.itemList]
     else:
@@ -426,4 +445,10 @@ def _to_middleware_sale_line(item: "ItemDetail") -> dict:
         line["pkgUnitCd"] = item.pkgUnitCd
     if item.qtyUnitCd:
         line["qtyUnitCd"] = item.qtyUnitCd
+    # The middleware encodes the discount for the control unit: whole percents as
+    # dcRt/dcAmt, anything else folded into a net unit price.
+    if item.dcAmt:
+        line["discount"] = str(item.dcAmt)
+    elif item.dcRt:
+        line["discountRate"] = str(item.dcRt)
     return line

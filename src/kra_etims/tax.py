@@ -78,6 +78,8 @@ def calculate_item(
     price_is_inclusive: bool = True,
     pkg_unit_cd: str = "NT",
     qty_unit_cd: str = "U",
+    discount: Union[Decimal, float, int, str, None] = None,
+    discount_rate: Union[Decimal, float, int, str, None] = None,
 ) -> ItemDetail:
     """
     Compute a KRA-compliant ``ItemDetail`` from a retail price and tax band.
@@ -103,6 +105,10 @@ def calculate_item(
     pkg_unit_cd / qty_unit_cd:
         KRA unit codes.  Defaults to "NT" / "U".  The VSCU rejects "UNT" with
         error 913 ("Code value error"); "NT" is KRA's valid packaging-unit code.
+    discount / discount_rate:
+        Optional line discount off ``qty × price`` (VAT-inclusive): an amount in
+        KES, or a percentage. At most one. VAT is split from the discounted total.
+        Requires a TaxID middleware with line-discount support.
 
     Returns
     -------
@@ -127,6 +133,9 @@ def calculate_item(
             f"Unknown tax_band '{tax_band}'. Must be one of: A, B, C, D, E."
         )
 
+    if discount is not None and discount_rate is not None:
+        raise ValueError("Pass discount or discount_rate, not both.")
+
     price = _q(Decimal(str(total_price)))
     quantity = _qty(Decimal(str(qty)))
     rate = _EXCLUSIVE_RATE[band]
@@ -141,7 +150,11 @@ def calculate_item(
     # drifts by up to qty x 0.005 and the middleware recomputes
     # tax = gross x rate / (1 + rate) at line/receipt level (0.02 tolerance),
     # rejecting SDK-built sales from qty 6 upward.
-    tot_amt = _q(gross_unit * quantity)
+    gross_amt = _q(gross_unit * quantity)
+    dc_rt = Decimal(str(discount_rate)) if discount_rate is not None else Decimal("0")
+    dc_amt = (_q(Decimal(str(discount))) if discount is not None
+              else _q(gross_amt * dc_rt / 100))
+    tot_amt = gross_amt - dc_amt
     taxbl_amt = _q(tot_amt / _INCLUSIVE_DIVISOR[band])
     tax_amt = tot_amt - taxbl_amt
 
@@ -153,6 +166,9 @@ def calculate_item(
         qtyUnitCd=qty_unit_cd,
         qty=quantity,
         uprc=gross_unit,
+        splyAmt=gross_amt,
+        dcRt=dc_rt,
+        dcAmt=dc_amt,
         totAmt=tot_amt,
         taxTyCd=TaxType(band),
         taxblAmt=taxbl_amt,

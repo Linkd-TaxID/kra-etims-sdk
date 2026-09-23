@@ -295,26 +295,47 @@ totals = build_invoice_totals(items)
 
 ### Discounts
 
-Neither the SDK nor the TaxID sale API transmits eTIMS discount fields today. Setting a non-zero
-`dcRt` or `dcAmt` on an `ItemDetail` makes `submit_sale` raise `ValueError` rather than sign the
-pre-discount total. (Before v0.6.0 the fields were silently dropped, overstating the sale and its
-VAT.) Price the line at what the customer actually pays:
+Pass a line discount to `calculate_item` as an amount (`discount=`) or a percentage
+(`discount_rate=`). VAT is split from the discounted total:
 
 ```python
-# 5 × 650 with KSh 50 off the line: sell at the net unit price
-line = calculate_item("Service A", "SVC-A", "640.00", "B", qty=5)   # totAmt=3200.00
+svc = calculate_item("Service A", "SVC-A", 650, "B", qty=5, discount="50")
+# splyAmt=3250.00, dcAmt=50.00, totAmt=3200.00, taxblAmt=2758.62, taxAmt=441.38
+svc.itemClsCd = "10101601"   # discounted invoices are itemised: every line needs one
 
-# Net total not divisible by qty: split one cent apart (3 × 650 less 50 = 1900.00)
-lines = [calculate_item("Service A", "SVC-A", "633.33", "B", qty=2),
-         calculate_item("Service A", "SVC-A", "633.34", "B", qty=1)]
+pct = calculate_item("Service A", "SVC-A", 650, "B", qty=5, discount_rate="2")
+# dcRt=2, dcAmt=65.00, totAmt=3185.00
 ```
 
-Why not send `dcRt`? KRA's validator recomputes `dcAmt = qty × prc × dcRt / 100` with `dcRt`
-**rounded to a whole percent**, although OSCU spec v2.0 types the field NUMBER(5,2). A 1.54%
-discount on a 3,250.00 line is checked against 65.00 (2%) and rejected with
-`Invalid dcAmt for item`. See [issue #31](https://github.com/Linkd-TaxID/kra-etims-sdk/issues/31)
-and the [FAQ](https://linkd-taxid.github.io/kra-etims-sdk/faq.html). Spread a basket-level
-discount across lines within each tax band, so each band's VAT falls proportionally.
+A discounted invoice is sent line by line (`items[]` with `discount`, or `discountRate` when
+only `dcRt` is set), like a mixed-band one. Each line therefore needs `itemClsCd`, and
+`submit_sale` raises `ValueError` if one is missing. You can also set `dcAmt` or `dcRt` on an
+`ItemDetail` yourself. `totAmt` must then equal `qty × uprc − discount`, and if you set both,
+`dcAmt` must equal `round(qty × uprc × dcRt / 100, 2)`.
+
+**How it reaches KRA.** KRA's validator recomputes `dcAmt = qty × prc × dcRt / 100` with
+`dcRt` **rounded to a whole percent**, although OSCU spec v2.0 types the field NUMBER(5,2). A
+1.54% discount on a 3,250.00 line is checked against 65.00 (2%) and rejected with
+`Invalid dcAmt for item` ([issue #31](https://github.com/Linkd-TaxID/kra-etims-sdk/issues/31),
+[FAQ](https://linkd-taxid.github.io/kra-etims-sdk/faq.html)). The TaxID middleware therefore
+encodes each discount so the signed total always equals what the customer paid:
+
+| Discount | Sent to the control unit as |
+|---|---|
+| Exactly a whole percent (65.00 on 3,250.00; `discount_rate="2"`) | `dcRt` 2.00, `dcAmt` 65.00 at the original price |
+| Anything else (KSh 50 on 5 × 650) | Net unit price, `dcRt` 0: 5 × 640.00 |
+| Net total not divisible by qty to the cent (KSh 50 on 3 × 650) | Two lines one cent apart: 2 × 633.33 + 1 × 633.34 |
+| The same, on a fractional qty > 1 (fuel litres) | One whole unit absorbs the remainder: 14.46 × 179.34 + 1 × 179.39 |
+
+Spread a basket-level discount across lines within each tax band, so each band's VAT falls
+proportionally.
+
+> **Requires a TaxID middleware with line-discount support.** An older server ignores the
+> `discount` field. Its line-total check then rejects the sale with HTTP 400 ("amount does not
+> match the sum of line items"), except for a discount smaller than that check's rounding
+> tolerance (KSh 0.02 × (lines + 1)), which it signs at the pre-discount total. Until your
+> server supports discounts, price the line net instead:
+> `calculate_item("Service A", "SVC-A", "640.00", "B", qty=5)`.
 
 ---
 
@@ -727,7 +748,9 @@ result = await client.submit_stock_adjustment(lines)
 - **VAT amounts can change by cents** for `qty > 1`: `calculate_item` now derives VAT from the
   line total. Results for `qty=1` are identical.
 - **`float` is rejected** by `ItemDetail` quantity/amount fields; pass `Decimal`, `str` or `int`.
-- **Non-zero `dcRt`/`dcAmt` raise `ValueError`** instead of being dropped; see [Discounts](#discounts).
+- **Discounts are transmitted** instead of silently dropped: a line with `dcRt`/`dcAmt` makes
+  the invoice itemised (every line needs `itemClsCd`) and needs a middleware with line-discount
+  support; see [Discounts](#discounts). `ItemDetail.totAmt` must now be the discounted total.
 - **`ItemDetail.pkgUnitCd` defaults to `"NT"`** (was `"UNT"`, which the VSCU rejects with 913).
 - **Exception mapping:** `RemoteProtocolError`/`ReadError`/`WriteError` after a POST, and HTTP
   502/504 on mutations, now raise `TIaaSAmbiguousStateError` (previously `TIaaSUnavailableError`

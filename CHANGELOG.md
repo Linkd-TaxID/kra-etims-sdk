@@ -32,6 +32,14 @@ All notable changes to kra-etims-sdk are documented here.
   total. Amounts for `qty > 1` can change by cents; `qty = 1` is unchanged.
 - `ItemDetail` rejects native `float` quantities and amounts (`Decimal`, `str` and `int` are
   accepted) and defaults `pkgUnitCd` to `"NT"`.
+
+### Added
+- Line discounts: `calculate_item(..., discount=)` / `discount_rate=`, and `dcAmt` / `dcRt` on
+  `ItemDetail`, are sent as `items[].discount` / `items[].discountRate`. A discounted invoice
+  uses the itemised path, so every line needs `itemClsCd`. `ItemDetail` validates
+  `totAmt = qty × uprc − discount` and, when both are set, `dcAmt = round(qty × uprc × dcRt / 100, 2)`.
+  Requires a TaxID middleware with line-discount support; an older server ignores the field
+  and rejects the sale unless the discount is below its rounding tolerance.
 - `flush_offline_queue` rows add `idempotency_key` plus, on success, `signed` and `sale_status`,
   and on error `error_type`, `ambiguous`, `retryable` and `exception`. Existing `status` values
   are unchanged. Async flush takes `concurrency=` (default 4, was a fixed 50).
@@ -56,8 +64,7 @@ All notable changes to kra-etims-sdk are documented here.
   24-hour VSCU ceiling was retried four times within seconds. `0.1 + 0.2` was sent as
   `"0.30000000000000004"`.
 - Non-zero `dcRt`/`dcAmt` on an `ItemDetail` were silently dropped, signing the pre-discount
-  total and overstating VAT. They now raise `ValueError`; price the line net instead (see
-  README "Discounts" and #31).
+  total and overstating VAT. They are now transmitted (see Added, README "Discounts" and #31).
 
 ## [0.5.3] - 2026-07-17
 
