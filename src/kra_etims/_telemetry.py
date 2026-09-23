@@ -7,7 +7,7 @@ has zero mandatory dependency on OTel — the standard pattern recommended
 by the OpenTelemetry specification for library authors.
 
 Install the extra to activate real spans:
-    pip install kra-etims[otel]
+    pip install "taxid-etims[otel]"
 
 OTel spec reference:
     https://opentelemetry.io/docs/specs/otel/library-guidelines/#instrumentation-best-practices

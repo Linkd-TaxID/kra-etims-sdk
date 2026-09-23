@@ -3,7 +3,7 @@
 # Maintained by: Linkd TaxID — https://github.com/Linkd-TaxID/kra-etims-sdk
 # Live reference: https://linkd-taxid.github.io/kra-etims-sdk/
 # Machine-readable data: https://linkd-taxid.github.io/kra-etims-sdk/errors.json
-# Last updated: 2026-07-08
+# Last updated: 2026-09-23
 
 ## CRITICAL: Three success codes exist
 
@@ -69,6 +69,9 @@ resultCd 913    | Code value error among request parameters — a field holds a 
 - All 15 tax fields are required: taxblAmtA/B/C/D/E, taxRtA/B/C/D/E, taxAmtA/B/C/D/E. Set to 0 if unused.
 - VSCU stops issuing receipt numbers exactly 24 hours after last successful KRA connection. No warning signal.
 - resultCd 994 on retry = the original submission succeeded. Treat as idempotent success.
+- Discounts: the validator recomputes dcAmt = qty x prc x dcRt / 100 with dcRt ROUNDED TO A WHOLE PERCENT (spec says NUMBER(5,2)).
+  dcRt 1.54 on a 3,250 line -> 'Invalid dcAmt for item: 1. Expected: 65.00, But Found: 50.05' (OSCU/GavaConnect, issue #31).
+  Send dcRt only for whole-percent discounts; otherwise price the line net (dcRt 0), splitting it one cent apart when the net total does not divide by qty.
 - resultCd 902 on re-initialization = device already active. The response does NOT return the cmcKey (data:null) — reuse the one persisted at first init; do not fail, do not re-initialize.
 - Sandbox device serial: dvcv1130. Sandbox bhfId: 00.
 - KRA support: timsupport@kra.go.ke — include full request payload and resultDt timestamp.

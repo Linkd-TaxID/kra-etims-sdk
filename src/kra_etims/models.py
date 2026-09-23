@@ -366,9 +366,8 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
         # pre-discount total and overstate VAT.
         raise ValueError(
             f"SaleInvoice {invoice.invcNo!r}: line(s) {discounted} carry dcRt/dcAmt, which "
-            "the SDK does not transmit yet. Price the line at the net (post-discount) unit "
-            "price, e.g. calculate_item(..., total_price=net_unit_price), or send "
-            "items[].discount / items[].discountRate to POST /v2/etims/sale directly."
+            "the SDK does not transmit. Price the line at the net (post-discount) unit "
+            "price instead, e.g. calculate_item(..., total_price=net_unit_price)."
         )
 
     dt = invoice.confirmDt

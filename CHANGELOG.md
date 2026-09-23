@@ -17,6 +17,48 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-23
+
+### Changed
+- **Wire headers:** the API key is sent as `Authorization: Bearer <api_key>` and the
+  idempotency key as `Idempotency-Key` (were `X-API-Key` / `X-TIaaS-Idempotency-Key`).
+  **Deploy a middleware that accepts both before upgrading**; a server that reads only the
+  legacy names returns 401 on every call.
+- Error parsing reads both TaxID flat errors (`status`, `code`, `message`) and RFC 9457
+  Problem Details (`type`, `title`, `status`, `detail`), and surfaces the machine `code` in
+  401/403/404 and generic error messages.
+- `calculate_item` derives VAT from the line total (`taxblAmt = totAmt / (1 + rate)`) instead of
+  unit VAT × qty, and the single-band sale payload sends `taxAmount` computed on the receipt
+  total. Amounts for `qty > 1` can change by cents; `qty = 1` is unchanged.
+- `ItemDetail` rejects native `float` quantities and amounts (`Decimal`, `str` and `int` are
+  accepted) and defaults `pkgUnitCd` to `"NT"`.
+- `flush_offline_queue` rows add `idempotency_key` plus, on success, `signed` and `sale_status`,
+  and on error `error_type`, `ambiguous`, `retryable` and `exception`. Existing `status` values
+  are unchanged. Async flush takes `concurrency=` (default 4, was a fixed 50).
+- Gateway: bounded full-jitter retries for failures with no server-side effect, a generated
+  idempotency key on `onboard_supplier()`, and float amounts rounded to cents with a
+  `DeprecationWarning`.
+- OpenTelemetry: the active trace context is injected into every request (W3C `traceparent` by
+  default). Spans no longer carry `invoice.tin`; the idempotency key is exported only as
+  `idempotency_key.sha256`.
+
+### Fixed
+- `client.reports`, `client.gateway` and OAuth token refresh raised `AttributeError` after the
+  auth/init lock split.
+- The middleware's 0.02 VAT tolerance rejected SDK-built sales from `qty = 6` upward (about 67% of
+  sales with `qty <= 50`) because of per-unit VAT rounding.
+- The sync and async clients classified the same transport failure differently. Now only
+  connect/pool failures are "not sent"; a dropped mutation after send (including "server
+  disconnected") and HTTP 502/504 on mutations raise `TIaaSAmbiguousStateError`.
+- `flush_offline_queue` reported ambiguous outcomes as a plain `error` string, and
+  `PENDING_SYNC`/`OUTCOME_UNKNOWN` as `success`.
+- The gateway retry policy was inverted: connection-refused was never retried, while the
+  24-hour VSCU ceiling was retried four times within seconds. `0.1 + 0.2` was sent as
+  `"0.30000000000000004"`.
+- Non-zero `dcRt`/`dcAmt` on an `ItemDetail` were silently dropped, signing the pre-discount
+  total and overstating VAT. They now raise `ValueError`; price the line net instead (see
+  README "Discounts" and #31).
+
 ## [0.5.3] - 2026-07-17
 
 ### Changed
@@ -312,31 +354,3 @@ these releases were published without cutting changelog sections at the time.
 - Full exception taxonomy mapping KRA result codes to typed Python exceptions
 - Category support: sales (OSCU + VSCU paths), purchases, stock, item registry,
   customer registry, branch management, notices
-## 0.6.0
-
-- Parse both TaxID v2 flat errors (`status`, `code`, `message`) and RFC 9457
-  Problem Details (`type`, `title`, `status`, `detail`, plus extensions).
-- Preserve compatibility with the legacy authentication and idempotency
-  headers while the server introduces their standard aliases.
-- Requires a middleware that accepts `Authorization: Bearer` and
-  `Idempotency-Key`; deploy the server first.
-- Fix: `client.reports`, `client.gateway` and OAuth token refresh raised
-  `AttributeError` after the lock split.
-- Fix: `calculate_item` derives VAT from the line total instead of unit VAT x
-  qty, and the flat sale path sends receipt-level `taxAmount`. SDK-built sales
-  from qty 6 upward were rejected by the middleware's 0.02 tolerance.
-- Fix: one transport-error classifier for sync and async. Only connect/pool
-  failures are "not sent"; a dropped POST after send (including "server
-  disconnected") and 502/504 on mutations are `TIaaSAmbiguousStateError`.
-- `flush_offline_queue` rows add `ambiguous`, `retryable`, `idempotency_key`,
-  `exception`, `signed` and `sale_status`. PENDING_SYNC/OUTCOME_UNKNOWN are no
-  longer indistinguishable from signed. Async flush concurrency defaults to 4
-  (`concurrency=`).
-- Gateway retries only failures with no server-side effect (full jitter,
-  4 attempts); the 24h VSCU ceiling is no longer retried; single onboarding
-  POSTs carry a generated idempotency key; float amounts are rounded to cents
-  with a DeprecationWarning.
-- W3C trace context is injected on every request; spans no longer export the
-  taxpayer PIN.
-- `ItemDetail` rejects floats, defaults `pkgUnitCd` to `NT`, and non-zero
-  `dcRt`/`dcAmt` raise instead of being silently dropped.

@@ -1,5 +1,12 @@
 # KRA eTIMS Error Code Reference — Changelog
 
+## 2026-09-23
+
+- Added FAQ entry "Why does eTIMS reject my discount with 'Invalid dcAmt for item'?":
+  the validator recomputes dcAmt with dcRt rounded to a whole percent, although OSCU spec v2.0
+  types dcRt as NUMBER(5,2) (reported on the OSCU/GavaConnect path in issue #31). Added the
+  matching llms.txt note and bumped the FAQ sitemap lastmod.
+
 ## 2026-07-08
 
 - Added resultCd 913 (Code Value Error Among Request Parameters) — production-observed

@@ -172,6 +172,14 @@
           "@type": "Answer",
           "text": "resultCd 990 means 'Rate Limit Exceeded'. The fix is to cache code list and item classification responses — call selectCodes and selectItems once at initialization and refresh on a scheduled interval, not on every transaction. When you do hit a 990, back off and retry with exponential delay. Never poll these endpoints in a tight loop."
         }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does eTIMS reject my discount with 'Invalid dcAmt for item'?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The eTIMS validator recomputes the line discount as dcAmt = qty x prc x dcRt / 100 and rejects the line when your dcAmt differs, e.g. 'Invalid dcAmt for item: 1. Expected: 65.00, But Found: 50.05'. It rounds dcRt to a whole percent first, although the OSCU spec v2.0 types dcRt as NUMBER(5,2): 5 x 650 = 3,250 with dcRt 1.54 and dcAmt 50.05 was checked against 3,250 x 2% = 65.00 (reported on the OSCU path via GavaConnect, 2026-07-24). Send dcRt only for whole-percent discounts, with dcAmt = round(qty x prc x dcRt / 100, 2), and build taxblAmt/taxAmt/totAmt from the discounted amount. For any other discount (a flat amount or a fractional percent), price the line at the net unit price with dcRt 0, and when the net total does not divide by qty to the cent, split the line: 3 x 650 less 50 becomes 2 x 633.33 + 1 x 633.34 = 1,900.00. Whether the validator rounds half-up or up is not yet established; the VSCU path has not been verified."
+        }
       }
     ]
   }
@@ -337,6 +345,15 @@
       <h2>What is resultCd E04?</h2>
       <p>resultCd E04 means <strong>Device / Branch Not Found</strong>. The <code>bhfId</code> in your request does not exist in KRA's system for your TIN. Verify your <code>bhfId</code> against what was assigned during registration — the default sandbox <code>bhfId</code> is <code>"00"</code>.</p>
       <p style="margin-top:10px;">This is a letter-prefixed code <strong>absent from all official spec documents</strong>. It is only confirmed through live GavaConnect production observation.</p>
+    </div>
+
+    <div class="faq-item">
+      <span class="tag tag-gotcha">Gotcha</span>
+      <h2>Why does eTIMS reject my discount with "Invalid dcAmt for item"?</h2>
+      <p>The validator recomputes each line's discount as <code>dcAmt = qty × prc × dcRt / 100</code> and rejects the line when yours differs. It <strong>rounds <code>dcRt</code> to a whole percent first</strong>, although OSCU spec v2.0 types <code>dcRt</code> as NUMBER(5,2). A line of 5 × 650 = 3,250 sent with <code>dcRt</code> 1.54 and <code>dcAmt</code> 50.05 came back as <code>Invalid dcAmt for item: 1. Expected: 65.00, But Found: 50.05</code>, i.e. 3,250 × <strong>2%</strong> (OSCU via GavaConnect, <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/31">issue #31</a>).</p>
+      <p style="margin-top:10px;"><strong>Whole-percent discounts:</strong> send <code>dcRt</code> with <code>dcAmt = round(qty × prc × dcRt / 100, 2)</code>, then build <code>taxblAmt</code>, <code>taxAmt</code> and <code>totAmt</code> from the discounted amount.</p>
+      <p style="margin-top:10px;"><strong>Anything else</strong> (a flat amount, a fractional percent): price the line at the net unit price with <code>dcRt</code> 0, so the signed total equals what the customer paid. If the net total does not divide by <code>qty</code> to the cent, split the line: 3 × 650 less 50 becomes 2 × 633.33 + 1 × 633.34 = 1,900.00. Spread a basket-level discount across lines within each tax band.</p>
+      <p style="margin-top:10px;">Not yet established: whether the rate is rounded half-up or up (send <code>dcRt</code> 1.40 to find out), and whether the VSCU path applies the same rule.</p>
     </div>
 
     <footer>

@@ -1,4 +1,4 @@
-# KRA eTIMS SDK (Python) `v0.5.3`
+# KRA eTIMS SDK (Python) `v0.6.0`
 
 ### Sign a KRA eTIMS receipt in one call. No OAuth. No eTIMS. No tax math.
 
@@ -184,6 +184,12 @@ client = KRAeTIMSClient("ID", "SEC", base_url="https://your-instance.railway.app
 # export TAXID_API_URL=https://your-instance.railway.app
 ```
 
+**Wire headers (v0.6.0+).** The API key is sent as `Authorization: Bearer <api_key>` and the
+idempotency key as `Idempotency-Key: <key>`. Earlier releases sent `X-API-Key` and
+`X-TIaaS-Idempotency-Key`. The TaxID middleware you point at must accept the new headers; a
+deployment that only reads the legacy names answers every call with HTTP 401. If yours does
+not accept them yet, stay on `taxid-etims<0.6`.
+
 ---
 
 ## CLI
@@ -245,16 +251,31 @@ maize   = calculate_item("Maize Flour 2kg",   "HS110100",  200,  "A")
 # Exclusive pricing — net price supplied, SDK adds VAT on top
 fee = calculate_item("Consulting Fee", "SRV001", 1000, "B", price_is_inclusive=False)
 # B=16% exclusive: taxblAmt=1000.00, taxAmt=160.00, totAmt=1160.00
+
+# Quantity > 1 — VAT is derived from the line total, not unit VAT × qty
+widgets = calculate_item("Widget", "SKU010", 100, "B", qty=10)
+# totAmt=1000.00, taxblAmt=862.07, taxAmt=137.93  (= 1000 × 16 / 116)
 ```
+
+VAT is always split from the **line total** (`taxblAmt = totAmt / (1 + rate)`), which is
+exactly how the TaxID middleware re-checks it. Before v0.6.0 the SDK rounded VAT per unit and
+multiplied by `qty`; that drifted by up to `qty × 0.005` and the middleware rejected SDK-built
+sales from `qty=6` upward (137.90 instead of 137.93 in the example above). On the single-band
+path the SDK also sends `taxAmount` computed on the receipt total, so multi-line tickets
+cannot accumulate per-line rounding past the middleware's 0.02 tolerance.
 
 ### Quantity Precision — Fuel, Weight, Pharmaceuticals
 
 ```python
-# Fuel: 15.456L — truncating to 2dp would understate the taxable amount
-diesel = calculate_item("Diesel", "HS270900", 3236.57, "E", qty=15.456)
+# Fuel: 15.456L — amounts are computed from the full quantity
+diesel = calculate_item("Diesel", "HS270900", "209.40", "E", qty="15.456")
 # Band E (8% Special Rate — petroleum products)
-# qty stored as Decimal("15.4560") — transmitted to KRA exactly
+# qty stored as Decimal("15.4560"); totAmt = 209.40 × 15.456 = 3236.49
 ```
+
+The amounts use the full 4-decimal quantity. The VSCU schema pins `qty` itself to
+`decimal(11,2)`, so on itemised sales the middleware sends `15.46` as the quantity while
+keeping the amounts you computed.
 
 ### Residual Drift — Invoice Integrity
 
@@ -267,7 +288,33 @@ totals = build_invoice_totals(items)
 # totals["totTaxblAmt"] + totals["totTaxAmt"] == totals["totAmt"]  ← always true
 ```
 
-> All inputs are coerced through `Decimal(str(value))` before any arithmetic. Floating-point intermediates are never used.
+> `calculate_item` coerces every input through `Decimal(str(value))` before any arithmetic, so
+> floating-point intermediates are never used. Models are stricter: `ItemDetail` rejects native
+> `float` values for quantities and amounts (a float has already lost precision before the SDK
+> sees it). Pass `Decimal` or `str`, e.g. `Decimal("300.30")` or `"300.30"`; `int` is fine.
+
+### Discounts
+
+Neither the SDK nor the TaxID sale API transmits eTIMS discount fields today. Setting a non-zero
+`dcRt` or `dcAmt` on an `ItemDetail` makes `submit_sale` raise `ValueError` rather than sign the
+pre-discount total. (Before v0.6.0 the fields were silently dropped, overstating the sale and its
+VAT.) Price the line at what the customer actually pays:
+
+```python
+# 5 × 650 with KSh 50 off the line: sell at the net unit price
+line = calculate_item("Service A", "SVC-A", "640.00", "B", qty=5)   # totAmt=3200.00
+
+# Net total not divisible by qty: split one cent apart (3 × 650 less 50 = 1900.00)
+lines = [calculate_item("Service A", "SVC-A", "633.33", "B", qty=2),
+         calculate_item("Service A", "SVC-A", "633.34", "B", qty=1)]
+```
+
+Why not send `dcRt`? KRA's validator recomputes `dcAmt = qty × prc × dcRt / 100` with `dcRt`
+**rounded to a whole percent**, although OSCU spec v2.0 types the field NUMBER(5,2). A 1.54%
+discount on a 3,250.00 line is checked against 65.00 (2%) and rejected with
+`Invalid dcAmt for item`. See [issue #31](https://github.com/Linkd-TaxID/kra-etims-sdk/issues/31)
+and the [FAQ](https://linkd-taxid.github.io/kra-etims-sdk/faq.html). Spread a basket-level
+discount across lines within each tax band, so each band's VAT falls proportionally.
 
 ---
 
@@ -275,14 +322,16 @@ totals = build_invoice_totals(items)
 
 ### Preventing Double Taxation — Schrödinger's Invoice
 
-Most financial libraries collapse network failures into one `TimeoutError` and leave retry semantics to the caller. This SDK partitions failures into four states with explicit retry rules:
+Most financial libraries collapse network failures into one `TimeoutError` and leave retry semantics to the caller. This SDK partitions failures by whether the request could have had an effect, and the sync and async clients classify every failure identically:
 
 | Failure | Exception | Safe to retry? |
 |---|---|---|
-| TCP `ConnectError` — request never left the socket | `TIaaSUnavailableError` | Yes — unconditional |
-| `ReadTimeout` / `WriteTimeout` on POST — sent, no response | `TIaaSAmbiguousStateError` | Only with the **same** idempotency key |
-| HTTP 500 on POST — server may have committed before erroring | `TIaaSAmbiguousStateError` | Only with the **same** idempotency key |
-| `ReadTimeout` on GET / HTTP 500 on GET — no mutation possible | `TIaaSUnavailableError` | Yes — unconditional |
+| `ConnectError`, `ConnectTimeout`, `PoolTimeout` — the request never left the client | `TIaaSUnavailableError` | Yes — unconditional |
+| Any transport failure after sending a POST/PUT/PATCH/DELETE — `ReadTimeout`, `WriteTimeout`, `ReadError`, `WriteError`, `RemoteProtocolError` ("server disconnected without sending a response") | `TIaaSAmbiguousStateError` | Only with the **same** idempotency key |
+| HTTP 500, 502 or 504 on a mutation — the server (or the proxy's upstream) may have committed | `TIaaSAmbiguousStateError` | Only with the **same** idempotency key |
+| Any transport failure, or HTTP 500/502/504, on GET — no mutation possible | `TIaaSUnavailableError` | Yes — unconditional |
+
+The original `httpx` exception is kept as `__cause__`.
 
 `TIaaSAmbiguousStateError` carries the `idempotency_key` that was in-flight. Re-submit with the same key: if the first attempt committed, KRA returns code 12 and the middleware deduplicates it; if it didn't commit, the invoice is submitted normally. Without an idempotency key the correct action after an ambiguous failure is undefined — which is why omitting it emits a `UserWarning`.
 
@@ -323,8 +372,8 @@ except KRADuplicateInvoiceError:
 | `KRAeTIMSAuthError` | Bad credentials or token refresh failure (HTTP 401) |
 | `KRAAuthorizationError` | Authenticated but not authorised for this operation (HTTP 403) — key lacks required role |
 | `KRAConnectivityTimeoutError` | 24-hour VSCU offline ceiling breached (HTTP 503) |
-| `TIaaSUnavailableError` | Middleware unreachable — TCP `ConnectError` or timeout on a read-only request; safe to retry unconditionally |
-| `TIaaSAmbiguousStateError` | POST sent but connection dropped, or HTTP 500 on POST — carries `idempotency_key`; re-submit with the same key |
+| `TIaaSUnavailableError` | Request never reached the middleware (connect/pool failure), or any failure on a read-only request; safe to retry unconditionally |
+| `TIaaSAmbiguousStateError` | Mutation sent but no usable response (connection dropped, server disconnected, HTTP 500/502/504) — carries `idempotency_key`; re-submit with the same key |
 | `KRAInvalidPINError` | Invalid TIN format (code 10) |
 | `KRAVSCUMemoryFullError` | VSCU storage at capacity — sync before invoicing (code 11) |
 | `KRADuplicateInvoiceError` | Invoice already processed (codes 12, 994); `is_idempotent_success=True` — receipt exists on KRA, treat as success in retry loops |
@@ -357,8 +406,8 @@ The sync client is safe to share across Celery workers and FastAPI request handl
 
 | Concern | Mechanism |
 |---|---|
-| OAuth token refresh | `threading.Lock` (sync) / `asyncio.Lock` (async) with double-checked locking |
-| Sub-interface init (`client.reports`, `client.gateway`) | Double-checked locking prevents duplicate initialisation under concurrent first-access |
+| OAuth token refresh | Dedicated lock — `threading.Lock` (sync) / `asyncio.Lock` (async) — with double-checked locking |
+| Sub-interface init (`client.reports`, `client.gateway`) | Separate double-checked lock, so first access never waits behind a slow token refresh |
 | HTTP connection pool | `httpx.Client` is natively thread-safe — a single instance is shared across all Celery workers with no `threading.local()` required. Each worker reuses connections from the pool concurrently without corruption. |
 
 ### Celery worker pattern
@@ -399,10 +448,20 @@ Emits OpenTelemetry spans when `opentelemetry-api` is installed. Without it, eve
 
 | Span | Key attributes |
 |---|---|
-| `kra_etims.submit_sale` | `invoice.no`, `invoice.tin` |
+| `kra_etims.submit_sale` | `invoice.no` |
 | `kra_etims.issue_credit_note` | `sale.id` |
 | `kra_etims.flush_offline_queue` | `queue.size` |
-| `kra_etims.request` | `http.method`, `http.path`, `idempotency_key` |
+| `kra_etims.request` | `http.method`, `http.path`, `idempotency_key.sha256` |
+
+**Trace propagation.** Every request carries the active trace context, written by your
+globally configured propagator (W3C `traceparent`/`tracestate` by default). A TaxID server span
+therefore joins the trace that started in your checkout handler. If you also instrument httpx
+(`HTTPXClientInstrumentor`), its CLIENT span re-injects the header, and the chain stays intact.
+
+**No taxpayer PINs in traces.** A KRA PIN can identify a natural person (Kenya Data Protection
+Act 2019), so spans never carry one. The default idempotency key is `"{tin}:{invcNo}"`, so it is
+exported only as the first 16 hex digits of its SHA-256 (`idempotency_key.sha256`). That is enough
+to correlate retries, but it is pseudonymised, not anonymised: the input space is small.
 
 On exception the span is marked `ERROR` and the exception recorded before re-raising. The SDK depends only on `opentelemetry-api` — wire your exporter (OTLP, Jaeger, Honeycomb) at the application layer as usual.
 
@@ -422,13 +481,33 @@ async def process_checkout(invoice):
 
 ### Concurrent Offline Queue Flush
 
-When your application loses connectivity and queues invoices locally, flush them once the middleware is reachable again. Uses `asyncio.gather` with `asyncio.Semaphore(50)` — a single failed invoice never aborts the batch.
+When your application loses connectivity and queues invoices locally, flush them once the middleware is reachable again. A single failed invoice never aborts the batch. The sync client submits in order. The async client runs `concurrency` submissions at a time (default 4).
 
 ```python
 async with AsyncKRAeTIMSClient("", "", api_key="txd_sb_your_key") as client:
-    results = await client.flush_offline_queue(locally_queued_invoices)
-    failed  = [r for r in results if r["status"] == "error"]
+    results = await client.flush_offline_queue(locally_queued_invoices, concurrency=4)
+
+for r in results:
+    if r["status"] == "success" and not r["signed"]:
+        track_pending(r["invoice_no"], r["sale_status"])      # accepted, not yet signed
+    elif r["status"] == "error" and r["retryable"]:
+        requeue(r["invoice_no"], key=r["idempotency_key"])    # resend with this exact key
+    elif r["status"] == "error":
+        alert(r["invoice_no"], r["error_type"], r["message"])  # rejected: fix before resending
 ```
+
+Every row carries `invoice_no`, `status` (`success`, `already_processed` or `error`) and the
+`idempotency_key` used (`"{tin}:{invcNo}"`). Reuse that key verbatim on any resend.
+
+| Row | Extra keys |
+|---|---|
+| `success` | `data` (response body), `signed`, `sale_status` — `signed` is `False` when the middleware answered `PENDING_SYNC`, `OUTCOME_UNKNOWN` or `RECONCILIATION_REQUIRED` |
+| `error` | `message`, `error_type`, `exception` (the original exception object), `ambiguous` (a Schrödinger receipt: the sale may have been signed), `retryable` (safe to resend with the same key) |
+
+Why 4? TaxID signs one sale at a time per tenant. A submission that waits longer than the
+middleware's signing-lock budget is moved to its server-side queue and comes back
+`PENDING_SYNC` rather than signed. More parallelism therefore turns flushed invoices into
+deferred ones without raising throughput.
 
 > Note: This flushes invoices your application queued locally when the middleware was unreachable. The middleware also maintains its own durable server-side queue for VSCU outages — that queue drains automatically without SDK involvement.
 
@@ -505,6 +584,20 @@ result = await client.gateway.onboard_supplier(
 ```
 
 **Status lifecycle:** `PENDING` → `CONFIRMED` → `SIGNED` (success), or `EXPIRED` (no reply within window) / `FAILED` (VSCU error).
+
+**Retries.** Gateway calls retry only failures that cannot have had a server-side effect:
+- `TIaaSUnavailableError` is retried: the connection never opened, or it was a read.
+- `OSCUUnavailableError` is retried on reads, and on POSTs that carry an idempotency key.
+  `onboard_supplier()` generates a UUID key when you don't pass one, so its retries can be
+  deduplicated. `onboard_suppliers()` sends no key, so an OSCU 503 on bulk is not retried.
+- Up to 4 attempts, with full-jitter backoff: a random delay of up to 0.5 s, then 1 s, then 2 s.
+  This spreads out many tills recovering from the same outage.
+- Never retried: `TIaaSAmbiguousStateError` (reconcile it; don't resend blindly) and the 24-hour
+  VSCU ceiling (`KRAConnectivityTimeoutError`), which lasts hours, not seconds.
+
+**Amounts.** Pass `amount` as `Decimal`, `str` or `int`. A `float` still works but emits a
+`DeprecationWarning` and is rounded to cents. Before v0.6.0, `0.1 + 0.2` was sent as
+`"0.30000000000000004"`.
 
 ---
 
@@ -626,6 +719,22 @@ result = await client.submit_stock_adjustment(lines)
 > This SDK is a technical implementation tool, not tax advice. Complies with the Kenya Data Protection Act (2019). The authors are not responsible for KRA penalties, non-deductible expenses, or financial losses resulting from user error, misconfigured payloads, or middleware misapplication.
 
 ---
+
+## Upgrading to v0.6.0
+
+- **Server first.** v0.6.0 authenticates with `Authorization: Bearer <api_key>` and sends
+  `Idempotency-Key`. Your TaxID middleware must accept both, or every call returns 401.
+- **VAT amounts can change by cents** for `qty > 1`: `calculate_item` now derives VAT from the
+  line total. Results for `qty=1` are identical.
+- **`float` is rejected** by `ItemDetail` quantity/amount fields; pass `Decimal`, `str` or `int`.
+- **Non-zero `dcRt`/`dcAmt` raise `ValueError`** instead of being dropped; see [Discounts](#discounts).
+- **`ItemDetail.pkgUnitCd` defaults to `"NT"`** (was `"UNT"`, which the VSCU rejects with 913).
+- **Exception mapping:** `RemoteProtocolError`/`ReadError`/`WriteError` after a POST, and HTTP
+  502/504 on mutations, now raise `TIaaSAmbiguousStateError` (previously `TIaaSUnavailableError`
+  or a generic `KRAeTIMSError`). `PoolTimeout` now raises `TIaaSUnavailableError` (the request
+  never left). Both are `KRAeTIMSError` subclasses, so broad handlers are unaffected.
+- **`flush_offline_queue` rows gain keys** (see above); existing `status` values are unchanged.
+  The async default concurrency drops from 50 to 4.
 
 ## Upgrading from v0.2.0
 
