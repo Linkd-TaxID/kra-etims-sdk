@@ -77,6 +77,30 @@ class GavaConnectTCCError(GavaConnectError):
 # Shared token logic (used by both sync and async clients)
 # ---------------------------------------------------------------------------
 
+def _raise_for_token_response(resp: httpx.Response) -> None:
+    # KRA answers wrong consumer credentials with HTTP 400 and an empty body
+    # (observed on both sbx.kra.go.ke and api.kra.go.ke), not 401.
+    if resp.status_code in (400, 401, 403):
+        raise GavaConnectAuthError(
+            f"GavaConnect rejected your consumer key / secret (HTTP {resp.status_code}). "
+            "Verify your credentials at developer.go.ke, and that sandbox= matches the "
+            "environment they were issued for."
+        )
+    if not resp.is_success:
+        raise GavaConnectError(f"GavaConnect token endpoint returned HTTP {resp.status_code}.")
+
+
+def _raise_for_api_response(resp: httpx.Response) -> None:
+    if not resp.is_success:
+        raise GavaConnectError(
+            f"GavaConnect returned HTTP {resp.status_code}: {resp.text[:200] or 'no body'}"
+        )
+
+
+def _unreachable(exc: httpx.RequestError) -> GavaConnectError:
+    return GavaConnectError(f"GavaConnect unreachable: {type(exc).__name__}")
+
+
 def _is_token_expiry_response(status_code: int, body: str) -> bool:
     """
     KRA signals token expiry in two ways (both observed in the wild):
@@ -163,17 +187,15 @@ class GavaConnectClient:
     def _fetch_token(self) -> None:
         # Token fetch is GET with HTTP Basic Auth — NOT a POST form body.
         # grant_type is a query parameter per the GavaConnect spec.
-        resp = self._http.get(
-            f"{self._base}{_TOKEN_PATH}",
-            params={"grant_type": "client_credentials"},
-            auth=(self._key, self._secret),
-        )
-        if resp.status_code == 401:
-            raise GavaConnectAuthError(
-                "GavaConnect rejected your consumer key / secret (HTTP 401). "
-                "Verify your credentials at developer.go.ke."
+        try:
+            resp = self._http.get(
+                f"{self._base}{_TOKEN_PATH}",
+                params={"grant_type": "client_credentials"},
+                auth=(self._key, self._secret),
             )
-        resp.raise_for_status()
+        except httpx.RequestError as exc:
+            raise _unreachable(exc) from exc
+        _raise_for_token_response(resp)
         self._token, self._token_expiry = _parse_token(resp.json())
 
     def _get_token(self) -> str:
@@ -193,17 +215,20 @@ class GavaConnectClient:
     def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         for attempt in range(2):
             token = self._get_token()
-            resp = self._http.post(
-                f"{self._base}{path}",
-                json=body,
-                headers={"Authorization": f"Bearer {token}"},
-            )
+            try:
+                resp = self._http.post(
+                    f"{self._base}{path}",
+                    json=body,
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            except httpx.RequestError as exc:
+                raise _unreachable(exc) from exc
             if _is_token_expiry_response(resp.status_code, resp.text):
                 self._invalidate_token()
                 if attempt == 0:
                     continue
                 raise GavaConnectAuthError("GavaConnect token expired and refresh failed.")
-            resp.raise_for_status()
+            _raise_for_api_response(resp)
             return resp.json()
         raise GavaConnectAuthError("GavaConnect request failed after token refresh.")
 
@@ -316,16 +341,15 @@ class AsyncGavaConnectClient:
         return cls(sandbox=sandbox)
 
     async def _fetch_token(self) -> None:
-        resp = await self._http.get(
-            f"{self._base}{_TOKEN_PATH}",
-            params={"grant_type": "client_credentials"},
-            auth=(self._key, self._secret),
-        )
-        if resp.status_code == 401:
-            raise GavaConnectAuthError(
-                "GavaConnect rejected your consumer key / secret (HTTP 401)."
+        try:
+            resp = await self._http.get(
+                f"{self._base}{_TOKEN_PATH}",
+                params={"grant_type": "client_credentials"},
+                auth=(self._key, self._secret),
             )
-        resp.raise_for_status()
+        except httpx.RequestError as exc:
+            raise _unreachable(exc) from exc
+        _raise_for_token_response(resp)
         self._token, self._token_expiry = _parse_token(resp.json())
 
     async def _get_token(self) -> str:
@@ -341,17 +365,20 @@ class AsyncGavaConnectClient:
     async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         for attempt in range(2):
             token = await self._get_token()
-            resp = await self._http.post(
-                f"{self._base}{path}",
-                json=body,
-                headers={"Authorization": f"Bearer {token}"},
-            )
+            try:
+                resp = await self._http.post(
+                    f"{self._base}{path}",
+                    json=body,
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            except httpx.RequestError as exc:
+                raise _unreachable(exc) from exc
             if _is_token_expiry_response(resp.status_code, resp.text):
                 await self._invalidate_token()
                 if attempt == 0:
                     continue
                 raise GavaConnectAuthError("GavaConnect token expired and refresh failed.")
-            resp.raise_for_status()
+            _raise_for_api_response(resp)
             return resp.json()
         raise GavaConnectAuthError("GavaConnect request failed after token refresh.")
 

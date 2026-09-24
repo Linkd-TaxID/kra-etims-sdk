@@ -17,6 +17,19 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-24
+
+### Fixed
+- `render_kra_qr_string()` raised `ValueError` on every real TaxID receipt. The
+  middleware returns the signed QR payload as `kraQrPayload`; the helper only looked
+  for `qrCode`, which only the test fixtures used. It now reads `kraQrPayload` first
+  and still accepts `qrCode`.
+- GavaConnect: KRA answers wrong consumer credentials with HTTP 400 and an empty body,
+  not 401, so bad credentials surfaced as a raw `httpx.HTTPStatusError` instead of
+  `GavaConnectAuthError`. Any 400/401/403 from the token endpoint now raises
+  `GavaConnectAuthError`; other non-2xx responses and connection failures raise
+  `GavaConnectError` instead of leaking `httpx` exceptions (sync and async).
+
 ## [0.6.0] - 2026-09-23
 
 ### Changed

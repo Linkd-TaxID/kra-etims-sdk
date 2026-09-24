@@ -1,4 +1,4 @@
-# KRA eTIMS SDK (Python) `v0.6.0`
+# KRA eTIMS SDK (Python) `v0.6.1`
 
 ### Sign a KRA eTIMS receipt in one call. No OAuth. No eTIMS. No tax math.
 
@@ -414,10 +414,10 @@ except KRADuplicateInvoiceError:
 
 | Exception | Trigger |
 |---|---|
-| `GavaConnectAuthError` | Consumer key / secret rejected by KRA, or token fetch failed |
+| `GavaConnectAuthError` | Consumer key / secret rejected by KRA (KRA answers with HTTP 400, not 401), or token refresh failed |
 | `GavaConnectPINNotFoundError` | PIN is not in KRA's taxpayer registry |
 | `GavaConnectTCCError` | TCC number is invalid, expired, or not found for the given PIN |
-| `GavaConnectError` | Base class for all GavaConnect exceptions |
+| `GavaConnectError` | Base class for all GavaConnect exceptions; also raised directly when KRA is unreachable or returns an unexpected HTTP status |
 
 ---
 

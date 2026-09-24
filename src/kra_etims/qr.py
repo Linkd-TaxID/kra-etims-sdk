@@ -32,8 +32,10 @@ def render_kra_qr_string(receipt_response: dict) -> str:
     """
     Extract the canonical KRA QR string from a signed receipt response.
 
-    The TIaaS middleware embeds the fully-signed, VSCU-stamped QR payload
-    in the ``qrCode`` key of every successful invoice response.
+    The TaxID middleware returns the signed QR payload (spec §6.23.8,
+    ``date#time#cuNumber#receiptNo#internalData#signature``) as
+    ``kraQrPayload`` on sale and credit-note responses and receipt webhooks.
+    ``qrCode`` is still accepted for other integrations.
 
     Parameters
     ----------
@@ -62,7 +64,9 @@ def render_kra_qr_string(receipt_response: dict) -> str:
     data = receipt_response.get("data", receipt_response)
 
     qr_string = (
-        data.get("qrCode")
+        data.get("kraQrPayload")
+        or receipt_response.get("kraQrPayload")
+        or data.get("qrCode")
         or data.get("qr_code")
         or data.get("qrcode")
         or receipt_response.get("qrCode")
@@ -71,7 +75,7 @@ def render_kra_qr_string(receipt_response: dict) -> str:
 
     if not qr_string:
         raise ValueError(
-            "No 'qrCode' field found in the receipt response. "
+            "No 'qrCode' or 'kraQrPayload' field found in the receipt response. "
             "Ensure the invoice was submitted successfully and the middleware "
             "returned a signed receipt before calling render_kra_qr_string()."
         )
