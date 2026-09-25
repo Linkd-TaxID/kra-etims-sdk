@@ -17,7 +17,7 @@ Required environment variables (one of):
 Optional environment variables:
     TAXID_CLIENT_ID     – OAuth2 client ID  (fallback when no API key is set)
     TAXID_CLIENT_SECRET – OAuth2 client secret
-    TAXID_API_URL       – Base URL of the middleware (default: https://taxid-production.up.railway.app)
+    TAXID_API_URL       – Base URL of the middleware (default: https://api.taxid.co.ke)
 """
 
 import os
@@ -36,7 +36,7 @@ def run_init_device() -> None:
     api_key       = os.getenv("TAXID_API_KEY", "").strip() or None
     client_id     = os.getenv("TAXID_CLIENT_ID",     "").strip() or None
     client_secret = os.getenv("TAXID_CLIENT_SECRET", "").strip() or None
-    base_url      = os.getenv("TAXID_API_URL", "https://taxid-production.up.railway.app").strip()
+    base_url      = os.getenv("TAXID_API_URL", "https://api.taxid.co.ke").strip()
 
     if not api_key and not (client_id and client_secret):
         print(

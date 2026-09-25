@@ -21,6 +21,7 @@ from .exceptions import (
     KRADuplicateInvoiceError,
     CreditNoteConflictError,
     CreditNoteExceedsOriginalError,
+    KRAConflictError,
     KRAConnectivityTimeoutError,
     KRAeTIMSAuthError,
     KRAAuthorizationError,
@@ -42,7 +43,7 @@ from .exceptions import (
 #   "001"  — empty-list response (no records match query) — NOT an error; must not raise
 _KRA_SUCCESS_CODES: frozenset = frozenset({"0", "00", "000", "0000", "001"})
 
-_DEFAULT_BASE_URL = "https://taxid-production.up.railway.app"
+_DEFAULT_BASE_URL = "https://api.taxid.co.ke"
 
 _MUTATING_METHODS: frozenset = frozenset({"POST", "PUT", "DELETE", "PATCH"})
 
@@ -261,11 +262,25 @@ class _BaseKRAeTIMSClient(ABC):
             if sc == 503:
                 self._raise_for_503(exc.response)
             if sc == 409:
-                body, msg, _ = self._error_fields(exc.response)
-                raise CreditNoteConflictError(
-                    msg,
-                    existing_credit_note_id=body.get("existingCreditNoteId"),
-                    existing_cu_invoice_no=body.get("existingCuInvoiceNo"),
+                body, msg, code = self._error_fields(exc.response)
+                message = f"Conflict (HTTP 409){f' [{code}]' if code else ''}: {msg}"
+                if "/credit-note" in exc.request.url.path:
+                    raise CreditNoteConflictError(
+                        message,
+                        existing_credit_note_id=body.get("existingCreditNoteId"),
+                        existing_cu_invoice_no=body.get("existingCuInvoiceNo"),
+                        code=code,
+                    ) from exc
+                raise KRAConflictError(message, code=code) from exc
+            if sc == 425:
+                # IDEMPOTENT_REQUEST_IN_FLIGHT: the first request with this key is
+                # still running. Its outcome is not known yet, and the fix is the
+                # same as for any ambiguous mutation — retry with the same key.
+                _, msg, _ = self._error_fields(exc.response)
+                raise TIaaSAmbiguousStateError(
+                    f"Request with this idempotency key is still in flight (HTTP 425): {msg} "
+                    "Retry shortly with the same idempotency key.",
+                    idempotency_key=idempotency_key,
                 ) from exc
             if sc == 422:
                 # 422 covers VSCU terminal rejections AND the credit-note

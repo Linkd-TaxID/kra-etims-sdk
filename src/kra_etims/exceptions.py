@@ -43,7 +43,8 @@ KRA Result Code Reference (eTIMS v2.0 spec):
   96  KRA system error (transient)
   99  Unknown / catch-all KRA error
 """
-from typing import Optional
+from decimal import Decimal
+from typing import Any, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -232,17 +233,25 @@ class KRAServerError(KRAeTIMSError):
     """Transient KRA server-side processing failure (result codes 20, 96, 99)."""
 
 
-class CreditNoteConflictError(KRAeTIMSError):
+class KRAConflictError(KRAeTIMSError):
     """
-    Generic HTTP 409 Conflict carrier for the TIaaS middleware.
+    HTTP 409 Conflict. ``code`` is the middleware's error code, e.g.
+    ``FISCAL_DAY_CLOSED`` (the sale's date is already Z-closed) or
+    ``ETIMS_NOT_INITIALIZED`` (the branch has not completed its handshake).
+    """
+    def __init__(self, message: str = "Conflict (HTTP 409)", code: Optional[str] = None):
+        super().__init__(message)
+        self.code = code
+
+
+class CreditNoteConflictError(KRAConflictError):
+    """
+    HTTP 409 on a credit-note request (for example ``ETIMS_NOT_INITIALIZED``).
 
     .. note::
        As of middleware V15 (2026-07) multiple credit notes MAY be issued
-       against one receipt — over-reversal now raises
-       :class:`CreditNoteExceedsOriginalError` (HTTP 422), not this. This
-       exception remains the intermediary the base client raises for any 409;
-       :mod:`kra_etims.reports` catches it to re-raise
-       :class:`ZReportAlreadyIssuedError` for the Z-report path.
+       against one receipt — over-reversal raises
+       :class:`CreditNoteExceedsOriginalError` (HTTP 422), not this.
 
     ``original_purchase_id`` carries the sale ID when present, so callers can
     look it up without parsing the message.
@@ -257,8 +266,9 @@ class CreditNoteConflictError(KRAeTIMSError):
         original_purchase_id: Optional[int] = None,
         existing_credit_note_id: Optional[int] = None,
         existing_cu_invoice_no: Optional[str] = None,
+        code: Optional[str] = None,
     ):
-        super().__init__(message)
+        super().__init__(message, code=code)
         self.original_purchase_id = original_purchase_id
         # Populated from the middleware's 409 body ({existingCreditNoteId,
         # existingCuInvoiceNo}) — the fields callers need to fetch the winner.
@@ -286,13 +296,16 @@ class CreditNoteExceedsOriginalError(KRAeTIMSError):
             "Credit Note Exceeds Original (HTTP 422): the reversal would exceed "
             "the receipt's remaining reversible balance. Issue a smaller credit note."
         ),
-        remaining: Optional[str] = None,
-        already_reversed: Optional[str] = None,
+        remaining: Any = None,
+        already_reversed: Any = None,
         original_purchase_id: Optional[int] = None,
     ):
         super().__init__(message)
-        self.remaining = remaining
-        self.already_reversed = already_reversed
+        # The 422 body carries JSON numbers; go through str() so a float such as
+        # 70.0 becomes Decimal("70.0") rather than its binary expansion.
+        self.remaining: Optional[Decimal] = None if remaining is None else Decimal(str(remaining))
+        self.already_reversed: Optional[Decimal] = (
+            None if already_reversed is None else Decimal(str(already_reversed)))
         self.original_purchase_id = original_purchase_id
 
 

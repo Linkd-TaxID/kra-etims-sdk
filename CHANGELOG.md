@@ -2,20 +2,24 @@
 
 All notable changes to kra-etims-sdk are documented here.
 
-## [0.5.1]
+## [Unreleased]
+
+### Added
+- `KRAConflictError` for HTTP 409, with the server's error code in `.code`.
 
 ### Changed
-- Published package metadata: added `[project.urls]` (Homepage, Documentation,
-  Repository, Changelog) so the PyPI project page links to the docs and source
-  instead of showing bare/`None` fields.
+- Default API URL is now `https://api.taxid.co.ke` (was `https://taxid-production.up.railway.app`).
+  `TAXID_API_URL` and `base_url=` still override it.
+- `CreditNoteExceedsOriginalError.remaining` and `.already_reversed` are `Decimal` (were the
+  raw JSON numbers).
 
-### Security / hygiene
-- Removed a hardcoded real KRA taxpayer PIN from the example day-scripts, test
-  fixtures, and the concurrent-stress harness; the stress script now reads the
-  PIN from `SANDBOX_TIN`. Campaign/day transcripts (which embed real KRA receipt
-  signatures) are no longer tracked and are git-ignored going forward.
-
-## [Unreleased]
+### Fixed
+- A 409 on a sale (`FISCAL_DAY_CLOSED`, `ETIMS_NOT_INITIALIZED`) raised `CreditNoteConflictError`.
+  It now raises `KRAConflictError`; `CreditNoteConflictError` is a subclass raised only for
+  credit-note requests. Code that caught `CreditNoteConflictError` for sale conflicts must catch
+  `KRAConflictError`.
+- HTTP 425 (`IDEMPOTENT_REQUEST_IN_FLIGHT`) raised a generic `KRAeTIMSError`. It now raises
+  `TIaaSAmbiguousStateError` with the idempotency key, so existing same-key retry handling applies.
 
 ## [0.6.1] - 2026-09-24
 
@@ -140,6 +144,19 @@ All notable changes to kra-etims-sdk are documented here.
 - **`__version__` fallback string was `0.4.0`** — stale by one release; `pyproject.toml`
   is `0.5.0` (matches the latest PyPI release). Only affects the `importlib.metadata`
   lookup-failure fallback (e.g. running from source without installed package metadata).
+
+## [0.5.1] - 2026-07-15
+
+### Changed
+- Published package metadata: added `[project.urls]` (Homepage, Documentation,
+  Repository, Changelog) so the PyPI project page links to the docs and source
+  instead of showing bare/`None` fields.
+
+### Security / hygiene
+- Removed a hardcoded real KRA taxpayer PIN from the example day-scripts, test
+  fixtures, and the concurrent-stress harness; the stress script now reads the
+  PIN from `SANDBOX_TIN`. Campaign/day transcripts (which embed real KRA receipt
+  signatures) are no longer tracked and are git-ignored going forward.
 
 ## [0.5.0] — 2026-07-08
 

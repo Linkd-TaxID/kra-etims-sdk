@@ -48,7 +48,8 @@ Exceptions
 - ``KRAInvalidItemCodeError`` — item not registered on eTIMS (code 13)
 - ``KRAInvalidBranchError``   — branch not registered for this TIN (code 14)
 - ``KRAServerError``          — transient KRA server error (codes 20/96/99)
-- ``CreditNoteConflictError`` — generic HTTP 409 carrier (see reports for Z-report use)
+- ``KRAConflictError``       — HTTP 409; ``code`` names the conflict (e.g. FISCAL_DAY_CLOSED)
+- ``CreditNoteConflictError`` — HTTP 409 on a credit-note request
 - ``CreditNoteExceedsOriginalError`` — reversal exceeds the reversible balance (HTTP 422)
 """
 
@@ -135,6 +136,7 @@ from .exceptions import (
     KRAInvalidItemCodeError,
     KRAInvalidBranchError,
     KRAServerError,
+    KRAConflictError,
     CreditNoteConflictError,
     CreditNoteExceedsOriginalError,
     ZReportAlreadyIssuedError,
@@ -197,6 +199,7 @@ __all__ = [
     "KRAInvalidItemCodeError",
     "KRAInvalidBranchError",
     "KRAServerError",
+    "KRAConflictError",
     "CreditNoteConflictError",
     "CreditNoteExceedsOriginalError",
     "ZReportAlreadyIssuedError",

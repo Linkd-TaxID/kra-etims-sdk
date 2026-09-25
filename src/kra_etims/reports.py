@@ -40,7 +40,7 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from .exceptions import CreditNoteConflictError, ZReportAlreadyIssuedError
+from .exceptions import KRAConflictError, ZReportAlreadyIssuedError
 
 if TYPE_CHECKING:
     from .client import KRAeTIMSClient
@@ -103,7 +103,7 @@ class XReport(BaseModel):
               "totalTaxAmount": 12000.00,
               "currency":       "KES",
               "taxBands": {
-                "A": { "count": 5, "taxableAmount": 43103.45,
+                "B": { "count": 5, "taxableAmount": 43103.45,
                        "taxAmount": 6896.55, "totalAmount": 50000.00 },
                 ...
               }
@@ -259,10 +259,8 @@ class ReportsInterface:
         """
         try:
             raw = self._client._request("POST", f"/v2/reports/daily-z?date={date}")
-        except CreditNoteConflictError as exc:
-            # The base client maps ALL HTTP 409 responses to CreditNoteConflictError.
-            # For Z-reports, 409 means the report was already issued — re-raise as the
-            # correct, semantically precise exception type.
+        except KRAConflictError as exc:
+            # On the Z-report path a 409 means the report was already issued.
             raise ZReportAlreadyIssuedError(
                 f"Z-Report already issued for date={date}: {exc}"
             ) from exc
@@ -298,7 +296,7 @@ class AsyncReportsInterface:
         """
         try:
             raw = await self._client._request("POST", f"/v2/reports/daily-z?date={date}")
-        except CreditNoteConflictError as exc:
+        except KRAConflictError as exc:
             raise ZReportAlreadyIssuedError(
                 f"Z-Report already issued for date={date}: {exc}"
             ) from exc

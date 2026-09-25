@@ -8,7 +8,7 @@ def test_url_resolution_priority(monkeypatch):
     # 1. Fallback to hardcoded default
     monkeypatch.delenv("TAXID_API_URL", raising=False)
     client_default = KRAeTIMSClient("id", "secret")
-    assert client_default.base_url == "https://taxid-production.up.railway.app"
+    assert client_default.base_url == "https://api.taxid.co.ke"
 
     # 2. Kwarg override
     client_kwarg = KRAeTIMSClient("id", "secret", base_url="https://sandbox.test.co.ke")
