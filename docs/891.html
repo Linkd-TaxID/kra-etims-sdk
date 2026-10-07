@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error 891: URL Construction Error | KRA eTIMS Error Reference</title>
-  <meta name="description" content="The SCU JAR or library encountered a fault constructing the request URL.">
+  <meta name="description" content="Request URL construction error.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/891.html">
@@ -12,9 +12,9 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 891 — URL Construction Error",
-  "description": "The SCU JAR or library encountered a fault constructing the request URL.",
+  "description": "Request URL construction error.",
   "url": "https://docs.taxid.co.ke/891.html",
-  "dateModified": "2026-07-07",
+  "dateModified": "2026-10-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -83,13 +83,12 @@
         <span class="badge" style="background:#fff3cd;color:#856404">Client</span>
       </div>
       <h1>URL Construction Error</h1>
-      <p>The SCU JAR or library encountered a fault constructing the request URL.</p>
-      <div class="section-label">Likely Causes</div>
-       <ul><li>Malformed endpoint path in SCU configuration</li>
-<li>Trailing or leading whitespace in URL segments</li></ul>
-      <div class="section-label">Fix</div>
-       <div class="fix-box">Strip all URL components of whitespace before use. Check your endpoint path configuration. GavaConnect returns HTTP 200 with an error body on whitespace URLs — no spec mention anywhere.</div>
-      
+      <p>Request URL construction error.</p>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
+
+      <div class="section-label">Resolution</div>
+       <div class="fix-box">Check the configured origin and endpoint path for malformed components or whitespace.</div>
+
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./892.html">892 — Header Construction Error</a><a class="related-link" href="./893.html">893 — Request Body Serialization Error</a><a class="related-link" href="./899.html">899 — Client Catch-All</a></div>
     </div>

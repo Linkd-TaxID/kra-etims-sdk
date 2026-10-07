@@ -1,14 +1,5 @@
 #!/usr/bin/env node
-/**
- * Generates a standalone HTML page for each error code in errors.js.
- *
- * Each page at /docs/{code}.html is independently indexable — no meta-refresh,
- * no canonical redirect. The URL itself signals exact intent to AI crawlers and
- * search engines. Pages are self-contained with full content and link back to
- * the main reference.
- *
- * Usage: node scripts/generate-pages.js
- */
+// Generate result-code pages from docs/errors.js.
 
 const fs   = require('fs');
 const path = require('path');
@@ -34,7 +25,8 @@ function escapeHtml(text) {
 function badgeStyle(category) {
   const styles = {
     Official:   'background:#d1ecf1;color:#0c5460',
-    Production: 'background:#f8d7da;color:#721c24',
+    Reported: 'background:#f8d7da;color:#721c24',
+    Observed:   'background:#d1ecf1;color:#0c5460',
     Client:     'background:#fff3cd;color:#856404',
   };
   return styles[category] || styles.Official;
@@ -42,17 +34,17 @@ function badgeStyle(category) {
 
 function buildPage(e) {
   const causesHtml = e.causes && e.causes.length
-    ? `<div class="section-label">Likely Causes</div>
+    ? `<div class="section-label">Possible causes</div>
        <ul>${e.causes.map(c => `<li>${escapeHtml(c)}</li>`).join('\n')}</ul>`
     : '';
 
   const fixHtml = e.fix
-    ? `<div class="section-label">Fix</div>
+    ? `<div class="section-label">Resolution</div>
        <div class="fix-box">${escapeHtml(e.fix)}</div>`
     : '';
 
   const gotchaHtml = e.gotcha
-    ? `<div class="section-label">Gotcha</div>
+    ? `<div class="section-label">Notes</div>
        <div class="gotcha-box">${escapeHtml(e.gotcha)}</div>`
     : '';
 
@@ -72,7 +64,7 @@ function buildPage(e) {
     'name': `KRA eTIMS resultCd ${e.code} — ${e.title}`,
     'description': e.description,
     'url': `${BASE_URL}/${e.code}.html`,
-    'dateModified': '2026-07-07',
+    'dateModified': '2026-10-07',
     'author': { '@type': 'Organization', 'name': 'Linkd TaxID', 'url': 'https://github.com/Linkd-TaxID' },
     'about': [
       { '@type': 'Thing', 'name': 'KRA eTIMS' },
@@ -147,6 +139,7 @@ function buildPage(e) {
       </div>
       <h1>${escapeHtml(e.title)}</h1>
       <p>${escapeHtml(e.description)}</p>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
       ${causesHtml}
       ${fixHtml}
       ${gotchaHtml}
@@ -160,11 +153,13 @@ function buildPage(e) {
 </html>`;
 }
 
+fs.writeFileSync(path.join(DOCS_DIR, 'errors.json'), JSON.stringify(ERRORS, null, 2) + '\n', 'utf8');
+
 let generated = 0;
 for (const e of ERRORS) {
   const filename = `${e.code}.html`;
   const filepath = path.join(DOCS_DIR, filename);
-  fs.writeFileSync(filepath, buildPage(e), 'utf8');
+  fs.writeFileSync(filepath, buildPage(e).split('\n').map(line => line.trimEnd()).join('\n'), 'utf8');
   generated++;
   console.log(`  wrote ${filename}`);
 }

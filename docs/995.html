@@ -14,7 +14,7 @@
   "name": "KRA eTIMS resultCd 995 — No Downloaded File",
   "description": "File retrieval failure in document or notice flows.",
   "url": "https://docs.taxid.co.ke/995.html",
-  "dateModified": "2026-07-07",
+  "dateModified": "2026-10-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -84,12 +84,13 @@
       </div>
       <h1>No Downloaded File</h1>
       <p>File retrieval failure in document or notice flows.</p>
-      <div class="section-label">Likely Causes</div>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
+      <div class="section-label">Possible causes</div>
        <ul><li>Document no longer available on KRA servers</li>
 <li>Invalid document reference</li></ul>
-      <div class="section-label">Fix</div>
+      <div class="section-label">Resolution</div>
        <div class="fix-box">Verify the document reference is current. Re-fetch the notice list to confirm the document still exists before retrying.</div>
-      
+
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./999.html">999 — Unknown Error</a></div>
     </div>

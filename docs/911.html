@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error 911: Empty Request Body | KRA eTIMS Error Reference</title>
-  <meta name="description" content="The request body is null or empty.">
+  <meta name="description" content="Request body is missing.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/911.html">
@@ -12,9 +12,9 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 911 — Empty Request Body",
-  "description": "The request body is null or empty.",
+  "description": "Request body is missing.",
   "url": "https://docs.taxid.co.ke/911.html",
-  "dateModified": "2026-07-07",
+  "dateModified": "2026-10-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -83,13 +83,12 @@
         <span class="badge" style="background:#d1ecf1;color:#0c5460">Official</span>
       </div>
       <h1>Empty Request Body</h1>
-      <p>The request body is null or empty.</p>
-      <div class="section-label">Likely Causes</div>
-       <ul><li>Serialization failure before send</li>
-<li>Accidental GET request to a POST endpoint</li></ul>
-      <div class="section-label">Fix</div>
-       <div class="fix-box">Verify the request body is populated before sending. Log the serialized payload at debug level.</div>
-      
+      <p>Request body is missing.</p>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
+
+      <div class="section-label">Resolution</div>
+       <div class="fix-box">Check serialization and Content-Type. Retain redacted diagnostics rather than logging credentials or the full invoice.</div>
+
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./910.html">910 — Request Parameter Error</a><a class="related-link" href="./912.html">912 — Request Method Error</a><a class="related-link" href="./895.html">895 — Unallowed Request Method</a></div>
     </div>

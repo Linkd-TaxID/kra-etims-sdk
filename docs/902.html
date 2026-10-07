@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error 902: Device Already Installed | KRA eTIMS Error Reference</title>
-  <meta name="description" content="The device serial has already been initialized and an active cmcKey exists.">
+  <meta name="description" content="The device is already installed. The retained initialization response returned data:null.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/902.html">
@@ -12,9 +12,9 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 902 — Device Already Installed",
-  "description": "The device serial has already been initialized and an active cmcKey exists.",
+  "description": "The device is already installed. The retained initialization response returned data:null.",
   "url": "https://docs.taxid.co.ke/902.html",
-  "dateModified": "2026-07-07",
+  "dateModified": "2026-10-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -83,14 +83,12 @@
         <span class="badge" style="background:#d1ecf1;color:#0c5460">Official</span>
       </div>
       <h1>Device Already Installed</h1>
-      <p>The device serial has already been initialized and an active cmcKey exists.</p>
-      <div class="section-label">Likely Causes</div>
-       <ul><li>Re-running initialization on an already-active device</li>
-<li>Redeploying without persisting the original cmcKey</li></ul>
-      <div class="section-label">Fix</div>
-       <div class="fix-box">This is idempotent — not a hard failure, but the 902 response does NOT return the cmcKey: verified live against the KRA sandbox (2026-07-04), the body is {&quot;resultCd&quot;:&quot;902&quot;,&quot;resultMsg&quot;:&quot;This device is installed&quot;,&quot;data&quot;:null}. Use the cmcKey you persisted at first initialization. If it is lost, contact timsupport@kra.go.ke to de-register the serial so the device can be re-initialized — there is no self-service recovery.</div>
-      <div class="section-label">Gotcha</div>
-       <div class="gotcha-box">The cmcKey is issued exactly once, only in the original init response, with no rotation mechanism — 902 will not hand it back. Any log line recording the full init response permanently leaks this key; redact cmcKey before any logging. Also watch for a present-but-empty cmcKey file after a failed restore: a file-exists check passes, but every subsequent request fails with 899/900 — validate the file is non-empty.</div>
+      <p>The device is already installed. The retained initialization response returned data:null.</p>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
+
+      <div class="section-label">Resolution</div>
+       <div class="fix-box">Reuse the cmcKey retained from successful initialization. If it is missing, stop and arrange device recovery with the operator/KRA; this response does not recover the key.</div>
+
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./901.html">901 — Not a Valid Device</a><a class="related-link" href="./903.html">903 — Device Type Mismatch</a></div>
     </div>

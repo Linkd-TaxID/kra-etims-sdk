@@ -1,3 +1,14 @@
+## 2026-10-07
+
+- Corrected duplicate and timeout guidance: investigate original transactions;
+  response codes do not recover receipts or authorize replay.
+- Removed unsupported two-call VSCU signing instructions and universal success
+  assertions. Labelled runtime observations separately from external reports.
+- Consolidated the FAQ and machine-readable guidance around TaxID API contracts.
+
+Earlier entries record changes made at the time; current guidance is in the
+[reference](https://docs.taxid.co.ke/) and SDK README.
+
 # KRA eTIMS Error Code Reference — Changelog
 
 ## 2026-09-23

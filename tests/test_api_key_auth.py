@@ -9,7 +9,7 @@ Positive tests (structural — verifies the SDK sends the right headers):
 2. /oauth/token is never called when api_key is set.
 3. TAXID_API_KEY env var is auto-picked-up.
 4. Legacy OAuth2 Bearer path unchanged when no api_key.
-5. Env var takes priority over constructor api_key argument.
+5. Constructor api_key takes priority over environment default.
 
 Negative tests (rejection — verifies server auth failures raise typed exceptions):
 6. Invalid API key → server returns 401 → KRAeTIMSAuthError raised.
@@ -157,9 +157,9 @@ def test_bearer_token_used_when_no_api_key(httpx_mock):
 # Test 5: Env var takes priority over constructor arg
 # ---------------------------------------------------------------------------
 
-def test_env_var_takes_priority_over_constructor_api_key(httpx_mock):
+def test_constructor_api_key_takes_priority_over_env_var(httpx_mock):
     """
-    TAXID_API_KEY env var should override the api_key constructor argument.
+    An explicit branch key must override process-global TAXID_API_KEY.
     """
     httpx_mock.add_response(
         url=HANDSHAKE_URL,
@@ -173,8 +173,8 @@ def test_env_var_takes_priority_over_constructor_api_key(httpx_mock):
         client.initialize_device_handshake()
 
     sent = httpx_mock.get_requests()
-    assert sent[0].headers.get("Authorization") == "Bearer env-wins", \
-        "Env var TAXID_API_KEY must take priority over constructor api_key"
+    assert sent[0].headers.get("Authorization") == "Bearer constructor-arg", \
+        "An explicit constructor api_key must take priority over the environment"
 
 
 # ---------------------------------------------------------------------------

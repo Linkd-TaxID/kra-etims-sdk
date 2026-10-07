@@ -14,7 +14,7 @@
   "name": "KRA eTIMS resultCd 900 — No Header Information",
   "description": "A required HTTP header is missing from the request.",
   "url": "https://docs.taxid.co.ke/900.html",
-  "dateModified": "2026-07-07",
+  "dateModified": "2026-10-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -84,14 +84,15 @@
       </div>
       <h1>No Header Information</h1>
       <p>A required HTTP header is missing from the request.</p>
-      <div class="section-label">Likely Causes</div>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
+      <div class="section-label">Possible causes</div>
        <ul><li>Authorization header missing</li>
 <li>tin, bhfId, or cmcKey missing from OSCU request headers</li>
 <li>Content-Type not set to application/json</li>
 <li>A present-but-empty (0-byte) cmcKey device file on the VSCU path — file-exists bootstrap checks pass, but the JAR sends an empty credential (verified live 2026-07-04)</li></ul>
-      <div class="section-label">Fix</div>
+      <div class="section-label">Resolution</div>
        <div class="fix-box">For OSCU, every request after initialization requires tin, bhfId, and cmcKey in the request headers or body depending on the endpoint. Verify all three are present.</div>
-      
+
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./910.html">910 — Request Parameter Error</a><a class="related-link" href="./892.html">892 — Header Construction Error</a></div>
     </div>

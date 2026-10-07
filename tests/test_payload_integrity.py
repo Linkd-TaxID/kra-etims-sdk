@@ -36,4 +36,5 @@ def test_payload_integrity_excludes_none(httpx_mock):
     assert "buyerPin" not in payload
     assert "buyerName" not in payload
     assert payload["supplierPin"] == "P1"
+    assert payload["clientReference"] == invoice.invcNo
     assert payload["invoiceDate"] == "2024-01-01"

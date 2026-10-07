@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error E04: Device / Branch Not Found | KRA eTIMS Error Reference</title>
-  <meta name="description" content="The device or branch ID in the request does not exist in KRA's system.">
+  <meta name="description" content="Reported device or branch lookup failure outside the cited v2.0 response-code table.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/E04.html">
@@ -12,9 +12,9 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd E04 — Device / Branch Not Found",
-  "description": "The device or branch ID in the request does not exist in KRA's system.",
+  "description": "Reported device or branch lookup failure outside the cited v2.0 response-code table.",
   "url": "https://docs.taxid.co.ke/E04.html",
-  "dateModified": "2026-07-07",
+  "dateModified": "2026-10-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -80,17 +80,15 @@
     <div class="card">
       <div class="card-top">
         <span class="code">E04</span>
-        <span class="badge" style="background:#f8d7da;color:#721c24">Production</span>
+        <span class="badge" style="background:#f8d7da;color:#721c24">Reported</span>
       </div>
       <h1>Device / Branch Not Found</h1>
-      <p>The device or branch ID in the request does not exist in KRA's system.</p>
-      <div class="section-label">Likely Causes</div>
-       <ul><li>bhfId not registered for this TIN</li>
-<li>Device registered under a different branch than specified in the request</li></ul>
-      <div class="section-label">Fix</div>
-       <div class="fix-box">Verify your bhfId against what was assigned during OSCU/VSCU registration. The default sandbox bhfId is '00'. Check that tin + bhfId combination matches your registration.</div>
-      <div class="section-label">Gotcha</div>
-       <div class="gotcha-box">This is a letter-prefixed code absent from all official spec documents. Only confirmed through live GavaConnect response observation.</div>
+      <p>Reported device or branch lookup failure outside the cited v2.0 response-code table.</p>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
+
+      <div class="section-label">Resolution</div>
+       <div class="fix-box">Verify the assigned taxpayer and branch registration. No default branch is valid for every integration.</div>
+
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./901.html">901 — Not a Valid Device</a><a class="related-link" href="./903.html">903 — Device Type Mismatch</a></div>
     </div>

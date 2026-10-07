@@ -1,8 +1,15 @@
 # taxid-etims
 
-A Python client for signing KRA eTIMS receipts through the
-[TaxID](https://taxid.co.ke) API. It also includes offline VAT arithmetic and
-KRA GavaConnect PIN/TCC lookups.
+A Python client for [TaxID](https://taxid.co.ke), fiscal infrastructure embedded
+in existing invoicing, accounting, POS and ERP software. TaxID retains original
+transaction references and branch-scoped receipt evidence for safe recovery.
+
+Current invited access simulates receipt workflows; it issues no fiscal invoices
+and makes no KRA submissions. Production access requires merchant authorization,
+real KRA evidence, operational acceptance and applicable KRA approval.
+
+The SDK also includes offline VAT arithmetic and KRA GavaConnect PIN/TCC
+lookups; those lookups require separate KRA developer credentials.
 
 ```bash
 pip install taxid-etims          # core: httpx + pydantic
@@ -22,12 +29,23 @@ Python 3.10 or later. The import name is `kra_etims`. KRA `resultCd` reference:
 
 ## Quickstart
 
+Request developer access on the TaxID landing page, open your private
+invitation and create a branch API key in the workspace. Store the key as
+`TAXID_API_KEY` on your server and set `TAXID_API_URL` to that workspace’s API
+origin. The invitation opens the workspace; it is not the application API key.
+No client ID or client secret is required for TaxID API requests. Use synthetic
+data and your assigned branch PIN in the example below.
+
 ```python
+import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from kra_etims import KRAeTIMSClient, SaleInvoice, calculate_item, build_invoice_totals
 
-client = KRAeTIMSClient("", "", api_key="txd_sb_…")   # the first two arguments are unused
+client = KRAeTIMSClient(
+    api_key=os.environ["TAXID_API_KEY"],
+    base_url=os.environ["TAXID_API_URL"],
+)
 
 items = [calculate_item("Consulting", "SRV-001", 5800, "B")]   # 5800 incl. 16% VAT
 invoice = SaleInvoice(
@@ -37,20 +55,25 @@ invoice = SaleInvoice(
 )
 
 receipt = client.submit_sale(invoice, idempotency_key="INV-0001")
-receipt["status"]            # "SIGNED"
-receipt["cuInvoiceNumber"]   # "KRACU0300003881/101 NS"
+receipt["status"]            # "SIGNED" in the simulator is not KRA acceptance
+receipt["cuInvoiceNumber"]   # simulated receipt identifier
 receipt["receiptSignature"], receipt["kraQrPayload"], receipt["sdcId"], receipt["vscuTimestamp"]
 ```
 
-`tin` is the seller's KRA PIN and must be the branch your key is bound to.
+`tin` must match the branch your key is bound to; use the assigned synthetic
+PIN in the simulator. Inspect the original invoice reference and practise
+failure handling before pursuing real KRA testing.
 `confirmDt` is `yyyyMMddHHmmss`.
 
 ## Configuration
 
-| Setting | Constructor | Environment (wins over the constructor) | Default |
+| Setting | Constructor | Environment (used when constructor argument is omitted) | Default |
 |---|---|---|---|
 | API key | `api_key=` | `TAXID_API_KEY` | none |
 | API URL | `base_url=` | `TAXID_API_URL` | `https://api.taxid.co.ke` |
+
+Explicit constructor values override environment defaults for both sync and async
+clients. This supports separate branch clients in the same process.
 
 The key is sent as `Authorization: Bearer <key>` and idempotency keys as
 `Idempotency-Key`. These headers need a TaxID server that accepts them; against
@@ -62,8 +85,8 @@ not offer, so always pass `api_key`.
 
 ## Tax bands
 
-KRA VSCU/OSCU specification v2.0 §4.1. **B is the 16% band, not A.** Swapping
-them is the most common integration error.
+SDK default band rates are based on the historical KRA v2.0 code table.
+Use current reference data and merchant classification before fiscal submission.
 
 | Band | Rate | Meaning |
 |---|---|---|
@@ -71,7 +94,7 @@ them is the most common integration error.
 | B | 16% | Standard VAT |
 | C | 0% | Zero-rated (input credit allowed) |
 | D | 0% | Non-VAT |
-| E | 8% | Special rate (petroleum, LPG). Confirm the current rate with KRA (timsupport@kra.go.ke) before use. |
+| E | 8% | Historical special-rate default; not a current commodity classification. |
 
 Override a rate with `ETIMS_TAX_RATE_A` … `ETIMS_TAX_RATE_E` (for example
 `ETIMS_TAX_RATE_E=0.16`).
@@ -87,7 +110,7 @@ pkg_unit_cd="NT", qty_unit_cd="U", discount=None, discount_rate=None)` returns a
 calculate_item("Laptop", "SKU1", 5800, "B")                    # taxblAmt 5000.00  taxAmt 800.00  totAmt 5800.00
 calculate_item("Fee", "SKU2", 1000, "B", price_is_inclusive=False)  # taxblAmt 1000.00  taxAmt 160.00  totAmt 1160.00
 calculate_item("Widget", "SKU3", 100, "B", qty=10)             # totAmt 1000.00  taxblAmt 862.07  taxAmt 137.93
-calculate_item("Diesel", "SKU4", "209.40", "E", qty="15.456")  # qty 15.4560  totAmt 3236.49
+calculate_item("Measured service", "SKU4", "209.40", "B", qty="15.456")  # qty 15.4560  totAmt 3236.49
 ```
 
 - VAT is split from the line total (`taxblAmt = totAmt / (1 + rate)`), which is
@@ -133,7 +156,7 @@ Check `receipt["status"]`. HTTP success does not mean the sale is signed.
 
 | `status` | Meaning | What to do |
 |---|---|---|
-| `SIGNED` | Receipt issued | Print it |
+| `SIGNED` | Control-unit receipt persisted; not proof of central KRA acceptance | Inspect it; simulator receipts are test output only |
 | `PENDING_SYNC` | Queued before reaching the control unit. TaxID signs it later. | `client.get_sale_status(receipt["purchaseId"])` until `SIGNED` |
 | `OUTCOME_UNKNOWN`, `RECONCILIATION_REQUIRED` | It may or may not have been signed | **Do not resubmit.** TaxID's operators reconcile it. |
 
@@ -142,18 +165,30 @@ Failures are split by whether the request could have had an effect:
 | Failure | Exception | Retry |
 |---|---|---|
 | Never left the client (connect error, pool timeout), or any failure on a GET | `TIaaSUnavailableError` | Yes |
-| Sent, then no usable response (read timeout, dropped connection, HTTP 500/502/504), or HTTP 425 because an earlier request with this key is still running | `TIaaSAmbiguousStateError` | Only with **the same** idempotency key (`exc.idempotency_key`) |
+| Sent, then no usable response (read timeout, dropped connection, HTTP 500/502/504), or HTTP 425 because an earlier request with this key is still running | `TIaaSAmbiguousStateError` | Look up the original reference first; preserve `exc.idempotency_key`. Do not blindly resubmit. |
 
-Retrying with the same key and the same body returns the original result, and
-never a second receipt. The same key with a different body raises
-`KRAeTIMSError` (`IDEMPOTENCY_KEY_REUSED`). If you omit `idempotency_key`, the SDK uses
-`"{tin}:{invcNo}"` and warns.
+The implemented server cache replays a stored response for the same key and exact
+request-body bytes; that response may still be uncertain. It is not an exactly-once
+or indefinite-retention guarantee. Different bytes under the same key raise
+`KRAeTIMSError` (`IDEMPOTENCY_KEY_REUSED`). Preserve the original invoice and
+reference instead of rebuilding them with a new date or identifier. If you omit
+`idempotency_key`, the SDK uses `"{tin}:{invcNo}"` and warns.
 
 ```python
 try:
     receipt = client.submit_sale(invoice, idempotency_key="INV-0001")
-except TIaaSAmbiguousStateError as exc:
-    receipt = client.submit_sale(invoice, idempotency_key=exc.idempotency_key)
+except TIaaSAmbiguousStateError:
+    # submit_sale maps invoice.invcNo to the API clientReference.
+    import httpx
+    response = httpx.get(
+        os.environ["TAXID_API_URL"].rstrip("/") + "/v2/etims/sales/search",
+        params={"clientReference": invoice.invcNo},
+        headers={"Authorization": "Bearer " + os.environ["TAXID_API_KEY"]},
+        timeout=30,
+    )
+    response.raise_for_status()
+    receipt = response.json()
+    # Inspect status; unresolved or missing results need investigation, not resend.
 ```
 
 ## Credit notes
@@ -216,7 +251,10 @@ confirm by SMS or WhatsApp. It is disabled on TaxID servers by default.
 `AsyncKRAeTIMSClient` has the same methods, awaited:
 
 ```python
-async with AsyncKRAeTIMSClient("", "", api_key="txd_sb_…") as client:
+async with AsyncKRAeTIMSClient(
+    api_key=os.environ["TAXID_API_KEY"],
+    base_url=os.environ["TAXID_API_URL"],
+) as client:
     receipt = await client.submit_sale(invoice, idempotency_key="INV-0001")
 ```
 
@@ -271,7 +309,7 @@ All exceptions inherit from `KRAeTIMSError`.
 | `KRAConnectivityTimeoutError` | 503: the branch is suspended (24-hour offline limit) |
 | `TIaaSUnavailableError` / `TIaaSAmbiguousStateError` | See [Outcomes, retries and idempotency](#outcomes-retries-and-idempotency) |
 | `OSCUUnavailableError` | 503 from an OSCU-backed branch (the control unit is temporarily unavailable) |
-| `KRADuplicateInvoiceError` | VSCU codes 12/994/902. `is_idempotent_success` is `True`. |
+| `KRADuplicateInvoiceError` | VSCU codes 12/994/902. `is_idempotent_success` is a legacy classification flag, not receipt evidence or permission to replay. |
 | `KRAInvalidPINError`, `KRAInvalidItemCodeError`, `KRAInvalidBranchError`, `KRAVSCUMemoryFullError`, `KRAServerError` | VSCU codes 10, 13, 14, 11, and 20/96/99 |
 | `CreditNoteExceedsOriginalError` | 422: the credit notes would exceed the receipt |
 | `KRAConflictError` | 409. `exc.code` is `FISCAL_DAY_CLOSED` (the date is already Z-closed) or `ETIMS_NOT_INITIALIZED` (the branch has not completed its handshake). |
