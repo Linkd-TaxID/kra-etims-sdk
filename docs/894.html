@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error 894: Server Communication Error | KRA eTIMS Error Reference</title>
-  <meta name="description" content="TCP or network failure between the SCU and the KRA backend.">
+  <meta name="description" content="Communication with the server failed.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/894.html">
@@ -12,9 +12,9 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 894 — Server Communication Error",
-  "description": "TCP or network failure between the SCU and the KRA backend.",
+  "description": "Communication with the server failed.",
   "url": "https://docs.taxid.co.ke/894.html",
-  "dateModified": "2026-07-07",
+  "dateModified": "2026-10-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -83,15 +83,12 @@
         <span class="badge" style="background:#fff3cd;color:#856404">Client</span>
       </div>
       <h1>Server Communication Error</h1>
-      <p>TCP or network failure between the SCU and the KRA backend.</p>
-      <div class="section-label">Likely Causes</div>
-       <ul><li>No internet connection</li>
-<li>VSCU 24-hour reconnection ceiling reached</li>
-<li>KRA API server unreachable</li></ul>
-      <div class="section-label">Fix</div>
-       <div class="fix-box">Check connectivity to etims-api.kra.go.ke. If on VSCU, check when the JAR last connected — it stops issuing receipt numbers exactly 24 hours after the last successful connection with no warning signal.</div>
-      <div class="section-label">Gotcha</div>
-       <div class="gotcha-box">The VSCU 24-hour ceiling surfaces as a TCP connection refusal or HTTP 503 — indistinguishable from a JAR crash. Track connectivity timestamps at the application layer.</div>
+      <p>Communication with the server failed.</p>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
+
+      <div class="section-label">Resolution</div>
+       <div class="fix-box">Inspect connectivity and runtime health. A communication failure does not establish whether a fiscal mutation was applied.</div>
+
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./896.html">896 — Request Status Error</a><a class="related-link" href="./990.html">990 — Rate Limit Exceeded</a><a class="related-link" href="./E11.html">E11 — VSCU Memory Full</a></div>
     </div>

@@ -4,25 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference</title>
-  <meta name="description" content="Complete reference for KRA eTIMS OSCU and VSCU API result codes. Covers resultCd 000, 001, 901, 902, 903, 910, 921, 922, 990, 994, E04, E11 with causes and fixes. Includes undocumented production codes absent from the official KRA spec.">
+  <meta name="description" content="Reference for KRA eTIMS OSCU and VSCU API result codes. Covers resultCd 000, 001, 901, 902, 903, 910, 921, 922, 990, 994, E04, E11 with causes and fixes. Includes undocumented reported codes outside the cited KRA specification.">
   <meta name="keywords" content="KRA eTIMS error codes, OSCU resultCd, VSCU error codes, eTIMS 901, eTIMS 910, eTIMS 921, KRA API errors, GavaConnect errors, kenya revenue authority API, eTIMS integration Kenya">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <meta name="google-site-verification" content="kvoqWPq6RXNOcyORJr4pyubDvsm7YdA_T15Y6yJ86VY">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/">
   <meta property="og:title" content="KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference">
-  <meta property="og:description" content="The most complete public reference for KRA eTIMS OSCU/VSCU result codes, including production codes absent from the official KRA spec.">
+  <meta property="og:description" content="Reference for KRA eTIMS OSCU/VSCU result codes, including reported codes outside the cited KRA specification.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://docs.taxid.co.ke/">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference">
-  <meta name="twitter:description" content="Complete reference for KRA eTIMS OSCU/VSCU resultCd values including production codes absent from the official spec.">
+  <meta name="twitter:description" content="Reference for KRA eTIMS OSCU/VSCU resultCd values including reported codes outside the cited specification.">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "TechArticle",
     "name": "KRA eTIMS OSCU/VSCU API Error Code Reference",
-    "description": "Complete reference for KRA eTIMS result codes including official OSCU/VSCU spec codes and production-observed codes absent from official documentation.",
+    "description": "Reference for KRA eTIMS result codes including official OSCU/VSCU spec codes and reported codes outside the cited specification.",
     "url": "https://docs.taxid.co.ke/",
     "author": {
       "@type": "Organization",
@@ -85,7 +85,8 @@
   <div class="container">
     <header>
       <h1>KRA eTIMS Error Codes</h1>
-      <p class="subtitle">Complete OSCU/VSCU <code>resultCd</code> reference — including production codes absent from the official KRA spec.</p>
+      <p>TaxID embeds fiscal operations in existing invoicing, POS and ERP software. This reference covers raw control-unit codes, not TaxID transaction statuses. A signed receipt does not establish central KRA acceptance.</p>
+      <p class="subtitle">OSCU/VSCU <code>resultCd</code> reference — including reported codes outside the cited KRA specification.</p>
       <div class="warning-banner">
         <strong>⚠️ Critical: Multiple success-code variants exist</strong>
         KRA returns <code>"000"</code> (OSCU spec §4.18 — also confirmed live from the VSDC 2.0.6 JAR), <code>"0000"</code> (observed live from GavaConnect), and <code>"00"</code> has been reported for the VSCU JAR. Never hardcode a single string. Always check membership in <code>{"0", "00", "000", "0000"}</code>.
@@ -102,16 +103,16 @@
       <div class="filters">
         <button class="filter-btn active" data-filter="All">All</button>
         <button class="filter-btn" data-filter="Official">Official Spec</button>
-        <button class="filter-btn" data-filter="Production">Production Only</button>
+        <button class="filter-btn" data-filter="Reported">Reported</button>
         <button class="filter-btn" data-filter="Client">Client-Side</button>
-        <button class="filter-btn" data-filter="Gotcha">Has Gotcha</button>
+        <button class="filter-btn" data-filter="Gotcha">Has Notes</button>
       </div>
     </div>
     <div id="results"></div>
     <div id="empty-state">No matching codes found. <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new" target="_blank">Open an issue</a> to add this code.</div>
     <footer>
       <p>Maintained by <a href="https://github.com/Linkd-TaxID" target="_blank">TaxID</a> · <a href="https://github.com/Linkd-TaxID/kra-etims-sdk" target="_blank">GitHub</a> · <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new" target="_blank">Add a missing code</a></p>
-      <p style="margin-top:8px;">Data sourced from KRA OSCU Specification v2.0 §4.18 and verified production reports.</p>
+      <p style="margin-top:8px;">Data sourced from KRA OSCU Specification v2.0 §4.18 and retained sandbox observations and separately labelled reports.</p>
     </footer>
   </div>
 
@@ -198,7 +199,7 @@
         ? fuse.search(currentQuery).map(r => r.item)
         : ERRORS;
 
-      // "Has Gotcha" filters on the gotcha field being present, regardless of category
+      // "Has Notes" filters on the gotcha field being present, regardless of category
       if (currentFilter === 'Gotcha') {
         entries = entries.filter(e => !!e.gotcha);
       } else if (currentFilter !== 'All') {
@@ -250,11 +251,11 @@
             <ul>${e.causes.map(c => `<li>${hl(c, q)}</li>`).join('')}</ul>
           ` : ''}
           ${e.fix ? `
-            <div class="section-label">Fix</div>
+            <div class="section-label">Resolution</div>
             <div class="fix-box">${hl(e.fix, q)}</div>
           ` : ''}
           ${e.gotcha ? `
-            <div class="section-label">Gotcha</div>
+            <div class="section-label">Notes</div>
             <div class="gotcha-box">${hl(e.gotcha, q)}</div>
           ` : ''}
         </div>
@@ -262,7 +263,7 @@
     }
 
     function badgeClass(category) {
-      const map = { Official: 'badge-official', Production: 'badge-production', Client: 'badge-client' };
+      const map = { Official: 'badge-official', Reported: 'badge-production', Observed: 'badge-official', Client: 'badge-client' };
       return map[category] || 'badge-official';
     }
 

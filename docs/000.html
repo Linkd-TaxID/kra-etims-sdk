@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error 000: Success | KRA eTIMS Error Reference</title>
-  <meta name="description" content="The request was processed successfully. This is the OSCU spec code per §4.18.">
+  <meta name="description" content="Documented success code. The retained VSDC 2.0.6 sandbox campaign also returned 000.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/000.html">
@@ -12,9 +12,9 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 000 — Success",
-  "description": "The request was processed successfully. This is the OSCU spec code per §4.18.",
+  "description": "Documented success code. The retained VSDC 2.0.6 sandbox campaign also returned 000.",
   "url": "https://docs.taxid.co.ke/000.html",
-  "dateModified": "2026-07-07",
+  "dateModified": "2026-10-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -83,12 +83,12 @@
         <span class="badge" style="background:#d1ecf1;color:#0c5460">Official</span>
       </div>
       <h1>Success</h1>
-      <p>The request was processed successfully. This is the OSCU spec code per §4.18.</p>
-      
-      <div class="section-label">Fix</div>
-       <div class="fix-box">No action needed.</div>
-      <div class="section-label">Gotcha</div>
-       <div class="gotcha-box">Success-code shape varies by integration path: &quot;000&quot; per the OSCU spec §4.18 — and live signings against the real VSDC 2.0.6 sandbox JAR also return &quot;000&quot; (verified 2026-07-06); &quot;0000&quot; observed live from GavaConnect; &quot;00&quot; reported for the VSCU JAR but unconfirmed by direct observation. Never hardcode a single string. Always check membership in {&quot;0&quot;, &quot;00&quot;, &quot;000&quot;, &quot;0000&quot;}.</div>
+      <p>Documented success code. The retained VSDC 2.0.6 sandbox campaign also returned 000.</p>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
+
+      <div class="section-label">Resolution</div>
+       <div class="fix-box">Inspect the endpoint response and required receipt fields; success does not establish central KRA acceptance.</div>
+
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./00.html">00 — Success (Reported VSCU JAR Variant)</a><a class="related-link" href="./0000.html">0000 — Success (GavaConnect Variant)</a><a class="related-link" href="./001.html">001 — No Search Result</a></div>
     </div>

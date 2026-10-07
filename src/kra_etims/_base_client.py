@@ -84,8 +84,8 @@ class _BaseKRAeTIMSClient(ABC):
 
     def __init__(
         self,
-        client_id: str,
-        client_secret: str,
+        client_id: str = "",
+        client_secret: str = "",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
     ) -> None:
@@ -93,13 +93,13 @@ class _BaseKRAeTIMSClient(ABC):
         self._client_secret = client_secret
 
         env_url = (os.getenv("TAXID_API_URL") or "").strip()
-        raw_url = env_url or base_url or _DEFAULT_BASE_URL
+        raw_url = base_url if base_url is not None else (env_url or _DEFAULT_BASE_URL)
         self.base_url = raw_url.strip().rstrip("/").strip()
 
         # Opaque TaxID credential takes priority over OAuth2 token acquisition
-        # (env var overrides constructor arg). Both use the standard Bearer
+        # (explicit values override environment defaults). Both use the standard Bearer
         # transport; the server continues accepting X-API-Key for older SDKs.
-        self._api_key: Optional[str] = os.getenv("TAXID_API_KEY") or api_key
+        self._api_key: Optional[str] = api_key if api_key is not None else os.getenv("TAXID_API_KEY")
 
         # OAuth2 token state — written under subclass-specific lock.
         self._access_token: Optional[str] = None

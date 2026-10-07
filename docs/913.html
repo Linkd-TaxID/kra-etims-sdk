@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error 913: Code Value Error Among Request Parameters | KRA eTIMS Error Reference</title>
-  <meta name="description" content="A field contains a value that is not in the KRA code table for that field. The resultMsg names the offending field path, e.g. pkgUnitCd inside itemList.">
+  <meta name="description" content="Code-value validation failed. Observed in the retained VSDC 2.0.6 sandbox campaign on 2026-07-07.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/913.html">
@@ -12,9 +12,9 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 913 — Code Value Error Among Request Parameters",
-  "description": "A field contains a value that is not in the KRA code table for that field. The resultMsg names the offending field path, e.g. pkgUnitCd inside itemList.",
+  "description": "Code-value validation failed. Observed in the retained VSDC 2.0.6 sandbox campaign on 2026-07-07.",
   "url": "https://docs.taxid.co.ke/913.html",
-  "dateModified": "2026-07-08",
+  "dateModified": "2026-10-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -80,16 +80,15 @@
     <div class="card">
       <div class="card-top">
         <span class="code">913</span>
-        <span class="badge" style="background:#f8d7da;color:#721c24">Production</span>
+        <span class="badge" style="background:#d1ecf1;color:#0c5460">Observed</span>
       </div>
       <h1>Code Value Error Among Request Parameters</h1>
-      <p>A field contains a value that is not in the KRA code table for that field. The resultMsg names the offending field path, e.g. 'Code value error among request parameters [&lt;itemList&gt;&lt;pkgUnitCd&gt;]'.</p>
-      <div class="section-label">Likely Causes</div>
-       <ul><li>pkgUnitCd populated with a quantity-unit code — ‘U’ (Unit) belongs to the quantity-unit table (spec §4.6), not the packaging-unit table (§4.5)</li><li>Any enumerated field (pkgUnitCd, qtyUnitCd, pmtTyCd, taxTyCd) populated with a value outside its spec §4 code table</li></ul>
-      <div class="section-label">Fix</div>
-       <div class="fix-box">Read the field path in resultMsg, then re-check that field against its code table in spec §4. For pkgUnitCd use packaging-unit codes (§4.5, e.g. NT = Net); for qtyUnitCd use quantity-unit codes (§4.6, e.g. U = Unit). Confirmed live: pkgUnitCd ‘U’ fails saveSales with 913; ‘NT’ signs.</div>
-      <div class="section-label">Gotcha</div>
-       <div class="gotcha-box">saveItems does NOT validate these code fields — only saveSales does. An item can register successfully with a bad pkgUnitCd and then 913 every sale that references it. Stock movements can also pass while sales fail, hiding the bad registry row. Confirmed live against VSDC 2.0.6, 2026-07-07.</div>
+      <p>Code-value validation failed. Observed in the retained VSDC 2.0.6 sandbox campaign on 2026-07-07.</p>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
+
+      <div class="section-label">Resolution</div>
+       <div class="fix-box">Read the field path in resultMsg and use its own code table: packaging and quantity units differ. The campaign rejected pkgUnitCd U and accepted NT.</div>
+
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./910.html">910 — Request Parameter Error</a><a class="related-link" href="./912.html">912 — Request Method Error</a></div>
     </div>

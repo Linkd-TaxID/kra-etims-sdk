@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error 990: Rate Limit Exceeded | KRA eTIMS Error Reference</title>
-  <meta name="description" content="Too many requests to a fetch or search endpoint within the allowed window.">
+  <meta name="description" content="Request limit exceeded.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/990.html">
@@ -12,9 +12,9 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 990 — Rate Limit Exceeded",
-  "description": "Too many requests to a fetch or search endpoint within the allowed window.",
+  "description": "Request limit exceeded.",
   "url": "https://docs.taxid.co.ke/990.html",
-  "dateModified": "2026-07-07",
+  "dateModified": "2026-10-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -83,13 +83,12 @@
         <span class="badge" style="background:#d1ecf1;color:#0c5460">Official</span>
       </div>
       <h1>Rate Limit Exceeded</h1>
-      <p>Too many requests to a fetch or search endpoint within the allowed window.</p>
-      <div class="section-label">Likely Causes</div>
-       <ul><li>Polling selectCodes or selectItems too frequently</li>
-<li>Bulk sync operations without throttling</li></ul>
-      <div class="section-label">Fix</div>
-       <div class="fix-box">Back off and retry with exponential delay. Cache code list and item classification responses — fetch them once at initialization and refresh on a schedule, not on every transaction.</div>
-      
+      <p>Request limit exceeded.</p>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
+
+      <div class="section-label">Resolution</div>
+       <div class="fix-box">Back off read-only queries and cache reference data. For a fiscal mutation, investigate the original transaction before considering replay.</div>
+
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./894.html">894 — Server Communication Error</a><a class="related-link" href="./999.html">999 — Unknown Error</a><a class="related-link" href="./001.html">001 — No Search Result</a></div>
     </div>

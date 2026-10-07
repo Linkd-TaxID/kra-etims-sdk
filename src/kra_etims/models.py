@@ -394,6 +394,7 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
 
     payload = {
         "supplierPin":     invoice.tin,
+        "clientReference": invoice.invcNo,
         "amount":          str(invoice.totAmt),
         "invoiceDate":     invoice_date,
         "itemDescription": description,

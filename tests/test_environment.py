@@ -3,7 +3,7 @@ from kra_etims.client import KRAeTIMSClient
 
 def test_url_resolution_priority(monkeypatch):
     """
-    Priority: TAXID_API_URL > constructor kwarg > hardcoded default.
+    Priority: Constructor kwarg > TAXID_API_URL > hardcoded default.
     """
     # 1. Fallback to hardcoded default
     monkeypatch.delenv("TAXID_API_URL", raising=False)
@@ -14,10 +14,12 @@ def test_url_resolution_priority(monkeypatch):
     client_kwarg = KRAeTIMSClient("id", "secret", base_url="https://sandbox.test.co.ke")
     assert client_kwarg.base_url == "https://sandbox.test.co.ke"
 
-    # 3. Env var override (highest priority)
+    # 3. Explicit per-client URL remains authoritative
     monkeypatch.setenv("TAXID_API_URL", "https://env.api.test")
     client_env = KRAeTIMSClient("id", "secret", base_url="https://sandbox.test.co.ke")
-    assert client_env.base_url == "https://env.api.test"
+    assert client_env.base_url == "https://sandbox.test.co.ke"
+    with KRAeTIMSClient("id", "secret") as client_fallback:
+        assert client_fallback.base_url == "https://env.api.test"
 
 def test_url_sanitization():
     """

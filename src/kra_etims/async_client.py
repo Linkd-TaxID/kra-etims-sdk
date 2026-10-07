@@ -63,8 +63,8 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
 
     def __init__(
         self,
-        client_id: str,
-        client_secret: str,
+        client_id: str = "",
+        client_secret: str = "",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
     ) -> None:

@@ -1,13 +1,10 @@
-# Contributing to the Error Code Reference
+# Contributing to the response-code reference
 
-If you've encountered a KRA eTIMS resultCd not listed here, open an issue with:
+Report a missing or incorrect code with the endpoint, runtime version,
+environment, exact resultCd and redacted resultMsg. Distinguish a reproducible
+observation from an interpretation. Exclude credentials, device keys and buyer data.
 
-- The exact resultCd value
-- The endpoint that returned it
-- The resultMsg if present
-- Whether you are on OSCU or VSCU
-- Sandbox or production environment
+Edit `docs/errors.js`, then run `node scripts/generate-pages.js` to regenerate
+the code pages and `docs/errors.json`. Keep the FAQ body and structured data consistent.
 
-Every confirmed code improves this for the next developer who hits it at midnight.
-
-Open an issue: https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new
+[Open an issue](https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new).

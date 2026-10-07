@@ -1,95 +1,36 @@
-# KRA eTIMS OSCU/VSCU API Response Codes — Complete Reference
-# Source: KRA OSCU Specification Document v2.0, April 2023, §4.18
-# Maintained by: Linkd TaxID — https://github.com/Linkd-TaxID/kra-etims-sdk
-# Live reference: https://linkd-taxid.github.io/kra-etims-sdk/
-# Machine-readable data: https://linkd-taxid.github.io/kra-etims-sdk/errors.json
-# Last updated: 2026-09-23
+# TaxID integration reference
 
-## CRITICAL: Three success codes exist
+TaxID embeds fiscal operations in partners’ existing invoicing, accounting,
+POS and ERP software. Current invited access is a simulator. Production access
+requires merchant authorization, real KRA evidence and applicable approval.
 
-resultCd "000"  = success (OSCU spec §4.18)
-resultCd "00"   = success (VSCU JAR only — not in spec, confirmed production)
-resultCd "0000" = success (GavaConnect only — not in spec, confirmed production)
+## Contracts
 
-Never hardcode equality to "000". Always check membership in {"00", "000", "0000"}.
-Any hardcoded `if resultCd == "000"` check will silently treat VSCU success as failure.
+- Keep branch API keys server-side. Invitation links open the workspace; they
+  are not application credentials.
+- Submit POST /v2/etims/sale. Retain clientReference, idempotency key and exact
+  request body. Retrieve GET /v2/etims/sales/search?clientReference=<encoded>.
+- SIGNED means a persisted control-unit receipt, not central KRA acceptance.
+  SIMULATED output makes no KRA submission.
+- OUTCOME_UNKNOWN and RECONCILIATION_REQUIRED require investigation of the
+  original transaction, not automatic resubmission or a replacement reference.
+- Raw resultCd values differ from TaxID HTTP errors and transaction statuses.
+  Duplicate codes do not recover receipt signatures or prove identical contents.
+- VSCU signing uses /trnsSales/saveSales. Do not invent a second saveInvoice call.
+- Initialization 902 does not recover cmcKey. Retain the original key securely;
+  missing device credentials require operator recovery.
+- Rates and classifications require current reference data and merchant mapping.
+  Historical sample rates are not current tax advice.
 
-## CRITICAL: KRA always returns HTTP 200, even for errors
+## Sources
 
-The KRA GavaConnect API returns HTTP 200 for all responses — including failures.
-Always check the resultCd field in the response body. Never trust the HTTP status alone.
+Official: cited KRA v2.0 response-code tables.
+Observed: retained, version-specific TaxID sandbox evidence.
+Reported: external reports requiring independent verification.
 
-## Official Codes (KRA OSCU Spec v2.0 §4.18)
-
-resultCd 000  | Success — request processed
-resultCd 001  | No search result — NOT an error. Treat as empty list []. Never raise an exception.
-resultCd 891  | Client | URL construction error — whitespace in endpoint path
-resultCd 892  | Client | Header construction error — cmcKey null or missing
-resultCd 893  | Client | Request body serialization error — invoice number sent as string not integer
-resultCd 894  | Client | Server communication error — check connectivity, VSCU 24hr ceiling
-resultCd 895  | Client | Unallowed request method — wrong HTTP verb
-resultCd 896  | Client | Request status error — unexpected HTTP status from proxy/backend
-resultCd 899  | Client | Generic client error — inspect resultMsg for detail
-resultCd 900  | Server | No header information — tin/bhfId/cmcKey missing from request
-resultCd 901  | Server | Not a valid device — dvcSrlNo not registered with KRA. Unrecoverable without KRA intervention. Contact timsupport@kra.go.ke.
-resultCd 902  | Server | Device already installed — idempotent, not a failure. The 902 body does NOT return the cmcKey (verified live: data:null). Use the cmcKey persisted at first initialization; if lost, contact timsupport@kra.go.ke to de-register the serial. Do not re-initialize.
-resultCd 903  | Server | Device type mismatch — VSCU serial on OSCU endpoint or vice versa. Unrecoverable without KRA.
-resultCd 910  | Server | Request parameter error — missing/malformed field. Common: cmcKey absent, invoice number as string, tax fields missing.
-resultCd 911  | Server | Empty request body
-resultCd 912  | Server | Request method error — wrong endpoint path. OSCU: /saveTrnsSalesOsdc. VSCU: /trnsSales/saveSales then /trnsSales/saveInvoice.
-resultCd 921  | Server | Sales invoice sequence violation — call saveSales before saveInvoice (VSCU only). OSCU uses a single combined call.
-resultCd 922  | Server | Invoice ordering error — same as 921 from opposite direction. Race condition in concurrent sales.
-resultCd 990  | Server | Rate limit exceeded — back off, cache selectCodes responses
-resultCd 991  | Server | Error during registration — retry once, escalate to KRA if persistent
-resultCd 992  | Server | Error during modification — retry once
-resultCd 993  | Server | Error during deletion — retry once
-resultCd 994  | Server | Duplicate record — treat as IDEMPOTENT SUCCESS on retry. The invoice was already registered.
-resultCd 995  | Server | No downloaded file — re-fetch notice list to verify document exists
-resultCd 999  | Server | Unknown error — log full request/response with resultDt, contact timsupport@kra.go.ke
-
-## Production-Only Codes (confirmed in production, absent from official spec)
-
-resultCd "00"   | VSCU JAR success variant — functionally identical to 000
-resultCd "0000" | GavaConnect success variant — functionally identical to 000
-resultCd E04    | Device/Branch not found — bhfId not registered for this TIN. Sandbox bhfId: 00.
-resultCd E11    | VSCU memory full — restart VSCU JAR after ensuring connectivity and sync
-resultCd 905    | OSCU-only device on VSCU endpoint — contact KRA, no self-service path
-resultCd 913    | Code value error among request parameters — a field holds a value outside its spec §4 code table; resultMsg names the field, e.g. [<itemList><pkgUnitCd>]. Classic trigger: pkgUnitCd 'U' (a §4.6 quantity-unit code) instead of a §4.5 packaging code like NT. saveItems does not validate these fields — only saveSales does, so a bad item registers fine and then 913s every sale. Confirmed live on VSDC 2.0.6, 2026-07-07.
-
-## Key integration facts
-
-- KRA API always returns HTTP 200. Always inspect resultCd in the response body.
-- resultCd 001 is NOT an error. It means no records exist yet. Treat as empty list.
-- VSCU requires two sequential calls: POST /trnsSales/saveSales then POST /trnsSales/saveInvoice.
-- OSCU uses one combined call: POST /saveTrnsSalesOsdc.
-- Mixing OSCU and VSCU paths causes resultCd 921 or 922.
-- cmcKey is issued once at device initialization. Never log it. Never rotate it.
-- cmcKey must appear in every OSCU transaction request body after initialization.
-- Invoice numbers must be sequential integers (1, 2, 3...). Never strings. Never reused after cancellation.
-- All 15 tax fields are required: taxblAmtA/B/C/D/E, taxRtA/B/C/D/E, taxAmtA/B/C/D/E. Set to 0 if unused.
-- VSCU stops issuing receipt numbers exactly 24 hours after last successful KRA connection. No warning signal.
-- resultCd 994 on retry = the original submission succeeded. Treat as idempotent success.
-- Discounts: the validator recomputes dcAmt = qty x prc x dcRt / 100 with dcRt ROUNDED TO A WHOLE PERCENT (spec says NUMBER(5,2)).
-  dcRt 1.54 on a 3,250 line -> 'Invalid dcAmt for item: 1. Expected: 65.00, But Found: 50.05' (OSCU/GavaConnect, issue #31).
-  Send dcRt only for whole-percent discounts; otherwise price the line net (dcRt 0), splitting it one cent apart when the net total does not divide by qty.
-- resultCd 902 on re-initialization = device already active. The response does NOT return the cmcKey (data:null) — reuse the one persisted at first init; do not fail, do not re-initialize.
-- Sandbox device serial: dvcv1130. Sandbox bhfId: 00.
-- KRA support: timsupport@kra.go.ke — include full request payload and resultDt timestamp.
-
-## Tax band codes (KRA eTIMS v2.0 §4.1)
-
-Band A = 0%  Exempt (no input VAT credit)
-Band B = 16% Standard VAT
-Band C = 0%  Zero-Rated (input credit allowed)
-Band D = 0%  Non-VAT (outside VAT Act)
-Band E = 8%  Special Rate (petroleum products, LPG)
-
-WARNING: A is NOT 16% and B is NOT 0%. This ordering is counterintuitive but is
-explicit in KRA VSCU/OSCU Specification v2.0 §4.1. Swapping A and B is the most
-common tax integration error and produces incorrect Z-Report aggregation.
-
-## SDK
-
+Reference: https://docs.taxid.co.ke/
+Machine-readable codes: https://docs.taxid.co.ke/errors.json
+VSCU specification: https://www.kra.go.ke/images/publications/VSCU_Specification_Document_v2.0.pdf
+OSCU specification: https://www.kra.go.ke/images/publications/OSCU_Specification_Document_v2.0.pdf
 Python SDK: https://github.com/Linkd-TaxID/kra-etims-sdk
-pip install taxid-etims
-(The old PyPI name kra-etims-sdk is frozen at 0.1.5 — do not install it.)
+Package: taxid-etims; import: kra_etims

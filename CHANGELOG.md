@@ -1,3 +1,11 @@
+## Unreleased — developer preview authentication
+
+- Support sync and async API-key clients without dummy OAuth credentials.
+- Make explicit API keys and base URLs override environment defaults, so
+  different merchant clients can coexist safely in one process.
+- Preserve the source invoice number as `clientReference` for workspace lookup.
+- Retain environment fallback and positional OAuth configuration.
+
 # Changelog
 
 All notable changes to kra-etims-sdk are documented here.

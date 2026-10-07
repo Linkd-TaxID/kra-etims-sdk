@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error 912: Request Method Error | KRA eTIMS Error Reference</title>
-  <meta name="description" content="Endpoint routing mismatch — the endpoint path does not match the expected route.">
+  <meta name="description" content="Request method error.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/912.html">
@@ -12,9 +12,9 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 912 — Request Method Error",
-  "description": "Endpoint routing mismatch — the endpoint path does not match the expected route.",
+  "description": "Request method error.",
   "url": "https://docs.taxid.co.ke/912.html",
-  "dateModified": "2026-07-07",
+  "dateModified": "2026-10-07",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -83,15 +83,14 @@
         <span class="badge" style="background:#d1ecf1;color:#0c5460">Official</span>
       </div>
       <h1>Request Method Error</h1>
-      <p>Endpoint routing mismatch — the endpoint path does not match the expected route.</p>
-      <div class="section-label">Likely Causes</div>
-       <ul><li>Trailing slash on endpoint path</li>
-<li>Wrong endpoint path — VSCU and OSCU use different paths for equivalent operations</li></ul>
-      <div class="section-label">Fix</div>
-       <div class="fix-box">OSCU uses /saveTrnsSalesOsdc for sales. VSCU uses two separate calls: /trnsSales/saveSales then /trnsSales/saveInvoice. These are not interchangeable.</div>
-      
+      <p>Request method error.</p>
+      <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
+
+      <div class="section-label">Resolution</div>
+       <div class="fix-box">Verify the method and documented route. The VSCU sale endpoint is POST /trnsSales/saveSales; no second saveInvoice call is required by the retained TaxID signing flow.</div>
+
       <div class="section-label">Related Errors</div>
-       <div class="related-list"><a class="related-link" href="./911.html">911 — Empty Request Body</a><a class="related-link" href="./921.html">921 — Sales Invoice Sequence Violation</a><a class="related-link" href="./895.html">895 — Unallowed Request Method</a></div>
+       <div class="related-list"><a class="related-link" href="./911.html">911 — Empty Request Body</a><a class="related-link" href="./921.html">921 — Sales Data Rejected</a><a class="related-link" href="./895.html">895 — Unallowed Request Method</a></div>
     </div>
     <footer>
       <p>Part of the <a href="https://docs.taxid.co.ke/">KRA eTIMS Error Code Reference</a> · Maintained by <a href="https://github.com/Linkd-TaxID">Linkd TaxID</a></p>
