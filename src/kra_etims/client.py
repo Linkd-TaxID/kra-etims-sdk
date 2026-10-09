@@ -57,6 +57,12 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             receipt = client.submit_sale(invoice)
     """
 
+    @property
+    def withholding(self):
+        """Accounting ledger and supplied remittance evidence; no KRA money movement."""
+        from .withholding import WithholdingInterface
+        return WithholdingInterface(self)
+
     def __init__(
         self,
         client_id: str = "",
@@ -328,6 +334,9 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         original_purchase_id: int,
         reason: Optional[str] = None,
         items: Optional[List[Dict[str, Any]]] = None,
+        *,
+        client_reference: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Issue a credit note against a previously signed sale.
@@ -336,23 +345,27 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         retrieves the original invoice, constructs the KRA credit note payload,
         signs it via the VSCU JAR, and returns the signed receipt.
 
-        If ``items`` is ``None`` the full original invoice is reversed.
-        Supply ``items`` only to partially reverse specific line items.
+        With ``items=None``, the supported flat original invoice is reversed in full.
+        The items argument is retained for wire compatibility; partial and canonical
+        itemised corrections remain gated by the middleware.
+        Retain the same correction identity across retries.
 
-        Multiple credit notes may be issued against one receipt (e.g. items returned
-        across separate visits) as long as the cumulative reversed amount does not
-        exceed the original (middleware V15).
-
+        :param client_reference: Stable partner correction reference (keyword only).
+        :param idempotency_key: Stable correction operation key (keyword only).
         :param original_purchase_id: TIaaS database ID of the original sale.
         :param reason: Human-readable reversal reason (optional).
-        :param items: Partial line items to reverse; ``None`` reverses the full invoice.
+        :param items: Reserved partial-item payload; currently gated. Use ``None``.
         :raises CreditNoteExceedsOriginalError: HTTP 422 — the reversal would exceed the
             receipt's remaining reversible balance (carries ``remaining``).
         :raises KRAeTIMSError: HTTP 404 — original sale not found.
         :raises KRAConnectivityTimeoutError: VSCU offline ceiling breached (HTTP 503).
         """
         with _span("kra_etims.issue_credit_note", {"sale.id": str(original_purchase_id)}):
+            if not client_reference and not idempotency_key:
+                raise ValueError("Credit notes require a stable client_reference or idempotency_key")
             body: Dict[str, Any] = {}
+            if client_reference is not None:
+                body["clientReference"] = client_reference
             if reason is not None:
                 body["reason"] = reason
             if items is not None:
@@ -360,6 +373,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             return self._request(
                 "POST", f"/v2/etims/sale/{original_purchase_id}/credit-note",
                 json=body if body else None,
+                idempotency_key=idempotency_key,
             )
 
     def submit_reverse_invoice(self, invoice: ReverseInvoice) -> Dict[str, Any]:
