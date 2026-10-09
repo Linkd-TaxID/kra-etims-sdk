@@ -1,9 +1,6 @@
 # Reproduce the synthetic marketplace demonstration
 
 TaxID supports any authorised application; this marketplace is one example.
-The existing `examples/tihada_synthetic.py` entry point and `tihada-fee` event identity
-are retained for compatibility with the companion runner, not as platform-specific behavior.
-
 This example exercises this SDK against TaxID HTTP endpoints and an isolated PostgreSQL
 17 database. All receipts, deductions, payment references and certificates are simulated.
 No KRA service, payment provider or production environment is contacted.
@@ -13,7 +10,7 @@ Python environment containing this SDK's dependencies:
 
 ```sh
 mvn -q -DskipTests compile dependency:build-classpath -Dmdep.outputFile=/tmp/marketplace-classpath
-python3 scripts/tests/tihada-demo.py \
+python3 scripts/tests/marketplace-demo.py \
   --sdk-root /path/to/kra-etims-sdk \
   --python /path/to/sdk-python-environment/bin/python \
   --classpath-file /tmp/marketplace-classpath \
@@ -41,4 +38,4 @@ not revoke the creator's own branch credential. Approval in this sandbox uses di
 credentials, not a verified production operator identity. Production needs verified,
 active, distinct operator subjects and accepted external assessment. Certificate metadata
 is supplied evidence, never independently verified proof. See the companion TaxID
-`docs/tihada/VERIFICATION_REPORT.md` for integration and external prerequisites.
+`docs/SYNTHETIC_MARKETPLACE.md` for integration and external prerequisites.
