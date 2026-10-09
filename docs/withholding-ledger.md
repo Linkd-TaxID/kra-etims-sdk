@@ -1,12 +1,12 @@
-# Withholding ledger — Phase 3
+# Withholding ledger
 
 Requires TaxID's additive `/v2/withholding` routes (V40 migration). Use a branch
 credential or delegated `withholding:read` / `withholding:write` capability.
 Platform master credentials cannot access this ledger. The taxpayer, branch and
 environment come from authentication, never from the request body.
 
-Phase 1 established schedule rates, but did not establish Tihada-specific category,
-basis, deduction trigger, PE/treaty treatment or refund recovery rules. Accordingly,
+Tax treatment depends on the integrating business: category, basis, deduction trigger,
+PE/treaty treatment and refund recovery rules require accepted policy evidence.
 `SIMULATION` policies and deductions require sandbox credentials. Production
 supports explicit `UNCONFIGURED` / `UNSUPPORTED` receipt accounting, with null
 calculated withholding and net payable. No automatic zero-tax interpretation.

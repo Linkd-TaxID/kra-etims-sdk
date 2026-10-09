@@ -1,4 +1,8 @@
-# Reproduce the synthetic Tihada demonstration
+# Reproduce the synthetic marketplace demonstration
+
+TaxID supports any authorised application; this marketplace is one example.
+The existing `examples/tihada_synthetic.py` entry point and `tihada-fee` event identity
+are retained for compatibility with the companion runner, not as platform-specific behavior.
 
 This example exercises this SDK against TaxID HTTP endpoints and an isolated PostgreSQL
 17 database. All receipts, deductions, payment references and certificates are simulated.
@@ -8,12 +12,12 @@ From the companion TaxID checkout, with Java 21, Maven, PostgreSQL 17 binaries a
 Python environment containing this SDK's dependencies:
 
 ```sh
-mvn -q -DskipTests compile dependency:build-classpath -Dmdep.outputFile=/tmp/tihada-classpath
+mvn -q -DskipTests compile dependency:build-classpath -Dmdep.outputFile=/tmp/marketplace-classpath
 python3 scripts/tests/tihada-demo.py \
   --sdk-root /path/to/kra-etims-sdk \
   --python /path/to/sdk-python-environment/bin/python \
-  --classpath-file /tmp/tihada-classpath \
-  --evidence-dir /tmp/tihada-demonstration-new-directory
+  --classpath-file /tmp/marketplace-classpath \
+  --evidence-dir /tmp/marketplace-demonstration-new-directory
 ```
 
 Use a new private directory on every run. Override `--pg-bin` if necessary. The runner
@@ -27,7 +31,7 @@ loopback-only isolated-simulator manifest. Concurrent HTTP retries reuse already
 identities; simultaneous new-operation races are covered by the middleware PostgreSQL tests.
 
 The 5% withholding rate, 7.5% inclusive fee, exhausted waiver and dates are arithmetic
-fixtures, not tax advice or an accepted Tihada policy. Gift classification remains
+fixtures, not tax advice or an accepted business policy. Gift classification remains
 UNRESOLVED and generates no fiscal invoice. Full flat corrections use stable
 `client_reference`/`idempotency_key`; canonical itemised and partial corrections stay gated.
 Refund retains withheld tax for operator review. Payout is projected, never paid.
