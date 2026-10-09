@@ -340,12 +340,17 @@ Full history: [CHANGELOG.md](CHANGELOG.md).
 This SDK is an integration tool, not tax advice. You are responsible for the
 tax treatment of what you submit.
 
-Phase 3 adds an [accounting-only withholding ledger](docs/withholding-ledger.md). Configured calculations and deductions are sandbox simulations; production treatment remains unconfigured. No remittance or certificate API is provided.
+TaxID is platform agnostic: these SDK capabilities are available to any authorised
+application. The [withholding ledger](docs/withholding-ledger.md) records receipt,
+deduction and refund accounting; configured calculations and deductions are sandbox
+simulations, and production treatment remains unconfigured.
 
-Phase 4 adds [authorised creator sessions and operator-assisted evidence](docs/authorised-operations.md),
-with sync/async parity. Reviewed remittance records are supplied, unverified evidence;
-they do not execute KRA payments, filing or certificate issuance. Reverse invoicing stays gated.
+[Scoped application sessions and operator-assisted evidence](docs/authorised-operations.md)
+support separate authorised issuers with sync/async parity. Reviewed remittance records
+remain supplied, unverified evidence; they do not execute KRA payments, filing or
+certificate issuance. Reverse invoicing remains gated.
 
-[Tihada synthetic demonstration](docs/tihada-synthetic.md) exercises the SDK against
-an isolated middleware and PostgreSQL, with process restart evidence. Simulated signing,
-payments and supplied remittance documents do not establish real KRA acceptance.
+The [synthetic marketplace example](docs/synthetic-marketplace.md) exercises the SDK
+against isolated middleware and PostgreSQL, including process restart. It is one example,
+not a restriction on supported platforms. Simulated receipts, payments and remittance
+documents do not establish real-KRA acceptance.

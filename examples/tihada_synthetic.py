@@ -1,4 +1,4 @@
-"""Synthetic Tihada probe for the isolated middleware runner; never targets a public URL.
+"""Synthetic marketplace probe for the isolated middleware runner; never targets a public URL.
 Run scripts/tests/tihada-demo.py in the middleware repository for setup/restart/cleanup.
 """
 import argparse
@@ -84,7 +84,7 @@ def main():
         return
 
     def workspace(label):
-        invitation = call("/v2/admin/preview/invitations", {"email":label+"@example.test", "persona":"DEVELOPER", "clientName":"Synthetic Tihada "+label}, token=operator, expected=201).json()
+        invitation = call("/v2/admin/preview/invitations", {"email":label+"@example.test", "persona":"DEVELOPER", "clientName":"Synthetic marketplace "+label}, token=operator, expected=201).json()
         browser = httpx.Client(base_url=origin, headers={"Origin":origin,"X-Preview-Request":"1"}, timeout=30)
         token = parse_qs(urlparse(invitation["inviteUrl"]).fragment)["token"][0]
         view = call("/v2/preview/redeem", {"token":token}, browser=browser, expected=200).json()
@@ -94,8 +94,8 @@ def main():
 
     creator_browser, creator_tin, creator_key = workspace("creator-one")
     other_browser, other_tin, other_key = workspace("creator-two")
-    payer_browser, payer_tin, payer_key = workspace("tihada-payer")
-    platform = call("/v2/admin/platforms", {"name":"Synthetic Tihada","requestsPerMinute":500}, token=operator, expected=201).json()
+    payer_browser, payer_tin, payer_key = workspace("platform-payer")
+    platform = call("/v2/admin/platforms", {"name":"Synthetic marketplace","requestsPerMinute":500}, token=operator, expected=201).json()
     fiscal_scopes = {"sale:create","sale:read","credit-note:create"}
     def grant(tin, scopes):
         return call(f"/v2/admin/platforms/{platform['platformId']}/grants", {"tin":tin,"bhfId":"00","environment":"SANDBOX","scopes":sorted(scopes),"requestsPerMinute":100}, token=operator, expected=201).json()["grantId"]
@@ -112,14 +112,14 @@ def main():
             with ThreadPoolExecutor(max_workers=2) as pool:
                 duplicates = list(pool.map(lambda _: creator.submit_sale(sale_invoice, idempotency_key="creator-digital-sale"), range(2)))
             check("concurrent sale retries return original", all(r["purchaseId"] == sale["purchaseId"] for r in duplicates))
-            fee = payer.submit_sale(invoice(payer_tin, "tihada-fee", "75", "Synthetic Tihada platform fee"), idempotency_key="tihada-fee")
+            fee = payer.submit_sale(invoice(payer_tin, "tihada-fee", "75", "Synthetic marketplace platform fee"), idempotency_key="tihada-fee")
             check("fee and creator invoices have separate issuers", fee["status"] == "SIGNED" and fee["sdcId"] != sale["sdcId"])
             call(f"/v2/etims/sales/{sale['purchaseId']}/status", token=other_key, expected=404)
             call("/v2/etims/sale", {"supplierPin":payer_tin,"amount":"10","invoiceDate":datetime.now().date().isoformat(),"clientReference":"wrong-creator"}, token=creator_session.accessToken.get_secret_value(), expected=403)
             call("/v2/etims/sale", {}, token=platform["platformSecret"], expected=403)
 
             now = datetime.now(timezone.utc)
-            policy = WithholdingPolicy(policyId="fixture",version=1,treatment="SIMULATION",category="MARKETPLACE_RESIDENT",basis="GROSS_RECEIPTS",effectiveFrom=now-timedelta(days=1),effectiveUntil=now+timedelta(days=1),decisionEvidence="Synthetic 5% arithmetic fixture; no Tihada legal determination")
+            policy = WithholdingPolicy(policyId="fixture",version=1,treatment="SIMULATION",category="MARKETPLACE_RESIDENT",basis="GROSS_RECEIPTS",effectiveFrom=now-timedelta(days=1),effectiveUntil=now+timedelta(days=1),decisionEvidence="Synthetic 5% arithmetic fixture; no accepted business tax determination")
             payer.withholding.create_policy(policy)
             receipt = WithholdingReceipt(eventId="product-payment",creatorId="creator-one",policyId="fixture",policyVersion=1,occurredAt=now,grossReceipts="1000",platformFee="64.66",receiptVat="137.93",platformFeeVat="10.34",sourceEvidence=f"SIMULATED payment; creator sale {sale['purchaseId']}; fee invoice {fee['purchaseId']}; assumes fee VAT-inclusive; no provider payment")
             calculated = payer.withholding.record_receipt(receipt)
