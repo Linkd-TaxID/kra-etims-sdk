@@ -369,7 +369,10 @@ class _BaseKRAeTIMSClient(ABC):
             "invoice_no":      invoice_no,
             "status":          "success",
             "data":            outcome,
-            "signed":          sale_state not in _UNSETTLED_SALE_STATES,
+            "signed":          sale_state == "SIGNED" and all(
+                isinstance(outcome.get(field), str) and outcome[field].strip()
+                for field in ("cuInvoiceNumber", "sdcId", "receiptSignature")
+            ),
             "sale_status":     sale_state,
             "idempotency_key": idem_key,
         }
