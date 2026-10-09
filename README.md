@@ -194,20 +194,19 @@ except TIaaSAmbiguousStateError:
 ## Credit notes
 
 ```python
-client.issue_credit_note(original_purchase_id=42, reason="Customer return")   # full original amount
-
-client.issue_credit_note(original_purchase_id=42, reason="One returned", items=[
-    {"sku": "SODA-500", "itemNm": "Soda 500ml", "itemClsCd": "5059690800",
-     "taxTyCd": "B", "qty": 1, "unitPrice": "70.00"},
-])
+client.issue_credit_note(
+    original_purchase_id=42, reason="Customer return",
+    client_reference="refund-event-42", idempotency_key="refund-operation-42",
+)
 ```
 
-With no `items`, the credit note reverses the whole original receipt. A receipt
-can take several credit notes up to its total. After a partial return, reverse
-the rest by listing the remaining lines. Going over the total raises
-`CreditNoteExceedsOriginalError`, which carries `already_reversed` and
-`remaining` as `Decimal`. A credit note that fails at the control unit does not count toward
-the total.
+A stable `client_reference` or `idempotency_key` is required; retain it across retries.
+The currently supported flat-invoice path reverses the full original amount. Canonical
+itemised and partial-line corrections remain gated by the middleware. Passing `items`
+does not enable them. Creator-sale and platform-fee invoices need separate corrections
+under their original issuer grants. An uncertain correction reserves its amount and
+requires reconciliation; it cannot be assumed safe to replace with another request.
+Over-reversal raises `CreditNoteExceedsOriginalError`, with exact Decimal balances.
 
 ## Reports
 
@@ -243,8 +242,9 @@ the `idempotency_key` to reuse on a resend. Success rows add `signed` and
 submits 4 at a time by default. TaxID signs one sale per branch at a time, so
 more concurrency only makes more sales come back `PENDING_SYNC`.
 
-**TaxID Links** (`client.gateway`): reverse invoices for informal suppliers who
-confirm by SMS or WhatsApp. It is disabled on TaxID servers by default.
+**TaxID Links** (`client.gateway`) records supplier outreach and consent. Fiscal
+reverse-invoicing submission remains unavailable pending a verified dedicated KRA
+contract and adapter; a feature flag cannot enable it. Inspect status gate reasons.
 
 ## Async
 
@@ -339,3 +339,13 @@ Full history: [CHANGELOG.md](CHANGELOG.md).
 
 This SDK is an integration tool, not tax advice. You are responsible for the
 tax treatment of what you submit.
+
+Phase 3 adds an [accounting-only withholding ledger](docs/withholding-ledger.md). Configured calculations and deductions are sandbox simulations; production treatment remains unconfigured. No remittance or certificate API is provided.
+
+Phase 4 adds [authorised creator sessions and operator-assisted evidence](docs/authorised-operations.md),
+with sync/async parity. Reviewed remittance records are supplied, unverified evidence;
+they do not execute KRA payments, filing or certificate issuance. Reverse invoicing stays gated.
+
+[Tihada synthetic demonstration](docs/tihada-synthetic.md) exercises the SDK against
+an isolated middleware and PostgreSQL, with process restart evidence. Simulated signing,
+payments and supplied remittance documents do not establish real KRA acceptance.
