@@ -1,5 +1,5 @@
 """Synthetic marketplace probe for the isolated middleware runner; never targets a public URL.
-Run scripts/tests/tihada-demo.py in the middleware repository for setup/restart/cleanup.
+Run scripts/tests/marketplace-demo.py in the middleware repository for setup/restart/cleanup.
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -112,7 +112,7 @@ def main():
             with ThreadPoolExecutor(max_workers=2) as pool:
                 duplicates = list(pool.map(lambda _: creator.submit_sale(sale_invoice, idempotency_key="creator-digital-sale"), range(2)))
             check("concurrent sale retries return original", all(r["purchaseId"] == sale["purchaseId"] for r in duplicates))
-            fee = payer.submit_sale(invoice(payer_tin, "tihada-fee", "75", "Synthetic marketplace platform fee"), idempotency_key="tihada-fee")
+            fee = payer.submit_sale(invoice(payer_tin, "platform-fee", "75", "Synthetic marketplace platform fee"), idempotency_key="platform-fee")
             check("fee and creator invoices have separate issuers", fee["status"] == "SIGNED" and fee["sdcId"] != sale["sdcId"])
             call(f"/v2/etims/sales/{sale['purchaseId']}/status", token=other_key, expected=404)
             call("/v2/etims/sale", {"supplierPin":payer_tin,"amount":"10","invoiceDate":datetime.now().date().isoformat(),"clientReference":"wrong-creator"}, token=creator_session.accessToken.get_secret_value(), expected=403)
