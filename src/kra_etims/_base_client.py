@@ -331,7 +331,11 @@ class _BaseKRAeTIMSClient(ABC):
             raise KRAeTIMSError(f"TIaaS returned HTTP {sc}{suffix}: {message}") from exc
 
         try:
-            response_data = resp.json()
+            if resp.request.url.path.startswith("/v2/withholding/"):
+                from decimal import Decimal
+                response_data = resp.json(parse_float=Decimal)
+            else:
+                response_data = resp.json()
         except (ValueError, httpx.DecodingError):
             raise KRAeTIMSError(
                 f"Non-JSON response from TIaaS [{resp.status_code}]: {resp.text[:200]}"
@@ -369,7 +373,10 @@ class _BaseKRAeTIMSClient(ABC):
             "invoice_no":      invoice_no,
             "status":          "success",
             "data":            outcome,
-            "signed":          sale_state not in _UNSETTLED_SALE_STATES,
+            "signed":          sale_state == "SIGNED" and all(
+                isinstance(outcome.get(field), str) and outcome[field].strip()
+                for field in ("cuInvoiceNumber", "sdcId", "receiptSignature")
+            ),
             "sale_status":     sale_state,
             "idempotency_key": idem_key,
         }

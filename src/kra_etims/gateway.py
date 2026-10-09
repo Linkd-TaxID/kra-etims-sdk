@@ -1,52 +1,15 @@
-"""
-KRA eTIMS SDK — TaxID Links Supplier Gateway
-=============================================
-Wraps the backend "TaxID Links" supplier onboarding flow — the statutory
-mechanism that allows buyers to claim deductions for purchases from informal
-suppliers (kiosks, jua kali, market vendors) who have no eTIMS software.
+"""TaxID Links supplier outreach and consent records.
 
-Background
-----------
-Finance Act 2023 §16(1)(c): buyers cannot claim expense deductions unless the
-purchase is supported by a valid eTIMS invoice. Informal traders rarely have
-TIS software. KRA's Category 5 (Reverse Invoice) spec allows the BUYER to issue
-the invoice on behalf of the supplier — but only with the supplier's explicit
-consent, obtained via an SMS or WhatsApp confirmation.
+Consent does not establish a fiscal invoice. Dedicated KRA reverse-invoicing
+integration remains unavailable even with the server feature flag enabled.
+Status responses expose failure_reason and fiscal_submission_available;
+CONFIRMED means consent recorded, not signing in progress. Do not poll for an
+invoice when fiscal_submission_available is false. Legacy responses omitting
+that field leave availability unknown, not approved.
 
-Flow
-----
-1. Buyer calls ``onboard_supplier()`` (or ``onboard_suppliers()`` for bulk).
-2. TIaaS sends the supplier an SMS/WhatsApp message with the amount and a
-   confirmation token.
-3. Supplier replies "YES {token}" (or "YES {KRA-PIN} {token}" if registered).
-4. TIaaS raises a KRA Category 5 Reverse Invoice, signs it via the VSCU JAR,
-   and persists the purchase record.
-5. Buyer polls ``get_status(request_id)`` until ``status == "SIGNED"``.
-
-Middleware endpoints (ground truth):
-  POST /v2/gateway/supplier-onboarding/single  — single supplier
-  POST /v2/gateway/supplier-onboarding         — bulk (list of suppliers)
-  GET  /v2/gateway/supplier-onboarding/{id}/status
-
-SDK usage (sync):
-    result = client.gateway.onboard_supplier(
-        phone="+254712345678",
-        amount=5000,
-        buyer_pin="A000123456B",
-        buyer_name="Acme Superstore",
-        item_description="Maize supply — March 2026",
-    )
-    print(result.request_id, result.status)   # 42, "PENDING"
-    print(result.token)                        # "XK9T" — embedded in the SMS
-
-    status = client.gateway.get_status(result.request_id)
-    print(status.status)                       # "SIGNED" once trader confirms
-
-SDK usage (async):
-    result = await client.gateway.onboard_supplier(
-        phone="+254712345678", amount=5000,
-        buyer_pin="A000123456B", buyer_name="Acme Superstore",
-    )
+Routes: POST /v2/gateway/supplier-onboarding/single, POST
+/v2/gateway/supplier-onboarding, GET
+/v2/gateway/supplier-onboarding/{id}/status.
 """
 
 from __future__ import annotations
@@ -172,17 +135,19 @@ class SupplierGatewayStatus(BaseModel):
 
     Status lifecycle:
       PENDING   — message sent, awaiting supplier reply
-      CONFIRMED — supplier replied YES; VSCU signing in progress
-      SIGNED    — KRA Category 5 invoice raised and signed; ``purchase_id`` is set
+      CONFIRMED — supplier consent recorded; fiscal submission may remain gated
+      SIGNED    — historical signed outcome; not an available reverse-invoicing contract
       EXPIRED   — supplier did not reply within the expiry window
-      FAILED    — VSCU signing failed; see middleware logs
+      FAILED    — initiation/submission failed; inspect failure_reason
     """
     request_id:     int
     status:         str
     supplier_phone: Optional[str]    = None
     amount:         Optional[Decimal] = None
     channel:        Optional[str]    = None
-    purchase_id:    Optional[int]    = None   # set when status == "SIGNED"
+    purchase_id:    Optional[int]    = None
+    failure_reason: Optional[str]    = None
+    fiscal_submission_available: Optional[bool] = None
     expires_at:     Optional[str]    = None
     raw:            Optional[Dict[str, Any]] = Field(None, exclude=True)
 
@@ -197,6 +162,8 @@ class SupplierGatewayStatus(BaseModel):
             amount=Decimal(str(raw_amount)) if raw_amount is not None else None,
             channel=payload.get("channel"),
             purchase_id=payload.get("purchaseId"),
+            failure_reason=payload.get("failureReason"),
+            fiscal_submission_available=payload.get("fiscalSubmissionAvailable"),
             expires_at=str(payload["expiresAt"]) if payload.get("expiresAt") else None,
             raw=payload,
         )
@@ -356,8 +323,9 @@ class TaxIDSupplierGateway:
         """
         Poll the status of a supplier onboarding request.
 
-        Poll until ``status == "SIGNED"`` (success) or ``"EXPIRED"/"FAILED"``.
-        ``purchase_id`` is populated once VSCU signing completes.
+        CONFIRMED records consent only. If fiscal_submission_available is false,
+        retain the gate reason and stop waiting for an invoice. Missing availability
+        on an older server is unknown, not permission to submit a reverse invoice.
 
         Parameters
         ----------

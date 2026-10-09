@@ -61,6 +61,12 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
           response = await client.submit_sale(invoice)
     """
 
+    @property
+    def withholding(self):
+        """Accounting ledger and supplied remittance evidence; no KRA money movement."""
+        from .withholding import AsyncWithholdingInterface
+        return AsyncWithholdingInterface(self)
+
     def __init__(
         self,
         client_id: str = "",
@@ -326,22 +332,34 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         original_purchase_id: int,
         reason: Optional[str] = None,
         items: Optional[List[Dict[str, Any]]] = None,
+        *,
+        client_reference: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Issue a credit note against a previously signed sale.
 
         Posts to ``POST /v2/etims/sale/{id}/credit-note``.
 
+        Retain the same correction identity across retries. Itemised corrections remain
+        gated by the middleware; these arguments do not enable unsupported corrections.
+
+        :param client_reference: Stable partner correction reference (keyword only).
+        :param idempotency_key: Stable correction operation key (keyword only).
         :param original_purchase_id: TIaaS database ID of the original sale.
         :param reason: Human-readable reversal reason (optional).
-        :param items: Partial line items to reverse; ``None`` reverses the full invoice.
+        :param items: Reserved partial-item payload; currently gated. Use ``None``.
         :raises CreditNoteExceedsOriginalError: HTTP 422 — reversal exceeds the
             receipt's remaining reversible balance (multiple notes allowed within it).
         :raises KRAeTIMSError: HTTP 404 — original sale not found.
         :raises KRAConnectivityTimeoutError: VSCU offline ceiling breached (HTTP 503).
         """
         with _span("kra_etims.issue_credit_note", {"sale.id": str(original_purchase_id)}):
+            if not client_reference and not idempotency_key:
+                raise ValueError("Credit notes require a stable client_reference or idempotency_key")
             body: Dict[str, Any] = {}
+            if client_reference is not None:
+                body["clientReference"] = client_reference
             if reason is not None:
                 body["reason"] = reason
             if items is not None:
@@ -349,6 +367,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             return await self._request(
                 "POST", f"/v2/etims/sale/{original_purchase_id}/credit-note",
                 json=body if body else None,
+                idempotency_key=idempotency_key,
             )
 
     async def submit_reverse_invoice(
