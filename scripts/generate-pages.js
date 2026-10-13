@@ -64,7 +64,7 @@ function buildPage(e) {
     'name': `KRA eTIMS resultCd ${e.code} — ${e.title}`,
     'description': e.description,
     'url': `${BASE_URL}/${e.code}.html`,
-    'dateModified': '2026-10-07',
+    'dateModified': e.dateModified || '2026-10-07',
     'author': { '@type': 'Organization', 'name': 'Linkd TaxID', 'url': 'https://github.com/Linkd-TaxID' },
     'about': [
       { '@type': 'Thing', 'name': 'KRA eTIMS' },

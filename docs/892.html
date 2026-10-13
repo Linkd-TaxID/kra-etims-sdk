@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error 892: Header Construction Error | KRA eTIMS Error Reference</title>
-  <meta name="description" content="The SCU library failed to construct a required HTTP header.">
+  <meta name="description" content="The specification describes an error while creating request header data. The code alone does not identify the missing or invalid field.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/892.html">
@@ -12,9 +12,9 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 892 — Header Construction Error",
-  "description": "The SCU library failed to construct a required HTTP header.",
+  "description": "The specification describes an error while creating request header data. The code alone does not identify the missing or invalid field.",
   "url": "https://docs.taxid.co.ke/892.html",
-  "dateModified": "2026-10-07",
+  "dateModified": "2026-10-13",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -83,13 +83,11 @@
         <span class="badge" style="background:#fff3cd;color:#856404">Client</span>
       </div>
       <h1>Header Construction Error</h1>
-      <p>The SCU library failed to construct a required HTTP header.</p>
+      <p>The specification describes an error while creating request header data. The code alone does not identify the missing or invalid field.</p>
       <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
-      <div class="section-label">Possible causes</div>
-       <ul><li>Missing required header value in SCU library call</li>
-<li>Null or empty cmcKey passed to OSCU request</li></ul>
+
       <div class="section-label">Resolution</div>
-       <div class="fix-box">Verify all required headers are populated. For OSCU, cmcKey must be present in every transaction request body — it is not optional after initialization.</div>
+       <div class="fix-box">Inspect client/library diagnostics and the headers required by the specific endpoint and runtime. Apply that endpoint’s authentication contract; do not infer a missing communication key from this code alone.</div>
 
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./891.html">891 — URL Construction Error</a><a class="related-link" href="./900.html">900 — No Header Information</a><a class="related-link" href="./910.html">910 — Request Parameter Error</a></div>

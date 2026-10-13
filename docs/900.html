@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Error 900: No Header Information | KRA eTIMS Error Reference</title>
-  <meta name="description" content="A required HTTP header is missing from the request.">
+  <meta name="description" content="The specification describes missing header information. The code alone does not identify which field is absent or where the interface expects it.">
   <meta name="robots" content="index, follow, max-snippet:-1">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/900.html">
@@ -12,9 +12,9 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "KRA eTIMS resultCd 900 — No Header Information",
-  "description": "A required HTTP header is missing from the request.",
+  "description": "The specification describes missing header information. The code alone does not identify which field is absent or where the interface expects it.",
   "url": "https://docs.taxid.co.ke/900.html",
-  "dateModified": "2026-10-07",
+  "dateModified": "2026-10-13",
   "author": {
     "@type": "Organization",
     "name": "Linkd TaxID",
@@ -83,16 +83,13 @@
         <span class="badge" style="background:#d1ecf1;color:#0c5460">Official</span>
       </div>
       <h1>No Header Information</h1>
-      <p>A required HTTP header is missing from the request.</p>
+      <p>The specification describes missing header information. The code alone does not identify which field is absent or where the interface expects it.</p>
       <p>Raw control-unit codes differ from TaxID HTTP errors and transaction statuses. A code alone neither authorizes fiscal replay nor proves central KRA acceptance.</p>
-      <div class="section-label">Possible causes</div>
-       <ul><li>Authorization header missing</li>
-<li>tin, bhfId, or cmcKey missing from OSCU request headers</li>
-<li>Content-Type not set to application/json</li>
-<li>A present-but-empty (0-byte) cmcKey device file on the VSCU path — file-exists bootstrap checks pass, but the JAR sends an empty credential (verified live 2026-07-04)</li></ul>
-      <div class="section-label">Resolution</div>
-       <div class="fix-box">For OSCU, every request after initialization requires tin, bhfId, and cmcKey in the request headers or body depending on the endpoint. Verify all three are present.</div>
 
+      <div class="section-label">Resolution</div>
+       <div class="fix-box">Verify the headers, device identity and authentication fields required by the exact endpoint and runtime. Retain the HTTP status, resultCd and redacted resultMsg to distinguish a client-side validation error from a control-unit response.</div>
+      <div class="section-label">Notes</div>
+       <div class="gotcha-box">OSCU v2.0 §3.3.2.1 lists cmcKey as required for code search, but the adjacent JSON sample omits it. That discrepancy does not establish that omitting the key returns 900, 901, 910 or 892. Earlier project notes associated 900 with an empty local VSCU cmcKey file; treat that as a reported runtime-specific observation, not a universal OSCU cause.</div>
       <div class="section-label">Related Errors</div>
        <div class="related-list"><a class="related-link" href="./910.html">910 — Request Parameter Error</a><a class="related-link" href="./892.html">892 — Header Construction Error</a></div>
     </div>

@@ -65,17 +65,15 @@
     "code": "892",
     "title": "Header Construction Error",
     "category": "Client",
-    "description": "The SCU library failed to construct a required HTTP header.",
-    "causes": [
-      "Missing required header value in SCU library call",
-      "Null or empty cmcKey passed to OSCU request"
-    ],
-    "fix": "Verify all required headers are populated. For OSCU, cmcKey must be present in every transaction request body — it is not optional after initialization.",
+    "description": "The specification describes an error while creating request header data. The code alone does not identify the missing or invalid field.",
+    "causes": [],
+    "fix": "Inspect client/library diagnostics and the headers required by the specific endpoint and runtime. Apply that endpoint’s authentication contract; do not infer a missing communication key from this code alone.",
     "related": [
       "891",
       "900",
       "910"
-    ]
+    ],
+    "dateModified": "2026-10-13"
   },
   {
     "code": "893",
@@ -150,18 +148,15 @@
     "code": "900",
     "title": "No Header Information",
     "category": "Official",
-    "description": "A required HTTP header is missing from the request.",
-    "causes": [
-      "Authorization header missing",
-      "tin, bhfId, or cmcKey missing from OSCU request headers",
-      "Content-Type not set to application/json",
-      "A present-but-empty (0-byte) cmcKey device file on the VSCU path — file-exists bootstrap checks pass, but the JAR sends an empty credential (verified live 2026-07-04)"
-    ],
-    "fix": "For OSCU, every request after initialization requires tin, bhfId, and cmcKey in the request headers or body depending on the endpoint. Verify all three are present.",
+    "description": "The specification describes missing header information. The code alone does not identify which field is absent or where the interface expects it.",
+    "causes": [],
+    "fix": "Verify the headers, device identity and authentication fields required by the exact endpoint and runtime. Retain the HTTP status, resultCd and redacted resultMsg to distinguish a client-side validation error from a control-unit response.",
     "related": [
       "910",
       "892"
-    ]
+    ],
+    "gotcha": "OSCU v2.0 §3.3.2.1 lists cmcKey as required for code search, but the adjacent JSON sample omits it. That discrepancy does not establish that omitting the key returns 900, 901, 910 or 892. Earlier project notes associated 900 with an empty local VSCU cmcKey file; treat that as a reported runtime-specific observation, not a universal OSCU cause.",
+    "dateModified": "2026-10-13"
   },
   {
     "code": "901",
@@ -180,13 +175,14 @@
     "code": "902",
     "title": "Device Already Installed",
     "category": "Official",
-    "description": "The device is already installed. The retained initialization response returned data:null.",
+    "description": "Documented installed-device condition (OSCU v2.0 §4.18; VSCU v2.0 §4.14). This does not guarantee identity/key data is returned or that the application is ready.",
     "causes": [],
-    "fix": "Reuse the cmcKey retained from successful initialization. If it is missing, stop and arrange device recovery with the operator/KRA; this response does not recover the key.",
+    "fix": "For OSCU, verify the matching device identity and issued or retained communication key. For VSCU, verify the retained local device state and application checkpoint. If either is missing, stop for operator/KRA recovery; 902 alone recovers neither credentials nor readiness.",
     "related": [
       "901",
       "903"
-    ]
+    ],
+    "dateModified": "2026-10-13"
   },
   {
     "code": "903",
