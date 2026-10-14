@@ -64,7 +64,6 @@
   function matchesFilter(e) {
     if (filter === 'All') return true;
     if (filter === 'Notes') return !!e.gotcha;
-    if (filter === 'Official') return e.category === 'Official' || e.category === 'Observed';
     return e.category === filter;
   }
 
