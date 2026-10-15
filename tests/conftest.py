@@ -1,8 +1,8 @@
 """
 Shared pytest fixtures for the kra-etims-sdk test suite.
 
-KRA response envelope format (research-validated against KRA OSCU Spec v2.0
-and confirmed in CLAUDE.md §4 Mathematical Integrity):
+KRA response envelope format from KRA OSCU Spec v2.0. Invoice amounts use
+Decimal arithmetic to preserve totals:
 
   {
     "resultCd":  "000",                  # "000" = success (GavaConnect), "00" = VSCU JAR
@@ -193,7 +193,7 @@ def kra_transient_error():
 def minimal_invoice():
     """
     Minimal valid SaleInvoice for use in tests that don't care about item detail.
-    All amounts use Decimal to avoid float drift (CLAUDE.md §4 Mathematical Integrity).
+    All amounts use Decimal to avoid float drift.
     """
     from kra_etims.models import SaleInvoice
     return SaleInvoice(
@@ -215,7 +215,7 @@ def standard_vat_invoice():
     """
     Full invoice with one Band B (Standard VAT 16%) item.
     Tax band mapping per KRA VSCU/OSCU Specification v2.0 §4.1:
-      B = Standard VAT 16% (NOT A — the mapping is counterintuitive, see CLAUDE.md)
+      B = Standard VAT 16% (NOT A — the mapping is counterintuitive)
     Item: 1 × KShs 1,160.00 inclusive → taxable 1,000.00 + tax 160.00
     """
     from kra_etims.models import SaleInvoice, ItemDetail, TaxType

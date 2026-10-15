@@ -74,6 +74,9 @@ otel = [
     "opentelemetry-api>=1.20.0,<2",
 ]
 
+[tool.setuptools]
+include-package-data = false
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["kra_etims*"]

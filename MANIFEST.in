@@ -1,0 +1,6 @@
+include README.md CHANGELOG.md pyproject.toml MANIFEST.in init_device.py
+include scripts/check_distribution.py examples/pos_basket_demo.py
+recursive-include src/kra_etims *.py py.typed
+recursive-include tests *.py *.json
+global-exclude *.py[cod]
+global-exclude __pycache__

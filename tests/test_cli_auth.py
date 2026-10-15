@@ -176,12 +176,12 @@ class TestAuthStatus:
     def test_status_shows_config_values(self, tmp_config: Path, keyring_ok: FakeKeyring) -> None:
         keyring_ok.set("k")
         tmp_config.write_text(
-            '[default]\ntin = "A000999999Z"\nbhf_id = "03"\nbase_url = ""\n',
+            '[default]\ntin = "A000123456B"\nbhf_id = "03"\nbase_url = ""\n',
             encoding="utf-8",
         )
         result = runner.invoke(app, ["auth", "status"])
         assert result.exit_code == 0, result.output
-        assert "A000999999Z" in result.output
+        assert "A000123456B" in result.output
         assert "03" in result.output
 
     def test_status_keyring_unavailable_row(self, tmp_config: Path, keyring_unavailable: Any, monkeypatch: pytest.MonkeyPatch) -> None:

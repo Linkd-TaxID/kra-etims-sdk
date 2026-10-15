@@ -20,3 +20,24 @@ from `docs/assets/search.js` with a local copy of Fuse.js, and the full code lis
 is in the HTML so the page works without JavaScript.
 
 [Open an issue](https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new).
+
+## Publication boundaries
+
+The Pages workflow regenerates the reference and fails if committed outputs drift.
+It copies only the explicit public inventory in `scripts/check_distribution.py`
+into `build/pages-site`, checks that directory, then uploads it to Pages. Source
+Markdown guides remain available in GitHub; local notes, tests and SDK source are
+not Pages inputs. The staged site includes the notices and licenses for its
+vendored fonts and Fuse.js; see `docs/assets/licenses/NOTICE.txt` for provenance.
+Generated reference HTML/JSON, public fonts and reviewed synthetic test fixtures
+are intentional source assets. They are not blanket exemptions for new outputs.
+
+Python dependencies are declared only in `pyproject.toml`. Install development
+requirements with `python -m pip install -e ".[dev,cli]"`. Build packages with
+`python -m build`, then run `python scripts/check_distribution.py --dist-dir dist`
+and `TAXID_DIST_DIR=dist pytest tests/test_distribution.py -q`. The wheel includes
+only the SDK and its metadata. The source archive also includes complete tests,
+synthetic JSON fixtures and the release-inventory checker. Transcript exports,
+local credentials, private agent instructions and audit handoffs are never release
+inputs. Extending a publication inventory requires reviewing the owning build
+script and its rejection tests together.
