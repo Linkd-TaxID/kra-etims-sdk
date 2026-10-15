@@ -1,0 +1,11 @@
+title = "Repository secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+    [[rules.allowlists]]
+    description = "Literal idempotency examples are transaction identities, not credentials"
+    regexTarget = "secret"
+    regexes = ['''^(refund-operation-42|idem-resilience-schrodinger-001|idem-schrod-001)$''']

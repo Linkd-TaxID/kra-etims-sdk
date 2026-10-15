@@ -11,9 +11,7 @@ behavior, and Decimal/rounding drift at volume.
 
 Tenant: a single KRA-sandbox-registered device, the same one used by
 javahouse_day.py / petrol_station_day.py. There is no second real tenant, so
-no cross-tenant isolation scenario runs here (see memory: that dimension was
-already covered in campaign 3/4 with the same tenant across time, not
-concurrently across tenants).
+this harness cannot establish isolation between different tenants.
 
 Usage:
     export SANDBOX_SDK_KEY=...        # tenant-bound SDK key

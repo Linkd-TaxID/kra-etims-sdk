@@ -1,7 +1,7 @@
-# Authorised creator invoicing and operator evidence (Phase 4)
+# Authorised creator invoicing and operator evidence
 
 Requires additive TaxID V41/remittance routes. Ordinary sales must have `invoice.tin`
-equal to the taxpayer on the selected creator grant. Use a separate Tihada grant/client
+equal to the taxpayer on the selected creator grant. Use a separate platform grant/client
 for fee invoices, and separate stable source/idempotency keys. Keep gross creator supply,
 fee, withholding and payout distinct. Retain mandate evidence before an operator issues
 a grant; the SDK never supplies a taxpayer identity to session acquisition.
@@ -13,9 +13,9 @@ with PlatformSessions(platform_secret, base_url=taxid_url) as sessions:
     with sessions.branch_client(creator_grant, environment="SANDBOX",
                                 scopes={"sale:create"}) as creator:
         creator.submit_sale(creator_invoice, idempotency_key=creator_source_key)
-    with sessions.branch_client(tihada_grant, environment="SANDBOX",
-                                scopes={"sale:create"}) as tihada:
-        tihada.submit_sale(fee_invoice, idempotency_key=fee_source_key)
+    with sessions.branch_client(platform_grant, environment="SANDBOX",
+                                scopes={"sale:create"}) as platform:
+        platform.submit_sale(fee_invoice, idempotency_key=fee_source_key)
 ```
 
 `AsyncPlatformSessions` has the same API with awaited methods and async context managers.
@@ -59,7 +59,7 @@ independently verify attachments. Reviewed exports do not execute payments or fi
 
 Responses retain `automaticKraRemittance=False`, `evidenceVerification=SUPPLIED_UNVERIFIED`
 and `CERTIFICATE_RECORDED_UNVERIFIED`. `reconciledSuppliedEvidence` means internal matching
-of operator-supplied evidence, not verified KRA remittance. The separate Phase 3 ledger
+of operator-supplied evidence, not verified KRA remittance. The separate withholding ledger
 retains its original response contract and zero authoritative remitted amount.
 Cancellation is terminal and only before payment evidence. Refunds block subsequent
 progression until external adjustment handling; no tax release or netting is inferred.

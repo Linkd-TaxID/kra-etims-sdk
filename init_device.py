@@ -21,7 +21,6 @@ Optional environment variables:
 """
 
 import os
-import json
 from kra_etims.client import KRAeTIMSClient
 
 
@@ -49,44 +48,20 @@ def run_init_device() -> None:
         )
         raise SystemExit(1)
 
-    if api_key:
-        print(f"[INFO] Using API key authentication (key prefix: {api_key[:6]}…)")
-    else:
-        print(f"[INFO] Using OAuth2 client credentials (client_id={client_id})")
-
-    print(f"[INFO] Connecting to middleware at: {base_url}")
-
-    client = KRAeTIMSClient(
-        client_id=client_id or "",
-        client_secret=client_secret or "",
-        api_key=api_key,
-        base_url=base_url,
-    )
-
-    print("[INFO] Calling initialize_device_handshake() → GET /v2/etims/init-handshake …\n")
+    print("[INFO] Using configured authentication credentials")
+    print("[INFO] Calling initialize_device_handshake()")
     try:
-        response = client.initialize_device_handshake()
-
-        print("[SUCCESS] Handshake completed. Middleware response:")
-        print(json.dumps(response, indent=2, default=str))
-
-        if isinstance(response, dict):
-            cmc_key = (
-                response.get("cmcKey")
-                or (response.get("data", {}).get("cmcKey") if isinstance(response.get("data"), dict) else None)
-            )
-            status = response.get("status") or response.get("resultCd") or response.get("resultMsg")
-
-            if cmc_key:
-                print(f"\n[VERIFIED] cmcKey retrieved and saved: {cmc_key[:8]}…")
-            elif status:
-                print(f"\n[INFO] Middleware status: {status}")
-            else:
-                print("\n[INFO] Response parsed — inspect the JSON above for handshake details.")
-
+        with KRAeTIMSClient(
+            client_id=client_id or "",
+            client_secret=client_secret or "",
+            api_key=api_key,
+            base_url=base_url,
+        ) as client:
+            client.initialize_device_handshake()
+        print("[SUCCESS] Handshake request completed.")
     except Exception as exc:
-        print(f"[ERROR] Handshake failed: {exc}")
-        raise
+        print(f"[ERROR] Handshake failed ({type(exc).__name__}).")
+        raise SystemExit(1) from None
 
     print("\n" + "=" * 60)
     print(" Initialization handshake complete.")

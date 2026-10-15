@@ -8,6 +8,7 @@ Requires:
     - TIaaS middleware running at localhost:8080
     - A valid API key seeded in that instance
 """
+import os
 import time
 import pytest
 from decimal import Decimal
@@ -21,7 +22,7 @@ def test_submit_sale_live():
     client = KRAeTIMSClient(
         client_id="not_used",
         client_secret="not_used",
-        api_key="6c8ed76ce581887c47d518ce6472de47a7331b114a78480a01ee9708659af5b7",
+        api_key=os.environ["SANDBOX_SDK_KEY"],
         base_url="http://localhost:8080",
     )
 

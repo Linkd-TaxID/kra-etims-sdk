@@ -21,6 +21,7 @@ Run it:
     pip install 'taxid-etims[qr]'          # or: clone the SDK repo
     export TAXID_API_URL=https://api.taxid.co.ke
     export TAXID_API_KEY=<your sandbox key>
+    export SANDBOX_TIN=<seller PIN assigned to that key>
     python examples/pos_basket_demo.py
 
 Writes ./pos-receipt.html — open or print it.
@@ -43,7 +44,10 @@ API_KEY = os.environ.get("TAXID_API_KEY")
 if not API_KEY:
     raise SystemExit("Set TAXID_API_KEY (your sandbox API key) before running.")
 
-TIN, BHF = "A008697103A", "00"        # the sandbox tenant this key is bound to
+TIN = os.environ.get("SANDBOX_TIN", "").strip()
+if not TIN:
+    raise SystemExit("Set SANDBOX_TIN to the sandbox seller PIN assigned to your API key.")
+BHF = os.environ.get("SANDBOX_BHF", "00")
 STORE, ADDR = "SOKONI CAFÉ & MART", "Ngong Road · Nairobi"
 
 # --- The basket: (name, seller SKU, KRA commodity code, retail price VAT-incl, band) ---
