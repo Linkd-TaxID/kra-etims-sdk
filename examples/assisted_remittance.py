@@ -1,7 +1,7 @@
 """Synthetic request construction only; no payment, filing or certificate is executed."""
 from datetime import datetime, date, timezone
 from decimal import Decimal
-from kra_etims.remittance import RemittanceExport, RemittanceTransition
+from kra_etims.remittance import RemittanceExport, RemittanceTransition, RemittanceCalendar
 
 
 def synthetic_requests():
@@ -9,7 +9,8 @@ def synthetic_requests():
         amount=Decimal("5.00"), deductedAt=datetime(2026, 10, 9, tzinfo=timezone.utc),
         dueDate=date(2026, 10, 16), deadlineEvidence="Synthetic operator holiday review",
         assessmentEvidence="Synthetic assessment fixture; not an approved production tax policy",
-        deductionEvidence="Synthetic deduction reference; not a real deduction")
+        deductionEvidence="Synthetic deduction reference; not a real deduction",
+        calendar=RemittanceCalendar(version="synthetic-2026",validFrom=date(2026,10,9),validUntil=date(2026,10,31),holidays=[],sourceEvidence="Synthetic calendar only; live holidays need reviewed sources"))
     review = RemittanceTransition(operationId="synthetic-review", action="REVIEW", evidence="Synthetic reviewed export")
     approval = RemittanceTransition(operationId="synthetic-approval", action="APPROVE", evidence="Synthetic independent approval")
     return export, review, approval

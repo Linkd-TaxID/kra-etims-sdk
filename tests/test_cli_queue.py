@@ -196,8 +196,10 @@ class TestQueueUnit:
         client.submit_sale.side_effect = KRADuplicateInvoiceError("dup")
         row = q.pending()[0]
         result = q.flush_one(client, row)
-        assert result["status"] == "already_processed"
-        assert q.status()["completed"] == 1
+        assert result["status"] == "outcome_unknown"
+        assert q.status()["completed"] == 0
+        assert q.status()["outcome_unknown"] == 1
+        assert q.pending() == []
 
     def test_flush_one_generic_exception_marks_failed(self, q: Queue) -> None:
         q.enqueue(_invoice())
@@ -371,7 +373,7 @@ class TestQueueFlushCLI:
         assert result.exit_code == 0, result.output
         assert "failed" in result.output.lower() or "retry" in result.output.lower()
 
-    def test_flush_duplicate_invoice_counts_as_completed(
+    def test_flush_duplicate_invoice_is_held_for_recovery(
         self, db_path: Path, mock_client: MagicMock
     ) -> None:
         q = self._queue(db_path)
@@ -381,5 +383,5 @@ class TestQueueFlushCLI:
             with patch(f"{_CLIENT_MOD}.get_client", return_value=mock_client):
                 result = runner.invoke(app, ["queue", "flush", "--api-key", "dummy"])
         assert result.exit_code == 0, result.output
-        # already_processed is a success outcome — should NOT say "1 failed"
-        assert "0" not in result.output.split("failed")[0].strip()[-3:] or "failed" not in result.output
+        assert q.status()["completed"] == 0
+        assert q.status()["outcome_unknown"] == 1

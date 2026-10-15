@@ -52,14 +52,6 @@ _UNSETTLED_SALE_STATES: frozenset = frozenset(
     {"PENDING_SYNC", "OUTCOME_UNKNOWN", "RECONCILIATION_REQUIRED"}
 )
 
-# Exceptions after which re-submitting with the SAME idempotency key is safe.
-_RETRYABLE_ERRORS = (
-    TIaaSUnavailableError,
-    TIaaSAmbiguousStateError,
-    OSCUUnavailableError,
-    KRAConnectivityTimeoutError,
-)
-
 # Failures where the request provably never reached the server: no TCP/TLS
 # connection was established, or no pooled connection became free in time.
 _NOT_SENT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
@@ -157,9 +149,13 @@ class _BaseKRAeTIMSClient(ABC):
 
         if result_cd in KRA_ERROR_MAP:
             exc_class, default_msg = KRA_ERROR_MAP[result_cd]
-            raise exc_class(f"{default_msg}: {result_msg}")
+            error = exc_class(f"{default_msg}: {result_msg}")
+            error.result_cd = result_cd
+            raise error
 
-        raise KRAeTIMSError(f"KRA Error [{result_cd}]: {result_msg}")
+        error = KRAeTIMSError(f"KRA Error [{result_cd}]: {result_msg}")
+        error.result_cd = result_cd
+        raise error
 
     # ------------------------------------------------------------------
     # Request construction helpers
@@ -253,7 +249,14 @@ class _BaseKRAeTIMSClient(ABC):
         # 503 from TIaaS signals either the 24-hour VSCU offline ceiling or a
         # transient OSCU failure — see _raise_for_503's docstring.
         if resp.status_code == 503:
-            self._raise_for_503(resp)
+            try:
+                self._raise_for_503(resp)
+            except KRAeTIMSError as error:
+                error.http_status = resp.status_code
+                error.idempotency_key = idempotency_key
+                error.requires_reconciliation = method.upper() in _MUTATING_METHODS
+                error.result_cd = getattr(error, "oscu_code", None)
+                raise
 
         try:
             resp.raise_for_status()
@@ -279,13 +282,15 @@ class _BaseKRAeTIMSClient(ABC):
                 _, msg, _ = self._error_fields(exc.response)
                 raise TIaaSAmbiguousStateError(
                     f"Request with this idempotency key is still in flight (HTTP 425): {msg} "
-                    "Retry shortly with the same idempotency key.",
+                    "Retain the original key and inspect its status before considering replay.",
                     idempotency_key=idempotency_key,
                 ) from exc
             if sc == 422:
                 # 422 covers VSCU terminal rejections AND the credit-note
                 # over-reversal guard (middleware V15). Discriminate by body code.
                 body, msg, code = self._error_fields(exc.response)
+                if code in {"IDEMPOTENCY_KEY_REUSED", "FISCAL_IDENTITY_CONFLICT"}:
+                    raise KRAConflictError(msg, code=code) from exc
                 if code == "CREDIT_NOTE_EXCEEDS_ORIGINAL":
                     raise CreditNoteExceedsOriginalError(
                         msg,
@@ -330,18 +335,39 @@ class _BaseKRAeTIMSClient(ABC):
             suffix = f" [{code}]" if code else ""
             raise KRAeTIMSError(f"TIaaS returned HTTP {sc}{suffix}: {message}") from exc
 
+        if resp.status_code in {204,205}:
+            return {}
         try:
             if resp.request.url.path.startswith("/v2/withholding/"):
                 from decimal import Decimal
                 response_data = resp.json(parse_float=Decimal)
             else:
                 response_data = resp.json()
-        except (ValueError, httpx.DecodingError):
+        except (ValueError, httpx.DecodingError) as invalid:
+            if method.upper() in _MUTATING_METHODS:
+                raise TIaaSAmbiguousStateError(
+                    "Unreadable mutation response; inspect the original operation before retrying.",
+                    idempotency_key=idempotency_key,
+                ) from invalid
             raise KRAeTIMSError(
                 f"Non-JSON response from TIaaS [{resp.status_code}]: {resp.text[:200]}"
             )
 
-        self._handle_error_response(response_data)
+        if resp.request.url.path == "/v2/admin/tenants" and isinstance(response_data, list):
+            if not all(isinstance(row, dict) for row in response_data):
+                raise KRAeTIMSError("Invalid tenant summary response")
+            return response_data
+        if isinstance(response_data,list) and resp.request.url.path == "/v2/admin/reconciliation":
+            for row in response_data:self._handle_error_response(row)
+            return response_data
+        try:
+            self._handle_error_response(response_data)
+        except KRAeTIMSError as error:
+            error.http_status = resp.status_code
+            error.idempotency_key = idempotency_key
+            if method.upper() in _MUTATING_METHODS:
+                error.requires_reconciliation = True
+            raise
         return response_data
 
     @staticmethod
@@ -354,17 +380,16 @@ class _BaseKRAeTIMSClient(ABC):
         rejection instead of parsing message. idempotency_key must be
         reused verbatim on any resubmission.
         """
-        if isinstance(outcome, KRADuplicateInvoiceError):
-            return {"invoice_no": invoice_no, "status": "already_processed",
-                    "idempotency_key": idem_key}
         if isinstance(outcome, BaseException):
             return {
                 "invoice_no":      invoice_no,
                 "status":          "error",
                 "message":         str(outcome),
                 "error_type":      type(outcome).__name__,
-                "ambiguous":       isinstance(outcome, TIaaSAmbiguousStateError),
-                "retryable":       isinstance(outcome, _RETRYABLE_ERRORS),
+                "ambiguous":       isinstance(outcome, TIaaSAmbiguousStateError) or getattr(outcome, "requires_reconciliation", False),
+                "retryable":       isinstance(outcome, TIaaSUnavailableError),
+                "result_cd":       getattr(outcome, "result_cd", None),
+                "http_status":     getattr(outcome, "http_status", None),
                 "idempotency_key": idem_key,
                 "exception":       outcome,
             }

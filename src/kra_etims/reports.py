@@ -7,19 +7,19 @@ parsing raw JSON.
 
 Middleware endpoints (ground truth):
   GET  /v2/reports/daily-x?date=YYYY-MM-DD   — X Report (read-only)
-  POST /v2/reports/daily-z?date=YYYY-MM-DD   — Z Report (triggers VSCU period close)
+  POST /v2/reports/daily-z?date=YYYY-MM-DD   — local day aggregate (no remote close)
 
-The Z Report is deliberately POST because it mutates VSCU state. Calling it
-twice for the same date returns HTTP 409 Conflict — the period-close is not
-repeated. The SDK raises ``ZReportAlreadyIssuedError`` on 409, which callers
-can catch to handle the already-submitted case cleanly.
+The Z Report is deliberately POST because it finalises local day state. Calling it
+twice after completion returns HTTP 409 with Z_REPORT_ALREADY_ISSUED.
+Only that conflict raises ``ZReportAlreadyIssuedError``. Unresolved work
+retains its middleware conflict code for recovery.
 
 Usage (sync):
     x = client.reports.get_x_report("2026-03-11")
     print(x.band_b.taxable_amount)   # Decimal("43103.45")  # Band B = Standard VAT 16%
 
-    z = client.reports.get_daily_z("2026-03-11")  # mutates VSCU — call once
-    print(z.vscu_acknowledged)       # True
+    z = client.reports.get_daily_z("2026-03-11")  # finalises the local aggregate
+    print(z.vscu_acknowledged)       # False for local aggregation
 
 Usage (async):
     x = await client.reports.get_x_report("2026-03-11")
@@ -151,10 +151,9 @@ class ZReport(BaseModel):
     """
     Z-Report — daily end-of-day totals.
 
-    Triggers the mandatory VSCU period-close sequence on the middleware.
-    The underlying endpoint is POST (not GET) because it mutates VSCU state
-    (KRA TIS v2.0 §6.5 — ★ RESEARCH-VALIDATED: Z report covers full day
-    00:00:00–23:59:59).
+    Finalises a local aggregate after admitted and unresolved work has settled.
+    No supported remote fiscal-close endpoint is called. Local closure does not
+    establish device or central KRA acknowledgement.
 
     Call once per day after close of trade; a second call for the same date
     raises ``ZReportAlreadyIssuedError`` (middleware returns HTTP 409 Conflict).
@@ -179,7 +178,10 @@ class ZReport(BaseModel):
     total_vat:         Decimal
     total_amount:      Decimal
     period_number:     Optional[int]  = None   # VSCU Z-counter (increments each daily close)
-    vscu_acknowledged: bool           = False  # True when VSCU day-reset completed
+    vscu_acknowledged: bool           = False  # Retained device acknowledgement, absent for local aggregates
+    kra_acknowledged: bool = False
+    closure_scope: str = "UNKNOWN"
+    device_fiscal_close_supported: bool = False
     raw:               Optional[Dict[str, Any]] = Field(None, exclude=True)
 
     @classmethod
@@ -215,6 +217,9 @@ class ZReport(BaseModel):
             total_amount=total_amt,
             period_number=payload.get("zReportNo") or payload.get("periodNo"),
             vscu_acknowledged=bool(payload.get("vscuAcknowledged", False)),
+            kra_acknowledged=bool(payload.get("kraAcknowledged", False)),
+            closure_scope=payload.get("closureScope", "UNKNOWN"),
+            device_fiscal_close_supported=bool(payload.get("deviceFiscalCloseSupported", False)),
             raw=payload,
         )
 
@@ -246,21 +251,18 @@ class ReportsInterface:
 
     def get_daily_z(self, date: str) -> ZReport:
         """
-        Close the fiscal day and fetch the Z-report for the given date (YYYY-MM-DD).
+        Finalise the local day aggregate for the given date (YYYY-MM-DD).
 
-        Issues a POST to the middleware, triggering the mandatory VSCU
-        period-close sequence (KRA TIS v2.0 §6.5 — full day 00:00:00–23:59:59).
-
-        A second call for the same date raises ``ZReportAlreadyIssuedError``
-        (middleware returns HTTP 409 Conflict). The VSCU day-reset is irreversible
-        (KRA TIS v2.0 §21.6.1) — do NOT retry on this exception.
-
-        Call once per business day, after the last transaction of the day.
+        Unresolved admissions, prerequisites, dispatch and stock block closure.
+        This endpoint does not invoke a device fiscal close or prove KRA acceptance.
+        A completed local report raises ``ZReportAlreadyIssuedError`` on repetition;
+        other conflicts retain their middleware code for supported recovery.
         """
         try:
             raw = self._client._request("POST", f"/v2/reports/daily-z?date={date}")
         except KRAConflictError as exc:
-            # On the Z-report path a 409 means the report was already issued.
+            if exc.code != "Z_REPORT_ALREADY_ISSUED":
+                raise
             raise ZReportAlreadyIssuedError(
                 f"Z-Report already issued for date={date}: {exc}"
             ) from exc
@@ -289,14 +291,16 @@ class AsyncReportsInterface:
 
     async def get_daily_z(self, date: str) -> ZReport:
         """
-        Close the fiscal day and fetch the Z-report (YYYY-MM-DD).
+        Finalise the local day aggregate (YYYY-MM-DD), subject to unresolved work.
 
-        Issues a POST — triggers VSCU period close (KRA TIS v2.0 §6.5). Call once per day.
-        Raises ``ZReportAlreadyIssuedError`` on HTTP 409 — the report was already submitted.
+        No device fiscal close or KRA acknowledgement is implied. Only an already
+        completed report raises ``ZReportAlreadyIssuedError``; other conflicts propagate.
         """
         try:
             raw = await self._client._request("POST", f"/v2/reports/daily-z?date={date}")
         except KRAConflictError as exc:
+            if exc.code != "Z_REPORT_ALREADY_ISSUED":
+                raise
             raise ZReportAlreadyIssuedError(
                 f"Z-Report already issued for date={date}: {exc}"
             ) from exc

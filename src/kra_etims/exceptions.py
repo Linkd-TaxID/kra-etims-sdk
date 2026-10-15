@@ -1,47 +1,11 @@
-"""
-KRA eTIMS SDK — Exception Taxonomy
-====================================
-Every exception maps 1-to-1 to an actionable failure mode.
-The developer must never have to guess what went wrong or read raw JSON.
+"""KRA/TaxID exception taxonomy.
 
-Full KRA result code reference (all 30 codes, including production-only codes
-absent from the official spec): https://linkd-taxid.github.io/kra-etims-sdk/
-
-Critical integration facts
---------------------------
-- Success codes: "00" (VSCU JAR), "000" (OSCU spec), "0000" (GavaConnect).
-  Never check ``resultCd == "000"`` alone — always test membership in
-  ``{"0", "00", "000", "0000"}``.
-
-- resultCd 001 is NOT an error. It means no records match the query (empty
-  list). Most public SDKs mistakenly raise here on day-one queries.
-
-- resultCd 994 on retry is idempotent success. The invoice is already on KRA.
-  Do not re-raise; do not re-submit with a new invoice number.
-
-- resultCd 921: VSCU requires saveSales → saveInvoice in sequence. OSCU
-  uses a single combined call. These paths cannot be mixed.
-
-- resultCd 901: device serial not approved. Unrecoverable without KRA
-  intervention. Email timsupport@kra.go.ke to register.
-
-- resultCd 902: device already initialized. Extract the existing cmcKey from
-  the response body — do not re-initialize.
-
-- cmcKey is issued exactly once. Store AES-256-GCM encrypted. Redact before
-  any logging. No self-service rotation path exists.
-
-KRA Result Code Reference (eTIMS v2.0 spec):
-  00  Success
-  01  Authentication / credential failure
-  10  Invalid PIN format (expected pattern: A123456789B)
-  11  VSCU memory full — device must sync / purge before accepting invoices
-  12  Duplicate invoice number — idempotent: already processed successfully
-  13  Invalid item code — item not registered on eTIMS
-  14  Invalid branch ID — bhfId not recognised for this TIN
-  20  KRA server-side processing error
-  96  KRA system error (transient)
-  99  Unknown / catch-all KRA error
+Official OSCU v2.0 §4.18 and VSCU v2.0 §4.14 describe 902 as an
+installed-device condition and 994 as overlapping data. Neither establishes
+transaction readiness, identical contents, or a recovered signed receipt.
+Codes 894 and 990 do not prove a fiscal mutation was never applied.
+Retain original identities and investigate outcomes before considering replay.
+Legacy two-digit/GavaConnect mappings are separate from these contracts.
 """
 from decimal import Decimal
 from typing import Any, Optional
@@ -103,7 +67,7 @@ class OSCUUnavailableError(KRAeTIMSError):
             "OSCU Temporarily Unavailable: KRA's OSCU server could not be "
             "reached or returned a transient error. This is unrelated to the "
             "24-hour VSCU offline ceiling — OSCU has no such ceiling by "
-            "design. Safe to retry with backoff."
+            "design. Inspect the original mutation before considering replay; backoff alone does not establish a safe retry."
         ),
         oscu_code: Optional[str] = None,
     ):
@@ -127,9 +91,9 @@ class KRAAuthorizationError(KRAeTIMSError):
 
 
 class TIaaSUnavailableError(KRAeTIMSError):
-    """The TIaaS Railway instance is unreachable (sleeping or down)."""
+    """The middleware service is unavailable."""
     def __init__(self, message: str = (
-        "TIaaS Service Unavailable: The Railway instance is unreachable."
+        "TIaaS Service Unavailable: The middleware service is unavailable."
     )):
         super().__init__(message)
 
@@ -138,18 +102,18 @@ class TIaaSAmbiguousStateError(KRAeTIMSError):
     """
     Network dropped after the request was sent but before a response was
     received.  The invoice state on KRA / TIaaS is unknown — Schrödinger's
-    Invoice.  Retry with the **same** idempotency key; the middleware will
-    deduplicate automatically.
+    Invoice. Retain the original idempotency key and inspect the original
+    status. Do not automatically replay or invent a replacement reference.
 
-    ``idempotency_key`` carries the key that was in-flight so callers can
-    retry without having to manage key storage separately.
+    ``idempotency_key`` carries the original in-flight identity for status lookup
+    and evidence-based recovery.
     """
     def __init__(
         self,
         message: str = (
             "TIaaS Ambiguous State: Request sent but connection dropped before "
-            "response. Retry with the same idempotency key — the middleware will "
-            "deduplicate it safely."
+            "response. Retain the original idempotency key and inspect its status "
+            "before considering replay."
         ),
         idempotency_key: str | None = None,
     ):
@@ -194,19 +158,29 @@ class KRAVSCUMemoryFullError(KRAeTIMSError):
 
 
 class KRADuplicateInvoiceError(KRAeTIMSError):
-    """
-    The invoice number was already processed successfully (KRA result code 12).
-    This is idempotent — the original submission succeeded.
-    Do NOT retry with a new invoice number; retrieve the original receipt instead.
+    """Duplicate data requires original receipt and content evidence.
 
-    ``is_idempotent_success = True`` signals callers (e.g. flush_offline_queue)
-    that the invoice IS on KRA and the exception should be treated as success.
+    The public exception name and compatibility attribute are retained, but a
+    bare duplicate response cannot be counted as signed or completed success.
     """
-    is_idempotent_success: bool = True
+    is_idempotent_success: bool = False
+    requires_reconciliation: bool = True
 
     def __init__(self, message: str = (
-        "Duplicate Invoice Number (Code 12): This invoice was already "
-        "processed. Retrieve the original signed receipt instead of retrying."
+        "Duplicate data: retain the original reference and inspect its outcome "
+        "and receipt. Do not create a replacement invoice reference."
+    )):
+        super().__init__(message)
+
+
+class KRADeviceInstalledError(KRAeTIMSError):
+    """902 reports an installed device, not a duplicate invoice or recovered key."""
+    is_idempotent_success: bool = False
+    requires_reconciliation: bool = True
+
+    def __init__(self, message: str = (
+        "Device installed (902): verify the retained identity and protocol-specific "
+        "checkpoint. Missing credentials require operator/KRA recovery."
     )):
         super().__init__(message)
 
@@ -249,9 +223,9 @@ class CreditNoteConflictError(KRAConflictError):
     HTTP 409 on a credit-note request (for example ``ETIMS_NOT_INITIALIZED``).
 
     .. note::
-       As of middleware V15 (2026-07) multiple credit notes MAY be issued
-       against one receipt — over-reversal raises
-       :class:`CreditNoteExceedsOriginalError` (HTTP 422), not this.
+       Partial or repeated returns are available only in explicit synthetic
+       fixtures. Production dispatch requires a separately accepted contract.
+       Over-reversal raises :class:`CreditNoteExceedsOriginalError` (HTTP 422).
 
     ``original_purchase_id`` carries the sale ID when present, so callers can
     look it up without parsing the message.
@@ -281,10 +255,9 @@ class CreditNoteExceedsOriginalError(KRAeTIMSError):
     Issuing this credit note would exceed the original receipt's reversible
     balance (HTTP 422, code ``CREDIT_NOTE_EXCEEDS_ORIGINAL``).
 
-    As of middleware V15, multiple credit notes may be issued against one
-    receipt (e.g. items returned across separate visits) as long as the
-    cumulative reversed amount does not exceed the original. This is raised
-    when the running total would be exceeded.
+    Supported synthetic return fixtures reserve original quantities and amounts.
+    This error means the requested cumulative reversal exceeds the original.
+    It does not establish permission for repeated production corrections.
 
     ``remaining`` is the amount still reversible and ``already_reversed`` the
     sum already credited (both from the 422 body). Retry with a note whose
@@ -313,12 +286,9 @@ class ZReportAlreadyIssuedError(KRAeTIMSError):
     """
     The Z-report for the requested date has already been issued (HTTP 409).
 
-    The VSCU day-reset command is irreversible (KRA TIS v2.0 §21.6.1 —
-    ★ RESEARCH-VALIDATED). TIaaS enforces exactly one Z-report per branch
-    per calendar day via a UNIQUE(branch_id, report_date) constraint.
-
-    This exception is NOT retryable. The Z-report was already submitted
-    successfully. Retrieve the existing report if you need the totals.
+    This records completion of the local daily aggregate. No remote device
+    fiscal-close request or central KRA acknowledgement is implied. Retrieve
+    the existing report for totals rather than issuing another local close.
 
     ``report_date`` carries the date string from the 409 response body,
     if present, so callers can log or display it without parsing the message.
@@ -327,8 +297,8 @@ class ZReportAlreadyIssuedError(KRAeTIMSError):
         self,
         message: str = (
             "Z-Report Already Issued (HTTP 409): The daily Z-report has already "
-            "been submitted for this date. The VSCU day-reset is irreversible — "
-            "do not retry. Retrieve the existing report for totals."
+            "been finalized locally for this date. Retrieve the existing report "
+            "for totals; no remote fiscal-close acknowledgement is implied."
         ),
         report_date: Optional[str] = None,
     ):
@@ -354,15 +324,9 @@ KRA_ERROR_MAP: dict = {
     # Letter-prefixed variants observed in live KRA GavaConnect responses
     "E04": (KRAInvalidBranchError,   "Device/Branch Not Found"),
     "E11": (KRAVSCUMemoryFullError,  "VSCU Memory Full (prefixed)"),
-    # Extended codes observed in live GavaConnect / VSCU responses
-    # 994: invoice already processed on a prior retry — idempotent success.
-    # Do not re-submit with a new invoice number; the receipt exists on KRA.
-    "994": (KRADuplicateInvoiceError, "Duplicate invoice (code 994 — prior retry succeeded)"),
-    # 901: device serial not approved — requires KRA eTIMS portal action.
-    "901": (KRAeTIMSError, "Device serial not approved — contact timsupport@kra.go.ke to register"),
-    # 902: device already initialized — retrieve existing cmcKey, do not re-initialize.
-    # Treated as KRADuplicateInvoiceError so is_idempotent_success=True is available.
-    "902": (KRADuplicateInvoiceError, "Device already initialized (code 902) — existing cmcKey remains valid"),
-    # 921: VSCU requires saveSales → saveInvoice in sequence. Cannot mix OSCU path.
-    "921": (KRAeTIMSError, "VSCU sequence error (code 921) — saveSales must precede saveInvoice"),
+    # Official installed-device/overlapping-data codes; no receipt success is inferred.
+    "994": (KRADuplicateInvoiceError, "Overlapping data (994) — original receipt evidence required"),
+    "901": (KRAeTIMSError, "Device not valid (901) — verify device enrollment and environment"),
+    "902": (KRADeviceInstalledError, "Device installed (902) — verify retained identity and checkpoint"),
+    "921": (KRAeTIMSError, "VSCU sequence error (code 921) — inspect the original operation and documented adapter contract"),
 }

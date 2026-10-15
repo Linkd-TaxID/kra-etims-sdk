@@ -211,11 +211,14 @@ def test_wheel_installs_and_cli_runs(tmp_path: Path) -> None:
     venv.create(str(venv_dir), with_pip=True)
     venv_python = venv_dir / "bin" / "python"
 
+    # Keep the source checkout out of the fresh installation boundary.
+    installed_env = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+
     # Install wheel + cli extras
     subprocess.run(
         [str(venv_python), "-m", "pip", "install", "--quiet",
          f"{wheel}[cli]"],
-        capture_output=True, check=True,
+        capture_output=True, check=True, env=installed_env,
     )
 
     # Run etims tax bands --json from the installed command
@@ -223,7 +226,7 @@ def test_wheel_installs_and_cli_runs(tmp_path: Path) -> None:
     result = subprocess.run(
         [str(etims_bin), "tax", "bands", "--json"],
         capture_output=True, text=True,
-        env={**os.environ, "TAXID_API_KEY": ""},
+        env={**installed_env, "TAXID_API_KEY": ""},
     )
     assert result.returncode == 0, result.stderr
     import json

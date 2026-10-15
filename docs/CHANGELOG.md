@@ -1,3 +1,16 @@
+# Sandbox contract guidance correction — 2026-10-13
+
+This correction uses published OSCU v2.0 §4.18 / VSCU v2.0 §4.14 contracts and
+local SDK boundary reproduction; no new real-device acceptance is claimed.
+902 now raises `KRADeviceInstalledError`, with retained-identity/checkpoint
+recovery guidance. `KRADuplicateInvoiceError` remains public, but
+`is_idempotent_success` is false: 994/legacy duplicate codes alone do not prove
+signed success. Batch helpers report a duplicate as an ambiguous, non-retryable
+error; the CLI holds it as `outcome_unknown` instead of completing it.
+Raw-envelope exceptions carry `result_cd`, `http_status` and the original
+`idempotency_key` separately. 894/990 backoff advice does not authorize mutation
+replay. Historical entries below describe earlier guidance, not current policy.
+
 ## 2026-10-07
 
 - Corrected duplicate and timeout guidance: investigate original transactions;

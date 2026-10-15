@@ -23,7 +23,10 @@ from .exceptions import (
     TIaaSAmbiguousStateError,
     TIaaSUnavailableError,
 )
+from .models import BranchCustomerRegistration, ItemRegistration, ItemDetail
+from .models import ReturnLine, CreditNoteReason, StockOperationResult, StockMasterRequest, StockMasterResult
 from .models import (
+    TenantProvisioning,
     DeviceInit,
     DataSyncRequest,
     ItemSave,
@@ -60,6 +63,17 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
       async with AsyncKRAeTIMSClient(...) as client:
           response = await client.submit_sale(invoice)
     """
+
+    @property
+    def retail(self):
+        from .retail import AsyncRetailInterface
+        return AsyncRetailInterface(self)
+
+    @property
+    def prerequisites(self):
+        """Accountable operator recovery; never automatically replays registration."""
+        from .prerequisites import AsyncPrerequisiteInterface
+        return AsyncPrerequisiteInterface(self)
 
     @property
     def withholding(self):
@@ -207,6 +221,46 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
                 raise self._transport_error(exc, method, idempotency_key) from exc
             return self._parse_response(resp, method, idempotency_key)
 
+    async def provision_tenant(self, data: "TenantProvisioning") -> Dict[str, Any]:
+        """Create an immutable branch device using an unbound operator credential."""
+        return await self._request("POST", "/v2/admin/tenants", json=data.model_dump(mode="json", exclude_none=True))
+
+    async def issue_tenant_key(self, device_id: int, client_name: str, role: str = "ROLE_SDK_CLIENT") -> Dict[str, Any]:
+        """Operator-only. The returned API credential is displayed once; store it privately."""
+        return await self._request("POST", f"/v2/admin/tenants/{device_id}/api-keys",
+                             json={"clientName": client_name, "role": role})
+
+    async def device_status(self) -> Dict[str, Any]:
+        """Read this branch's durable onboarding checkpoint without dispatching initialization."""
+        return await self._request("GET", "/v2/etims/device")
+
+    async def device_health(self) -> Dict[str, Any]:
+        """Probe this branch with a read-only protocol request; does not prove central synchronization."""
+        return await self._request("GET", "/v2/etims/device/health")
+
+    async def capabilities(self) -> Dict[str, Any]:
+        """Branch engineering support and restrictions; never authorization or KRA approval."""
+        return await self._request("GET", "/v2/etims/device/capabilities")
+
+    async def metadata(self, kind: str, *, since: str = "20000101000000") -> Dict[str, Any]:
+        """Read codes, classifications or notices through the stored branch adapter."""
+        from urllib.parse import urlencode
+        if kind not in {"CODES", "CLASSIFICATIONS", "NOTICES"} or len(since) != 14 or not since.isascii() or not since.isdigit():
+            raise ValueError("Supported metadata kind and fourteen-digit cursor required")
+        return await self._request("GET", "/v2/etims/device/metadata?" + urlencode({"kind": kind, "since": since}))
+
+    async def initialize_branch(self) -> Dict[str, Any]:
+        """Initialize the authorized stored identity; inspect uncertain states without replay."""
+        return await self._request("POST", "/v2/etims/init")
+
+    async def device_monitoring(self) -> Dict[str, Any]:
+        """Read local protocol observations; no central-sync or notification proof."""
+        return await self._request("GET", "/v2/etims/device/monitoring")
+
+    async def list_tenants(self) -> List[Dict[str, Any]]:
+        """Operator-only safe onboarding summaries; never returns communication keys."""
+        return await self._request("GET", "/v2/admin/tenants")
+
     # ------------------------------------------------------------------
     # Category 1 — Device Initialisation
     # ------------------------------------------------------------------
@@ -219,11 +273,11 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         )
 
     async def initialize_device_handshake(self) -> Dict[str, Any]:
-        """
-        Category 1 (Pre-step): Trigger the middleware device wake-up.
+        """Initialize this credential's branch through its durable VSCU/OSCU selection.
 
-        The middleware retrieves and AES-256-encrypts the cmcKey, then
-        persists it to the TenantDevice record.
+        READY confirms the persisted mode-specific checkpoint. OUTCOME_UNKNOWN or
+        KEY_REQUIRED requires authoritative recovery; do not automatically resend.
+        No communication key is returned. Existing GET route remains compatible.
         """
         return await self._request("GET", "/v2/etims/init-handshake")
 
@@ -286,9 +340,10 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
 
         ``idempotency_key`` is strongly recommended.  If omitted, a deterministic
         key ``"{tin}:{invcNo}"`` is auto-generated and a :class:`UserWarning` is
-        emitted.  Pass an explicit key to suppress the warning and to guarantee
-        safe retry behaviour when a network timeout drops the response before it
-        reaches the caller.
+        emitted.  Pass an explicit key to suppress the warning and to preserve
+        the original request identity when a network timeout drops the response.
+        Confirmed pre-signing prerequisite blocks can resume with this exact key
+        and body after reconciliation. Uncertain signing requires status lookup.
         """
         if idempotency_key is None:
             idempotency_key = f"{invoice.tin}:{invoice.invcNo}"
@@ -296,7 +351,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
                 f"submit_sale() called without an idempotency_key — "
                 f"auto-generated '{idempotency_key}'. "
                 "Pass idempotency_key=<your-key> explicitly to suppress this warning "
-                "and guarantee safe retry behaviour on network timeouts.",
+                "and retain the original identity for status lookup and recovery.",
                 UserWarning,
                 stacklevel=2,
             )
@@ -311,6 +366,43 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
                 json=to_middleware_sale_payload(invoice),
                 idempotency_key=idempotency_key,
             )
+
+    async def lookup_customer(self, pin: str) -> Dict[str, Any]:
+        """Read taxpayer information through this branch's protocol; does not register a customer."""
+        from urllib.parse import urlencode
+        return await self._request("GET", "/v2/etims/customers/lookup?"+urlencode({"pin":pin}))
+
+    async def get_sale_original(self, purchase_id: int) -> Dict[str, Any]:
+        """Inspect original business payload and safe protocol identity without fiscal dispatch."""
+        return await self._request("GET", f"/v2/etims/sales/{purchase_id}/original")
+
+    async def register_customer(self, registration: "BranchCustomerRegistration") -> Dict[str, Any]:
+        """Explicit branch-customer registration; independent of taxpayer lookup."""
+        return await self._request("POST", "/v2/etims/customers", json=registration.model_dump(mode="json"))
+
+    async def register_item(self, item: "ItemDetail | ItemRegistration") -> Dict[str, Any]:
+        """Register an immutable source item using the branch's stored protocol.
+
+        ``itemCd`` is the source SKU. The server owns the fiscal item code. Unknown
+        registration outcomes require original-operation review; do not replace the SKU.
+        """
+        from .models import _to_middleware_sale_line
+        if isinstance(item,ItemRegistration):
+            payload=item.model_dump(mode="json")
+        else:
+            if not item.itemClsCd:
+                raise ValueError("Item registration requires itemClsCd")
+            payload=_to_middleware_sale_line(item)
+        return await self._request("POST", "/v2/etims/items", json=payload)
+
+    async def find_sale(self, *, client_reference=None, operation_key=None, request_id=None, transaction_id=None) -> Dict[str, Any]:
+        """Inspect one original operation after an HTTP timeout without submitting it."""
+        from urllib.parse import urlencode
+        query={"clientReference":client_reference,"operationKey":operation_key,"requestId":request_id,"transactionId":transaction_id}
+        selected={key:value for key,value in query.items() if value is not None}
+        if len(selected)!=1:
+            raise ValueError("Supply exactly one original sale lookup identity")
+        return await self._request("GET", "/v2/etims/sales/search?"+urlencode(selected))
 
     async def get_sale_status(self, invc_no: int) -> Dict[str, Any]:
         """
@@ -335,24 +427,17 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         *,
         client_reference: Optional[str] = None,
         idempotency_key: Optional[str] = None,
+        return_lines: Optional[List[ReturnLine]] = None,
+        reason_code: Optional[CreditNoteReason] = None,
     ) -> Dict[str, Any]:
-        """
-        Issue a credit note against a previously signed sale.
+        """Return original quantities using a stable correction identity.
 
-        Posts to ``POST /v2/etims/sale/{id}/credit-note``.
-
-        Retain the same correction identity across retries. Itemised corrections remain
-        gated by the middleware; these arguments do not enable unsupported corrections.
-
-        :param client_reference: Stable partner correction reference (keyword only).
-        :param idempotency_key: Stable correction operation key (keyword only).
-        :param original_purchase_id: TIaaS database ID of the original sale.
-        :param reason: Human-readable reversal reason (optional).
-        :param items: Reserved partial-item payload; currently gated. Use ``None``.
-        :raises CreditNoteExceedsOriginalError: HTTP 422 — reversal exceeds the
-            receipt's remaining reversible balance (multiple notes allowed within it).
-        :raises KRAeTIMSError: HTTP 404 — original sale not found.
-        :raises KRAConnectivityTimeoutError: VSCU offline ceiling breached (HTTP 503).
+        Omitted selections reverse remaining original quantities. Legacy ``items``
+        selects unambiguous original SKUs; replacement prices and tax fields are ignored.
+        Partial/repeated returns are restricted to explicit synthetic fixtures.
+        KRA TIS 6.16 defines once-only cancellation; live combinations need a verified
+        contract and production corrections remain evidence-gated. Unknown/deferred
+        corrections reserve their original quantities and must never be replaced.
         """
         with _span("kra_etims.issue_credit_note", {"sale.id": str(original_purchase_id)}):
             if not client_reference and not idempotency_key:
@@ -364,6 +449,12 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
                 body["reason"] = reason
             if items is not None:
                 body["items"] = items
+            if return_lines is not None:
+                if items:
+                    raise ValueError("Select return_lines or legacy items, not both")
+                body["returnLines"] = [line.model_dump(mode="json") for line in return_lines]
+            if reason_code is not None:
+                body["reasonCode"] = CreditNoteReason(reason_code).value
             return await self._request(
                 "POST", f"/v2/etims/sale/{original_purchase_id}/credit-note",
                 json=body if body else None,
@@ -380,7 +471,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         """
         warnings.warn(
             "submit_reverse_invoice() is deprecated and targets a removed endpoint. "
-            "Use issue_credit_note(original_purchase_id, reason, items) instead.",
+            "For original-invoice refunds use issue_credit_note(); this does not provide buyer-issued reverse invoicing.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -394,7 +485,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     # ------------------------------------------------------------------
 
     async def update_stock(self, data: StockItem) -> Dict[str, Any]:
-        """Category 8: Stock adjustment / transfer / loss."""
+        """Restricted legacy stock route; use submit_stock_adjustment with an original operation key."""
         return await self._request(
             "POST", "/v2/etims/stock",
             json=data.model_dump(mode="json", exclude_none=True),
@@ -407,21 +498,20 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         cust_nm: Optional[str] = None,
         remark: Optional[str] = None,
         org_sar_no: int = 0,
-    ) -> Dict[str, Any]:
-        """
-        Submit a stock adjustment to ``POST /v2/etims/stock/adjustment``.
+        *,
+        idempotency_key: Optional[str] = None,
+    ) -> StockOperationResult:
+        """Submit an independent stock movement with a stable operation key.
 
-        A 201 response means the VSCU signed synchronously (``status=SYNCED``).
-        A 202 response means the movement is queued for retry (``status=FAILED``);
-        issue a new request — do not retry with the same data.
-
-        :param lines: At least one :class:`StockAdjustmentLine`.
-        :param cust_tin: Customer KRA TIN (B2B movements only).
-        :param cust_nm: Customer name.
-        :param remark: Free-text remark (max 400 chars).
-        :param org_sar_no: Original SAR number for amendments (default 0).
-        :raises KRAConnectivityTimeoutError: VSCU offline ceiling breached (HTTP 503).
+        This does not duplicate sale or return stock effects. OUTCOME_UNKNOWN
+        retains its original SAR and payload across timeout/restart; inspect it
+        and resolve only with authoritative evidence. Never issue a replacement.
+        VSCU uses its stock I/O route; OSCU uses authenticated /insertStockIO.
+        Absolute remaining stock is a separate explicit submit_stock_master request.
+        Production stock dispatch remains evidence-gated.
         """
+        if not idempotency_key:
+            raise ValueError("Stock requires a stable idempotency_key")
         request = StockAdjustmentRequest(
             lines=lines,
             custTin=cust_tin,
@@ -429,10 +519,36 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             remark=remark,
             orgSarNo=org_sar_no,
         )
-        return await self._request(
+        result = await self._request(
             "POST", "/v2/etims/stock/adjustment",
             json=request.model_dump(mode="json", exclude_none=True),
+            idempotency_key=idempotency_key,
         )
+        return StockOperationResult.model_validate(result)
+
+    async def inspect_stock_operation(self, operation_key: str) -> StockOperationResult:
+        """Read retained current stock outcome; a cached POST response may be older."""
+        from urllib.parse import quote
+        result = await self._request("GET", "/v2/etims/stock/operations/" + quote(operation_key, safe=""))
+        return StockOperationResult.model_validate(result)
+
+    async def submit_stock_master(self, request: StockMasterRequest, *, idempotency_key: str) -> StockMasterResult:
+        """Send supplied absolute residual quantity after confirmed original I/O.
+
+        Never calculated from sales/returns. Unknown originals fence branch dispatch;
+        duplicate keys retain the original authenticated payload and cannot dispatch again.
+        """
+        if not idempotency_key:
+            raise ValueError("Stock master requires a stable idempotency_key")
+        result = await self._request("POST", "/v2/etims/stock/master",
+            json=request.model_dump(mode="json"), idempotency_key=idempotency_key)
+        return StockMasterResult.model_validate(result)
+
+    async def inspect_stock_master(self, operation_key: str) -> StockMasterResult:
+        """Inspect the original absolute stock operation without fiscal dispatch."""
+        from urllib.parse import quote
+        result = await self._request("GET", "/v2/etims/stock/master/operations/" + quote(operation_key, safe=""))
+        return StockMasterResult.model_validate(result)
 
     async def batch_update_stock(
         self, items: List[StockItem]
@@ -488,3 +604,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     async def check_compliance(self, pin: str) -> Dict[str, Any]:
         """Verify device compliance for the given TIN/PIN."""
         return await self._request("GET", f"/v2/etims/compliance/{pin}")
+
+    async def lookup_pin(self, pin: str) -> Dict[str, Any]:
+        """Compatibility alias for taxpayer lookup; does not register a buyer."""
+        return await self.lookup_customer(pin)

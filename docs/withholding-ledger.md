@@ -1,5 +1,8 @@
 # Withholding ledger
 
+Current supported contract and recovery flow: [withholding operations](withholding-operations.md).
+The simulation examples below are historical arithmetic fixtures, not accepted legal or partner policy.
+
 Requires TaxID's additive `/v2/withholding` routes (V40 migration). Use a branch
 credential or delegated `withholding:read` / `withholding:write` capability.
 Platform master credentials cannot access this ledger. The taxpayer, branch and

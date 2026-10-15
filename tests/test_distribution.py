@@ -43,7 +43,9 @@ def test_unpacked_sdist_contracts(distributions, tmp_path):
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
          "tests/test_phase4_operations.py", "tests/test_withholding.py",
-         "tests/test_item_wire_contract.py"],
+         "tests/test_item_wire_contract.py", "tests/test_control_unit_registration.py",
+         "tests/test_retail_operations.py", "tests/test_withholding_operations.py",
+         "tests/test_recovery_boundaries.py"],
         cwd=unpacked, env=env, capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr

@@ -40,11 +40,11 @@ Exceptions
 - ``KRAConnectivityTimeoutError`` — 24-hour VSCU offline ceiling breached
 - ``OSCUUnavailableError``    — OSCU transient failure (HTTP 503, but NOT the VSCU ceiling — OSCU has no offline ceiling)
 - ``TIaaSUnavailableError``   — Railway instance unreachable
-- ``TIaaSAmbiguousStateError``— Schrödinger's Invoice (retry with same key)
+- ``TIaaSAmbiguousStateError``— unknown outcome; inspect with original key
 - ``KRAValidationError``      — schema / business-rule validation failure
 - ``KRAInvalidPINError``      — invalid TIN/PIN format (code 10)
 - ``KRAVSCUMemoryFullError``  — VSCU storage at capacity (code 11)
-- ``KRADuplicateInvoiceError``— already processed successfully (code 12)
+- ``KRADuplicateInvoiceError``— duplicate data; original receipt evidence required
 - ``KRAInvalidItemCodeError`` — item not registered on eTIMS (code 13)
 - ``KRAInvalidBranchError``   — branch not registered for this TIN (code 14)
 - ``KRAServerError``          — transient KRA server error (codes 20/96/99)
@@ -133,6 +133,7 @@ from .exceptions import (
     KRAInvalidPINError,
     KRAVSCUMemoryFullError,
     KRADuplicateInvoiceError,
+    KRADeviceInstalledError,
     KRAInvalidItemCodeError,
     KRAInvalidBranchError,
     KRAServerError,
@@ -196,6 +197,7 @@ __all__ = [
     "KRAInvalidPINError",
     "KRAVSCUMemoryFullError",
     "KRADuplicateInvoiceError",
+    "KRADeviceInstalledError",
     "KRAInvalidItemCodeError",
     "KRAInvalidBranchError",
     "KRAServerError",
@@ -211,3 +213,13 @@ __all__ = [
     "GavaConnectPINNotFoundError",
     "GavaConnectTCCError",
 ]
+
+from .models import ReturnLine, CreditNoteReason, StockOperationResult
+
+from .models import TenantProvisioning
+
+__all__.append("TenantProvisioning")
+
+from .models import BranchCustomerRegistration, OriginalTransportSnapshot
+
+from .models import ItemRegistration

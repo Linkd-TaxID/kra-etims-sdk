@@ -9,3 +9,10 @@ id = "generic-api-key"
     description = "Literal idempotency examples are transaction identities, not credentials"
     regexTarget = "secret"
     regexes = ['''^(refund-operation-42|idem-resilience-schrodinger-001|idem-schrod-001)$''']
+
+    [[rules.allowlists]]
+    description = "Synthetic retail request identities, restricted to their executable example"
+    condition = "AND"
+    paths = ['''(?:^|/)examples/retail_operations\.py$''']
+    regexTarget = "secret"
+    regexes = ['''^phase2-(stock-(reject|unknown|replacement)|admission-race|after-close)$''']
