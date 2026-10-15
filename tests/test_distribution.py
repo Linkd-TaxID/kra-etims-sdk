@@ -147,3 +147,30 @@ def test_decompression_budget_covers_hidden_tar_headers(monkeypatch):
     reader = policy.BoundedArchiveReader(io.BytesIO(b"x" * 32))
     with pytest.raises(ValueError, match="decompression budget"):
         reader.read(1024 * 1024)
+
+
+@pytest.mark.parametrize("kind", ["wheel", "sdist"])
+def test_gitleaks_scans_injected_existing_metadata(distributions, tmp_path, monkeypatch, kind):
+    from types import SimpleNamespace
+    marker = b"api_" + b"key = \"" + b"Qz9La6rT2vB7" + b"mX4Jp8Kc5Nw3Hd1Fs0Ye\""
+    rewrite_archive(distributions, tmp_path, kind, lambda data: data + b"\n" + marker)
+    scanned = []
+
+    def scan(command, **kwargs):
+        scan_root = Path(command[2])
+        scanned.append(scan_root)
+        assert any(marker in path.read_bytes() for path in scan_root.rglob("*") if path.is_file())
+        assert any(path.is_file() for path in (scan_root / "wheel").rglob("*"))
+        assert any(path.is_file() for path in (scan_root / "sdist").rglob("*"))
+        assert command[command.index("--config") + 1] == str(ROOT / ".github/gitleaks.toml")
+        assert "--redact=100" in command
+        assert "--ignore-gitleaks-allow" in command
+        assert command[command.index("--gitleaks-ignore-path") + 1] == "/dev/null"
+        assert kwargs["capture_output"] is True
+        return SimpleNamespace(returncode=1, stdout=marker, stderr=marker)
+
+    monkeypatch.setattr(policy.subprocess, "run", scan)
+    with pytest.raises(ValueError, match="Gitleaks rejected archive payloads") as failure:
+        policy.check_packages(tmp_path, tmp_path / "gitleaks")
+    assert marker.decode() not in str(failure.value)
+    assert scanned and not scanned[0].exists()

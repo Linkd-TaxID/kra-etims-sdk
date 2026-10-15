@@ -1,5 +1,5 @@
 include README.md CHANGELOG.md pyproject.toml MANIFEST.in init_device.py
-include scripts/check_distribution.py scripts/check_repository.py .github/repository-policy.json
+include scripts/check_distribution.py scripts/check_repository.py .github/repository-policy.json .github/gitleaks.toml
 include examples/pos_basket_demo.py
 recursive-include src/kra_etims *.py py.typed
 recursive-include tests *.py *.json

@@ -113,9 +113,12 @@ jobs:
           find . -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
           python -m build
 
+      - name: Install checksum-pinned Gitleaks
+        run: bash .github/scripts/install-gitleaks.sh "$RUNNER_TEMP/gitleaks"
+
       - name: Verify distribution membership and unpacked tests
         run: |
-          python scripts/check_distribution.py --dist-dir dist
+          python scripts/check_distribution.py --dist-dir dist --gitleaks "$RUNNER_TEMP/gitleaks"
           TAXID_DIST_DIR=dist pytest tests/test_distribution.py::test_unpacked_sdist_contracts -q
 
       # actions/upload-artifact v4.4.3 — pinned to commit SHA.
@@ -130,6 +133,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      contents: read
       id-token: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -143,10 +147,13 @@ jobs:
           name: dist
           path: dist/
 
+      - name: Install checksum-pinned Gitleaks
+        run: bash .github/scripts/install-gitleaks.sh "$RUNNER_TEMP/gitleaks"
+
       - name: Verify downloaded release artifacts
         run: |
           python scripts/check_repository.py --ref "$GITHUB_SHA"
-          python scripts/check_distribution.py --dist-dir dist
+          python scripts/check_distribution.py --dist-dir dist --gitleaks "$RUNNER_TEMP/gitleaks"
 
       # pypa/gh-action-pypi-publish v1.14.0 — OIDC trusted publishing.
       # Upgraded from v1.11.0: v1.11.0 used twine 4.x which rejects Metadata-Version 2.4

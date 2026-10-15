@@ -9,6 +9,8 @@ import json
 from pathlib import Path, PurePosixPath
 import shutil
 import stat
+import subprocess
+import tempfile
 import tarfile
 import zipfile
 
@@ -76,16 +78,35 @@ def check_member_size(size: int, total: int, count: int, limit: int) -> int:
     return total + size
 
 
-def check_member_content(stream, name: str, size: int, policy: dict) -> None:
+def check_member_content(stream, name: str, size: int, policy: dict) -> bytes:
     data = stream.read(size + 1)
     if len(data) != size:
         raise ValueError(f"Archive member size mismatch: {name}")
     violations = SCANNER.content_violations(data, policy)
     if violations:
         raise ValueError(f"Archive content rejected: {name}: {', '.join(violations)}")
+    return data
 
 
-def check_packages(directory: Path) -> None:
+def scan_package_payloads(payloads: dict[str, bytes], executable: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="sdk-artifact-scan-") as temporary:
+        root = Path(temporary)
+        for name, data in payloads.items():
+            destination = root / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(data)
+        result = subprocess.run(
+            [str(executable.resolve()), "dir", str(root), "--config",
+             str(ROOT / ".github/gitleaks.toml"), "--ignore-gitleaks-allow",
+             "--gitleaks-ignore-path", "/dev/null", "--redact=100", "--no-banner",
+             "--timeout", "120"],
+            capture_output=True, timeout=150,
+        )
+        if result.returncode:
+            raise ValueError(f"Gitleaks rejected archive payloads (exit {result.returncode})")
+
+
+def check_packages(directory: Path, gitleaks: Path | None = None) -> None:
     with (ROOT / "pyproject.toml").open("rb") as stream:
         version = tomllib.load(stream)["project"]["version"]
     policy = json.loads((ROOT / ".github/repository-policy.json").read_text())
@@ -100,8 +121,10 @@ def check_packages(directory: Path) -> None:
     expected_sdist = package | source_files("tests", {".py", ".json"}) | {
         "README.md", "CHANGELOG.md", "pyproject.toml", "MANIFEST.in", "init_device.py",
         "scripts/check_distribution.py", "scripts/check_repository.py",
-        ".github/repository-policy.json", "examples/pos_basket_demo.py", "PKG-INFO", "setup.cfg",
+        ".github/repository-policy.json", ".github/gitleaks.toml",
+        "examples/pos_basket_demo.py", "PKG-INFO", "setup.cfg",
     } | {f"src/taxid_etims.egg-info/{name}" for name in EGG_FILES}
+    payloads = {}
     names, actual, total = set(), set(), 0
     # Streaming checks each header before traversing its declared payload.
     with gzip.open(directory / f"{base}.tar.gz", "rb") as compressed, tarfile.open(
@@ -122,7 +145,7 @@ def check_packages(directory: Path) -> None:
                     raise ValueError(f"sdist: unexpected={name}")
                 actual.add(name)
                 with archive.extractfile(member) as stream:
-                    check_member_content(stream, name, member.size, policy)
+                    payloads[f"sdist/{name}"] = check_member_content(stream, name, member.size, policy)
     compare(actual, expected_sdist, "sdist")
     expected_wheel = {p.removeprefix("src/") for p in package} | {
         f"{base}.dist-info/{name}" for name in WHEEL_FILES}
@@ -140,7 +163,10 @@ def check_packages(directory: Path) -> None:
             total = check_member_size(member.file_size, total, count, limit)
         for member in archive.infolist():
             with archive.open(member) as stream:
-                check_member_content(stream, member.filename, member.file_size, policy)
+                payloads[f"wheel/{member.filename}"] = check_member_content(
+                    stream, member.filename, member.file_size, policy)
+    if gitleaks is not None:
+        scan_package_payloads(payloads, gitleaks)
     print(f"Verified {base}: complete sdist tests, package-only wheel, scanned archive content")
 
 
@@ -179,6 +205,7 @@ def check_docs(directory: Path, *, stage: bool = False) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dist-dir", type=Path)
+    parser.add_argument("--gitleaks", type=Path, help="Gitleaks executable for archive payload scanning")
     parser.add_argument("--docs-dir", type=Path)
     parser.add_argument("--stage-docs", type=Path)
     args = parser.parse_args()
@@ -186,12 +213,12 @@ def main() -> None:
         parser.error("select --dist-dir, --docs-dir or --stage-docs")
     try:
         if args.dist_dir:
-            check_packages(args.dist_dir)
+            check_packages(args.dist_dir, args.gitleaks)
         if args.stage_docs:
             check_docs(args.stage_docs, stage=True)
         if args.docs_dir:
             check_docs(args.docs_dir)
-    except (ValueError, OSError, KeyError, tarfile.TarError, zipfile.BadZipFile) as exc:
+    except (ValueError, OSError, KeyError, tarfile.TarError, zipfile.BadZipFile, subprocess.TimeoutExpired) as exc:
         parser.exit(1, f"Distribution policy failed: {exc}\n")
 
 

@@ -43,3 +43,11 @@ metadata, after validating member paths, types and bounded sizes. Transcript exp
 local credentials, private agent instructions and audit handoffs are never release
 inputs. Extending a publication inventory requires reviewing the owning build
 script and its rejection tests together.
+
+Both PyPI publication boundaries install checksum-pinned Gitleaks and require
+`--gitleaks "$RUNNER_TEMP/gitleaks"` when checking distribution archives. The
+checker first bounds and validates archive members, then scans their actual
+unpacked bytes using `.github/gitleaks.toml`. Optional local runs without that
+flag still enforce membership and the lightweight content policy; they do not
+replace the required release secret scan. Findings fail publication without
+printing their values.
