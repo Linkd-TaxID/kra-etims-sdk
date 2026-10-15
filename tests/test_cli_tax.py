@@ -262,7 +262,7 @@ class TestTaxBands:
         assert "16%" in result.output
 
     def test_correction_note_present(self) -> None:
-        # CLAUDE.md mandates this note — guards against the A=16% inversion bug.
+        # Keep the A/B tax-band inversion warning visible.
         result = runner.invoke(app, ["tax", "bands"])
         assert "A is NOT" in result.output or "NOT" in result.output
 
