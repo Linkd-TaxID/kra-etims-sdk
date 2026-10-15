@@ -15,8 +15,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repository-hygiene:
+    uses: ./.github/workflows/hygiene.yml
+
   build:
     name: Docs artifact
+    needs: repository-hygiene
     permissions:
       contents: read
       pages: read

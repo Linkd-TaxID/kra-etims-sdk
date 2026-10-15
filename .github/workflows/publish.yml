@@ -8,6 +8,9 @@ permissions:
   contents: read
 
 jobs:
+  repository-hygiene:
+    uses: ./.github/workflows/hygiene.yml
+
   # -----------------------------------------------------------------------
   # Version consistency gate
   # Asserts the GitHub release tag exactly matches the version in
@@ -89,7 +92,7 @@ jobs:
 
   build:
     name: Build distribution
-    needs: [test, security]
+    needs: [test, security, repository-hygiene]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
