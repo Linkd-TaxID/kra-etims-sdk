@@ -37,7 +37,9 @@ requirements with `python -m pip install -e ".[dev,cli]"`. Build packages with
 `python -m build`, then run `python scripts/check_distribution.py --dist-dir dist`
 and `TAXID_DIST_DIR=dist pytest tests/test_distribution.py -q`. The wheel includes
 only the SDK and its metadata. The source archive also includes complete tests,
-synthetic JSON fixtures and the release-inventory checker. Transcript exports,
+synthetic JSON fixtures, the release checker, and its shared content scanner and
+reviewed policy. Release checks scan actual archive member bytes, including package
+metadata, after validating member paths, types and bounded sizes. Transcript exports,
 local credentials, private agent instructions and audit handoffs are never release
 inputs. Extending a publication inventory requires reviewing the owning build
 script and its rejection tests together.

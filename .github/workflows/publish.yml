@@ -25,8 +25,9 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Assert tag matches pyproject.toml version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          RELEASE_TAG="${{ github.event.release.tag_name }}"
           # Strip leading 'v' if present (e.g. v0.2.0 → 0.2.0)
           TAG_VERSION="${RELEASE_TAG#v}"
           TOML_VERSION=$(python3 - <<'EOF'

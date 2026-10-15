@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import gzip
+import importlib.util
 import json
 from pathlib import Path, PurePosixPath
 import shutil
@@ -16,6 +18,12 @@ except ModuleNotFoundError:
     import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
+SCANNER_SPEC = importlib.util.spec_from_file_location(
+    "repository_content_policy", ROOT / "scripts/check_repository.py")
+SCANNER = importlib.util.module_from_spec(SCANNER_SPEC)
+SCANNER_SPEC.loader.exec_module(SCANNER)
+MAX_ARCHIVE_BYTES = 32 * 1024 * 1024
+MAX_ARCHIVE_MEMBERS = 4096
 EGG_FILES = {"PKG-INFO", "SOURCES.txt", "dependency_links.txt", "entry_points.txt",
              "requires.txt", "top_level.txt"}
 WHEEL_FILES = {"METADATA", "WHEEL", "entry_points.txt", "top_level.txt", "RECORD"}
@@ -42,47 +50,98 @@ def source_files(directory: str, suffixes: set[str]) -> set[str]:
 
 def safe_name(name: str) -> None:
     path = PurePosixPath(name)
-    if path.is_absolute() or ".." in path.parts or "\\" in name:
+    if path.is_absolute() or ".." in path.parts or "\\" in name or any(ord(c) < 32 for c in name):
         raise ValueError(f"Unsafe archive member: {name}")
+
+
+class BoundedArchiveReader:
+    def __init__(self, stream):
+        self.stream = stream
+        self.remaining = MAX_ARCHIVE_BYTES
+
+    def read(self, size=-1):
+        size = self.remaining + 1 if size < 0 else min(size, self.remaining + 1)
+        data = self.stream.read(size)
+        self.remaining -= len(data)
+        if self.remaining < 0:
+            raise ValueError("Archive exceeds the decompression budget")
+        return data
+
+
+def check_member_size(size: int, total: int, count: int, limit: int) -> int:
+    if size < 0 or size > limit:
+        raise ValueError("Archive member exceeds the content scan limit")
+    if total + size > MAX_ARCHIVE_BYTES or count > MAX_ARCHIVE_MEMBERS:
+        raise ValueError("Archive exceeds the content scan budget")
+    return total + size
+
+
+def check_member_content(stream, name: str, size: int, policy: dict) -> None:
+    data = stream.read(size + 1)
+    if len(data) != size:
+        raise ValueError(f"Archive member size mismatch: {name}")
+    violations = SCANNER.content_violations(data, policy)
+    if violations:
+        raise ValueError(f"Archive content rejected: {name}: {', '.join(violations)}")
 
 
 def check_packages(directory: Path) -> None:
     with (ROOT / "pyproject.toml").open("rb") as stream:
         version = tomllib.load(stream)["project"]["version"]
+    policy = json.loads((ROOT / ".github/repository-policy.json").read_text())
+    limit = min(policy["max_blob_bytes"], MAX_ARCHIVE_BYTES)
     base = f"taxid_etims-{version}"
     compare({p.name for p in directory.iterdir()},
             {f"{base}.tar.gz", f"{base}-py3-none-any.whl"}, "distribution files")
+    for file in directory.iterdir():
+        if file.is_symlink() or not file.is_file() or file.stat().st_size > MAX_ARCHIVE_BYTES:
+            raise ValueError(f"Invalid or oversized distribution file: {file.name}")
     package = source_files("src/kra_etims", {".py", ".typed"})
     expected_sdist = package | source_files("tests", {".py", ".json"}) | {
         "README.md", "CHANGELOG.md", "pyproject.toml", "MANIFEST.in", "init_device.py",
-        "scripts/check_distribution.py", "examples/pos_basket_demo.py", "PKG-INFO", "setup.cfg",
+        "scripts/check_distribution.py", "scripts/check_repository.py",
+        ".github/repository-policy.json", "examples/pos_basket_demo.py", "PKG-INFO", "setup.cfg",
     } | {f"src/taxid_etims.egg-info/{name}" for name in EGG_FILES}
-    with tarfile.open(directory / f"{base}.tar.gz") as archive:
-        members = archive.getmembers()
-        names = [m.name for m in members]
-        if len(names) != len(set(names)):
-            raise ValueError("Duplicate sdist members")
-        for member in members:
+    names, actual, total = set(), set(), 0
+    # Streaming checks each header before traversing its declared payload.
+    with gzip.open(directory / f"{base}.tar.gz", "rb") as compressed, tarfile.open(
+            fileobj=BoundedArchiveReader(compressed), mode="r|") as archive:
+        for member in archive:
             safe_name(member.name)
+            if member.name in names:
+                raise ValueError("Duplicate sdist members")
+            names.add(member.name)
             if not (member.isfile() or member.isdir()):
                 raise ValueError(f"Non-regular sdist member: {member.name}")
             if not member.name.startswith(base + "/") and member.name != base:
                 raise ValueError(f"Unexpected sdist root: {member.name}")
-        actual = {m.name[len(base) + 1:] for m in members if m.isfile()}
+            total = check_member_size(member.size, total, len(names), limit)
+            if member.isfile():
+                name = member.name[len(base) + 1:]
+                if name not in expected_sdist:
+                    raise ValueError(f"sdist: unexpected={name}")
+                actual.add(name)
+                with archive.extractfile(member) as stream:
+                    check_member_content(stream, name, member.size, policy)
     compare(actual, expected_sdist, "sdist")
+    expected_wheel = {p.removeprefix("src/") for p in package} | {
+        f"{base}.dist-info/{name}" for name in WHEEL_FILES}
     with zipfile.ZipFile(directory / f"{base}-py3-none-any.whl") as archive:
         names = archive.namelist()
         if len(names) != len(set(names)):
             raise ValueError("Duplicate wheel members")
-        for member in archive.infolist():
+        compare(set(names), expected_wheel, "wheel")
+        total = 0
+        for count, member in enumerate(archive.infolist(), 1):
             safe_name(member.filename)
             mode = member.external_attr >> 16
-            if stat.S_ISLNK(mode):
-                raise ValueError(f"Wheel symlink: {member.filename}")
-    expected_wheel = {p.removeprefix("src/") for p in package} | {
-        f"{base}.dist-info/{name}" for name in WHEEL_FILES}
-    compare(set(names), expected_wheel, "wheel")
-    print(f"Verified {base}: complete sdist tests and package-only wheel")
+            if stat.S_IFMT(mode) not in {0, stat.S_IFREG}:
+                raise ValueError(f"Non-regular wheel member: {member.filename}")
+            total = check_member_size(member.file_size, total, count, limit)
+        for member in archive.infolist():
+            with archive.open(member) as stream:
+                check_member_content(stream, member.filename, member.file_size, policy)
+    print(f"Verified {base}: complete sdist tests, package-only wheel, scanned archive content")
 
 
 def docs_inventory() -> set[str]:
