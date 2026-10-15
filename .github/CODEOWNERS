@@ -1,14 +1,14 @@
 # Content policy, exception and publication changes require maintainer review.
-/.github/ @ronnyabuto
-/scripts/check_repository.py @ronnyabuto
-/scripts/tests/test_repository_policy.py @ronnyabuto
-/CONTRIBUTING.md @ronnyabuto
-/scripts/check_distribution.py @ronnyabuto
-/scripts/check_site.py @ronnyabuto
-/scripts/check_evidence.py @ronnyabuto
-/scripts/check_runtime_artifacts.py @ronnyabuto
-/Dockerfile @ronnyabuto
-/pyproject.toml @ronnyabuto
-/MANIFEST.in @ronnyabuto
-/_config.yml @ronnyabuto
-/Gemfile* @ronnyabuto
+/.github/ @ronnyabuto @yvonnewangui
+/scripts/check_repository.py @ronnyabuto @yvonnewangui
+/scripts/tests/test_repository_policy.py @ronnyabuto @yvonnewangui
+/CONTRIBUTING.md @ronnyabuto @yvonnewangui
+/scripts/check_distribution.py @ronnyabuto @yvonnewangui
+/scripts/check_site.py @ronnyabuto @yvonnewangui
+/scripts/check_evidence.py @ronnyabuto @yvonnewangui
+/scripts/check_runtime_artifacts.py @ronnyabuto @yvonnewangui
+/Dockerfile @ronnyabuto @yvonnewangui
+/pyproject.toml @ronnyabuto @yvonnewangui
+/MANIFEST.in @ronnyabuto @yvonnewangui
+/_config.yml @ronnyabuto @yvonnewangui
+/Gemfile* @ronnyabuto @yvonnewangui

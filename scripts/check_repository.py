@@ -2,6 +2,7 @@
 """Check a candidate Git tree or a distribution directory without printing data."""
 
 import argparse
+import fnmatch
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
@@ -89,12 +90,16 @@ def check_source(root, policy, ref):
     identifiers = policy.get("immutable_identifier_exceptions", {})
     for name, mode, oid, size in git_entries(root, ref):
         rules = path_violations(name)
+        if any(fnmatch.fnmatchcase(name, pattern) for pattern in policy.get("forbidden_paths", [])):
+            rules.append("retired-or-private-path")
         if mode == "160000":
             rules.append("unexpected-gitlink")
         elif mode not in {"100644", "100755"}:
             rules.append("unsupported-file-mode")
         else:
             exception = exceptions.get(name)
+            if exception and oid != exception["git_blob"]:
+                rules.append("changed-pinned-blob")
             if size > policy["max_blob_bytes"]:
                 if not exception or oid != exception["git_blob"]:
                     rules.append("unapproved-large-blob")
