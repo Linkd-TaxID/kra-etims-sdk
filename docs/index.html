@@ -7,267 +7,517 @@
   <meta name="description" content="Reference for KRA eTIMS OSCU and VSCU API result codes. Covers resultCd 000, 001, 901, 902, 903, 910, 921, 922, 990, 994, E04, E11 with causes and fixes. Includes undocumented reported codes outside the cited KRA specification.">
   <meta name="keywords" content="KRA eTIMS error codes, OSCU resultCd, VSCU error codes, eTIMS 901, eTIMS 910, eTIMS 921, KRA API errors, GavaConnect errors, kenya revenue authority API, eTIMS integration Kenya">
   <meta name="robots" content="index, follow, max-snippet:-1">
-  <meta name="google-site-verification" content="kvoqWPq6RXNOcyORJr4pyubDvsm7YdA_T15Y6yJ86VY">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' font-family='system-ui,sans-serif' font-size='22' font-weight='700' fill='%23f85149' text-anchor='middle'>!</text></svg>">
   <link rel="canonical" href="https://docs.taxid.co.ke/">
+  <link rel="icon" type="image/x-icon" href="https://taxid.co.ke/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="https://taxid.co.ke/favicon-32x32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://taxid.co.ke/apple-touch-icon.png">
   <meta property="og:title" content="KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference">
   <meta property="og:description" content="Reference for KRA eTIMS OSCU/VSCU result codes, including reported codes outside the cited KRA specification.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://docs.taxid.co.ke/">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:site_name" content="TaxID">
+  <meta property="og:image" content="https://taxid.co.ke/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference">
-  <meta name="twitter:description" content="Reference for KRA eTIMS OSCU/VSCU resultCd values including reported codes outside the cited specification.">
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "TechArticle",
-    "name": "KRA eTIMS OSCU/VSCU API Error Code Reference",
-    "description": "Reference for KRA eTIMS result codes including official OSCU/VSCU spec codes and reported codes outside the cited specification.",
-    "url": "https://docs.taxid.co.ke/",
-    "author": {
-      "@type": "Organization",
-      "name": "Linkd TaxID",
-      "url": "https://github.com/Linkd-TaxID"
+  <meta name="twitter:description" content="Reference for KRA eTIMS OSCU/VSCU result codes, including reported codes outside the cited KRA specification.">
+  <meta name="twitter:image" content="https://taxid.co.ke/og-image.png">
+  <link rel="preload" href="assets/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/jetbrains-mono-var.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/taxid-docs.css">
+  <meta name="google-site-verification" content="kvoqWPq6RXNOcyORJr4pyubDvsm7YdA_T15Y6yJ86VY">
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "name": "KRA eTIMS OSCU/VSCU API Error Code Reference",
+  "description": "Reference for KRA eTIMS result codes including official OSCU/VSCU spec codes and reported codes outside the cited specification.",
+  "url": "https://docs.taxid.co.ke/",
+  "dateModified": "2026-10-14",
+  "author": {
+    "@type": "Organization",
+    "name": "TaxID",
+    "url": "https://taxid.co.ke/"
+  },
+  "about": [
+    {
+      "@type": "Thing",
+      "name": "KRA eTIMS"
     },
-    "about": [
-      {"@type": "Thing", "name": "KRA eTIMS"},
-      {"@type": "Thing", "name": "OSCU API"},
-      {"@type": "Thing", "name": "VSCU API"},
-      {"@type": "Thing", "name": "Kenya Revenue Authority"},
-      {"@type": "Thing", "name": "GavaConnect"}
-    ],
-    "keywords": "KRA eTIMS, OSCU, VSCU, resultCd, error codes, Kenya tax API"
-  }
-  </script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #222; line-height: 1.6; }
-    .container { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
-    header { margin-bottom: 32px; }
-    h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
-    .subtitle { color: #555; font-size: 15px; margin-bottom: 16px; }
-    .warning-banner { background: #fff3cd; border-left: 4px solid #f59e0b; padding: 14px 18px; border-radius: 0 6px 6px 0; margin-bottom: 24px; font-size: 14px; }
-    .warning-banner strong { display: block; margin-bottom: 4px; font-size: 15px; }
-    .controls { margin-bottom: 24px; }
-    .search-wrap { position: relative; }
-    #search { width: 100%; padding: 14px 16px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
-    #search:focus { box-shadow: 0 0 0 3px rgba(0, 80, 200, 0.15); border-color: #0050c8; }
-    .search-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; min-height: 20px; }
-    #result-count { font-size: 13px; color: #666; }
-    .search-hint { font-size: 12px; color: #999; }
-    .search-hint kbd { display: inline-block; padding: 1px 5px; font-size: 11px; font-family: monospace; background: #f0f0f0; border: 1px solid #ccc; border-radius: 3px; color: #555; }
-    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .filter-btn { padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 20px; border: 1px solid #ccc; background: white; cursor: pointer; transition: background 0.1s, color 0.1s; }
-    .filter-btn.active { background: #0050c8; color: white; border-color: #0050c8; }
-    #results { margin-top: 8px; }
-    .card { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
-    .card-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-    .code { font-family: monospace; font-size: 22px; font-weight: 700; color: #0050c8; }
-    .badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 12px; }
-    .badge-official { background: #d1ecf1; color: #0c5460; }
-    .badge-production { background: #f8d7da; color: #721c24; }
-    .badge-client { background: #fff3cd; color: #856404; }
-    .card-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
-    .description { font-size: 14px; color: #444; margin-bottom: 12px; }
-    .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #666; margin-bottom: 6px; margin-top: 12px; }
-    .fix-box { background: #f0fff4; border-left: 3px solid #28a745; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 14px; }
-    .gotcha-box { background: #fff8e1; border-left: 3px solid #f59e0b; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 13px; color: #555; }
-    ul { padding-left: 20px; font-size: 14px; }
-    li { margin-bottom: 4px; }
-    #empty-state { display: none; text-align: center; padding: 40px 20px; color: #666; font-size: 15px; }
-    footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #e0e0e0; font-size: 13px; color: #666; }
-    footer a { color: #0050c8; text-decoration: none; }
-    mark { background: #fef3c7; color: inherit; border-radius: 2px; padding: 0 2px; }
-    @media (max-width: 600px) { .code { font-size: 18px; } h1 { font-size: 22px; } .search-hint { display: none; } }
-  </style>
+    {
+      "@type": "Thing",
+      "name": "OSCU API"
+    },
+    {
+      "@type": "Thing",
+      "name": "VSCU API"
+    },
+    {
+      "@type": "Thing",
+      "name": "Kenya Revenue Authority"
+    },
+    {
+      "@type": "Thing",
+      "name": "GavaConnect"
+    }
+  ],
+  "keywords": "KRA eTIMS, OSCU, VSCU, resultCd, error codes, Kenya tax API"
+}</script>
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": "KRA eTIMS result codes",
+  "numberOfItems": 31,
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "000 — Success",
+      "url": "https://docs.taxid.co.ke/000.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "00 — Success (Reported VSCU JAR Variant)",
+      "url": "https://docs.taxid.co.ke/00.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "0000 — Success (GavaConnect Variant)",
+      "url": "https://docs.taxid.co.ke/0000.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 4,
+      "name": "001 — No Search Result",
+      "url": "https://docs.taxid.co.ke/001.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 5,
+      "name": "891 — URL Construction Error",
+      "url": "https://docs.taxid.co.ke/891.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 6,
+      "name": "892 — Header Construction Error",
+      "url": "https://docs.taxid.co.ke/892.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 7,
+      "name": "893 — Request Body Serialization Error",
+      "url": "https://docs.taxid.co.ke/893.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 8,
+      "name": "894 — Server Communication Error",
+      "url": "https://docs.taxid.co.ke/894.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 9,
+      "name": "895 — Unallowed Request Method",
+      "url": "https://docs.taxid.co.ke/895.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 10,
+      "name": "896 — Request Status Error",
+      "url": "https://docs.taxid.co.ke/896.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 11,
+      "name": "899 — Client Catch-All",
+      "url": "https://docs.taxid.co.ke/899.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 12,
+      "name": "900 — No Header Information",
+      "url": "https://docs.taxid.co.ke/900.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 13,
+      "name": "901 — Not a Valid Device",
+      "url": "https://docs.taxid.co.ke/901.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 14,
+      "name": "902 — Device Already Installed",
+      "url": "https://docs.taxid.co.ke/902.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 15,
+      "name": "903 — Device Type Mismatch",
+      "url": "https://docs.taxid.co.ke/903.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 16,
+      "name": "905 — Only OSCU Device Can Be Verified",
+      "url": "https://docs.taxid.co.ke/905.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 17,
+      "name": "910 — Request Parameter Error",
+      "url": "https://docs.taxid.co.ke/910.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 18,
+      "name": "911 — Empty Request Body",
+      "url": "https://docs.taxid.co.ke/911.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 19,
+      "name": "912 — Request Method Error",
+      "url": "https://docs.taxid.co.ke/912.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 20,
+      "name": "913 — Code Value Error Among Request Parameters",
+      "url": "https://docs.taxid.co.ke/913.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 21,
+      "name": "921 — Sales Data Rejected",
+      "url": "https://docs.taxid.co.ke/921.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 22,
+      "name": "922 — Sales Data Sequence Error",
+      "url": "https://docs.taxid.co.ke/922.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 23,
+      "name": "990 — Rate Limit Exceeded",
+      "url": "https://docs.taxid.co.ke/990.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 24,
+      "name": "991 — Error During Registration",
+      "url": "https://docs.taxid.co.ke/991.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 25,
+      "name": "992 — Error During Modification",
+      "url": "https://docs.taxid.co.ke/992.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 26,
+      "name": "993 — Error During Deletion",
+      "url": "https://docs.taxid.co.ke/993.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 27,
+      "name": "994 — Duplicate Record",
+      "url": "https://docs.taxid.co.ke/994.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 28,
+      "name": "995 — No Downloaded File",
+      "url": "https://docs.taxid.co.ke/995.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 29,
+      "name": "999 — Unknown Error",
+      "url": "https://docs.taxid.co.ke/999.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 30,
+      "name": "E04 — Device / Branch Not Found",
+      "url": "https://docs.taxid.co.ke/E04.html"
+    },
+    {
+      "@type": "ListItem",
+      "position": 31,
+      "name": "E11 — VSCU Memory Full",
+      "url": "https://docs.taxid.co.ke/E11.html"
+    }
+  ]
+}</script>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>KRA eTIMS Error Codes</h1>
-      <p>TaxID embeds fiscal operations in existing invoicing, POS and ERP software. This reference covers raw control-unit codes, not TaxID transaction statuses. A signed receipt does not establish central KRA acceptance.</p>
-      <p class="subtitle">OSCU/VSCU <code>resultCd</code> reference — including reported codes outside the cited KRA specification.</p>
-      <div class="warning-banner">
-        <strong>⚠️ Critical: Multiple success-code variants exist</strong>
-        KRA returns <code>"000"</code> (OSCU spec §4.18 — also confirmed live from the VSDC 2.0.6 JAR), <code>"0000"</code> (observed live from GavaConnect), and <code>"00"</code> has been reported for the VSCU JAR. Never hardcode a single string. Always check membership in <code>{"0", "00", "000", "0000"}</code>.
-      </div>
-    </header>
+<nav id="nav">
+  <div class="nav-row">
+    <a href="https://taxid.co.ke/" class="nav-logo" aria-label="TaxID home">Tax<span>ID</span><span class="docs-tag">docs</span></a>
+    <button class="nav-burger" id="nav-burger" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="nav-links" id="nav-links">
+      <a href="https://taxid.co.ke/#how-it-works" class="nav-link">How it works</a>
+      <a href="https://taxid.co.ke/blog/" class="nav-link">Blog</a>
+      <a href="./" class="nav-link is-active" aria-current="page">Error codes</a>
+      <a href="faq.html" class="nav-link">FAQ</a>
+      <a href="https://taxid.co.ke/#waitlist" class="btn btn-primary" style="margin-left: 8px; font-size: var(--fs-sm); padding: 8px 18px;">Request developer access</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main">
+  <section class="d-head wrap">
+    <span class="eyebrow">eTIMS reference</span>
+    <h1 class="d-title">KRA eTIMS error codes</h1>
+    <p class="lead">TaxID embeds fiscal operations in existing invoicing, POS and ERP software. This reference covers raw control-unit codes, not TaxID transaction statuses. A signed receipt does not establish central KRA acceptance.</p>
+    <p class="d-sub">OSCU/VSCU <code>resultCd</code> reference, including reported codes outside the cited KRA specification.</p>
+
+    <div class="warn" role="note">
+      <strong>Multiple success-code variants exist</strong>
+      KRA returns <code>"000"</code> (OSCU spec §4.18, also confirmed live from the VSDC 2.0.6 JAR), <code>"0000"</code> (observed live from GavaConnect), and <code>"00"</code> has been reported for the VSCU JAR. Never hardcode a single string. Always check membership in <code>{"0", "00", "000", "0000"}</code>.
+    </div>
+
     <div class="controls">
       <div class="search-wrap">
-        <input type="text" id="search" placeholder="Search by code, message, cause, or fix..." autofocus autocomplete="off" spellcheck="false">
+        <label for="search" class="sr-only">Search error codes</label>
+        <input type="search" id="search" class="search-input" placeholder="Search codes, messages and fixes…" autocomplete="off" spellcheck="false">
+        <kbd class="search-key" aria-hidden="true">/</kbd>
       </div>
-      <div class="search-meta">
-        <span id="result-count" class="result-count"></span>
-        <span class="search-hint">Press <kbd>/</kbd> to focus &nbsp;·&nbsp; <kbd>Esc</kbd> to clear</span>
-      </div>
-      <div class="filters">
-        <button class="filter-btn active" data-filter="All">All</button>
-        <button class="filter-btn" data-filter="Official">Official Spec</button>
-        <button class="filter-btn" data-filter="Reported">Reported</button>
-        <button class="filter-btn" data-filter="Client">Client-Side</button>
-        <button class="filter-btn" data-filter="Gotcha">Has Notes</button>
+      <div class="filters" role="group" aria-label="Filter by source">
+        <button class="chip" data-filter="All" aria-pressed="true">All</button>
+        <button class="chip" data-filter="Official" aria-pressed="false">Official spec</button>
+        <button class="chip" data-filter="Reported" aria-pressed="false">Reported</button>
+        <button class="chip" data-filter="Client" aria-pressed="false">Client-side</button>
+        <button class="chip" data-filter="Notes" aria-pressed="false">Has notes</button>
       </div>
     </div>
-    <div id="results"></div>
-    <div id="empty-state">No matching codes found. <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new" target="_blank">Open an issue</a> to add this code.</div>
-    <footer>
-      <p>Maintained by <a href="https://github.com/Linkd-TaxID" target="_blank">TaxID</a> · <a href="https://github.com/Linkd-TaxID/kra-etims-sdk" target="_blank">GitHub</a> · <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new" target="_blank">Add a missing code</a></p>
-      <p style="margin-top:8px;">Data sourced from KRA OSCU Specification v2.0 §4.18 and retained sandbox observations and separately labelled reports.</p>
-    </footer>
+  </section>
+
+  <section class="wrap d-list" aria-label="Result codes">
+    <div class="list-meta">
+      <span id="result-count" aria-live="polite">31 codes</span>
+      <span class="hint">Press <kbd>/</kbd> to search · <kbd>Esc</kbd> to clear</span>
+    </div>
+    <div class="code-list" id="code-list">
+      <a class="code-row" href="000.html" data-code="000">
+        <span class="c">000</span>
+        <span class="t">Success</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Documented success code.</span>
+      </a>
+      <a class="code-row" href="00.html" data-code="00">
+        <span class="c">00</span>
+        <span class="t">Success (Reported VSCU JAR Variant)</span>
+        <span class="badge b-reported">Reported</span>
+        <span class="s">Reported VSCU success variant; not confirmed by the retained VSDC 2.0.6 campaign.</span>
+      </a>
+      <a class="code-row" href="0000.html" data-code="0000">
+        <span class="c">0000</span>
+        <span class="t">Success (GavaConnect Variant)</span>
+        <span class="badge b-reported">Reported</span>
+        <span class="s">Reported GavaConnect success variant; not the documented VSCU success code.</span>
+      </a>
+      <a class="code-row" href="001.html" data-code="001">
+        <span class="c">001</span>
+        <span class="t">No Search Result</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">No matching search results.</span>
+      </a>
+      <a class="code-row" href="891.html" data-code="891">
+        <span class="c">891</span>
+        <span class="t">URL Construction Error</span>
+        <span class="badge b-client">Client-side</span>
+        <span class="s">Request URL construction error.</span>
+      </a>
+      <a class="code-row" href="892.html" data-code="892">
+        <span class="c">892</span>
+        <span class="t">Header Construction Error</span>
+        <span class="badge b-client">Client-side</span>
+        <span class="s">The specification describes an error while creating request header data.</span>
+      </a>
+      <a class="code-row" href="893.html" data-code="893">
+        <span class="c">893</span>
+        <span class="t">Request Body Serialization Error</span>
+        <span class="badge b-client">Client-side</span>
+        <span class="s">The SCU library could not serialize the request payload.</span>
+      </a>
+      <a class="code-row" href="894.html" data-code="894">
+        <span class="c">894</span>
+        <span class="t">Server Communication Error</span>
+        <span class="badge b-client">Client-side</span>
+        <span class="s">Communication with the server failed.</span>
+      </a>
+      <a class="code-row" href="895.html" data-code="895">
+        <span class="c">895</span>
+        <span class="t">Unallowed Request Method</span>
+        <span class="badge b-client">Client-side</span>
+        <span class="s">The wrong HTTP verb was used for this endpoint.</span>
+      </a>
+      <a class="code-row" href="896.html" data-code="896">
+        <span class="c">896</span>
+        <span class="t">Request Status Error</span>
+        <span class="badge b-client">Client-side</span>
+        <span class="s">Request status error.</span>
+      </a>
+      <a class="code-row" href="899.html" data-code="899">
+        <span class="c">899</span>
+        <span class="t">Client Catch-All</span>
+        <span class="badge b-client">Client-side</span>
+        <span class="s">Generic client error; the code alone does not identify the cause.</span>
+      </a>
+      <a class="code-row" href="900.html" data-code="900">
+        <span class="c">900</span>
+        <span class="t">No Header Information</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">The specification describes missing header information.</span>
+      </a>
+      <a class="code-row" href="901.html" data-code="901">
+        <span class="c">901</span>
+        <span class="t">Not a Valid Device</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">The device is not valid for this environment.</span>
+      </a>
+      <a class="code-row" href="902.html" data-code="902">
+        <span class="c">902</span>
+        <span class="t">Device Already Installed</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Documented installed-device condition (OSCU v2.0 §4.18; VSCU v2.0 §4.14).</span>
+      </a>
+      <a class="code-row" href="903.html" data-code="903">
+        <span class="c">903</span>
+        <span class="t">Device Type Mismatch</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">The device type does not match the verification path.</span>
+      </a>
+      <a class="code-row" href="905.html" data-code="905">
+        <span class="c">905</span>
+        <span class="t">Only OSCU Device Can Be Verified</span>
+        <span class="badge b-reported">Reported</span>
+        <span class="s">Reported device-type mismatch outside the cited v2.0 response-code table.</span>
+      </a>
+      <a class="code-row" href="910.html" data-code="910">
+        <span class="c">910</span>
+        <span class="t">Request Parameter Error</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Request parameter validation failed.</span>
+      </a>
+      <a class="code-row" href="911.html" data-code="911">
+        <span class="c">911</span>
+        <span class="t">Empty Request Body</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Request body is missing.</span>
+      </a>
+      <a class="code-row" href="912.html" data-code="912">
+        <span class="c">912</span>
+        <span class="t">Request Method Error</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Request method error.</span>
+      </a>
+      <a class="code-row" href="913.html" data-code="913">
+        <span class="c">913</span>
+        <span class="t">Code Value Error Among Request Parameters</span>
+        <span class="badge b-official">Observed</span>
+        <span class="s">Code-value validation failed.</span>
+      </a>
+      <a class="code-row" href="921.html" data-code="921">
+        <span class="c">921</span>
+        <span class="t">Sales Data Rejected</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Declared sales or invoice data could not be received.</span>
+      </a>
+      <a class="code-row" href="922.html" data-code="922">
+        <span class="c">922</span>
+        <span class="t">Sales Data Sequence Error</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">The response-code table describes invoice data received before sales data.</span>
+      </a>
+      <a class="code-row" href="990.html" data-code="990">
+        <span class="c">990</span>
+        <span class="t">Rate Limit Exceeded</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Request limit exceeded.</span>
+      </a>
+      <a class="code-row" href="991.html" data-code="991">
+        <span class="c">991</span>
+        <span class="t">Error During Registration</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Registration failed.</span>
+      </a>
+      <a class="code-row" href="992.html" data-code="992">
+        <span class="c">992</span>
+        <span class="t">Error During Modification</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Modification failed.</span>
+      </a>
+      <a class="code-row" href="993.html" data-code="993">
+        <span class="c">993</span>
+        <span class="t">Error During Deletion</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Deletion failed.</span>
+      </a>
+      <a class="code-row" href="994.html" data-code="994">
+        <span class="c">994</span>
+        <span class="t">Duplicate Record</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Duplicate data was reported.</span>
+      </a>
+      <a class="code-row" href="995.html" data-code="995">
+        <span class="c">995</span>
+        <span class="t">No Downloaded File</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">File retrieval failure in document or notice flows.</span>
+      </a>
+      <a class="code-row" href="999.html" data-code="999">
+        <span class="c">999</span>
+        <span class="t">Unknown Error</span>
+        <span class="badge b-official">Official spec</span>
+        <span class="s">Unclassified server error.</span>
+      </a>
+      <a class="code-row" href="E04.html" data-code="E04">
+        <span class="c">E04</span>
+        <span class="t">Device / Branch Not Found</span>
+        <span class="badge b-reported">Reported</span>
+        <span class="s">Reported device or branch lookup failure outside the cited v2.0 response-code table.</span>
+      </a>
+      <a class="code-row" href="E11.html" data-code="E11">
+        <span class="c">E11</span>
+        <span class="t">VSCU Memory Full</span>
+        <span class="badge b-reported">Reported</span>
+        <span class="s">Reported runtime capacity failure outside the cited v2.0 response-code table.</span>
+      </a>
+    </div>
+    <p class="empty" id="empty-state">No matching codes found. <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new">Open an issue</a> to add this code.</p>
+    <p class="d-sub source-note">Data sourced from KRA OSCU Specification v2.0 §4.18 and retained sandbox observations and separately labelled reports.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-row">
+      <a href="https://taxid.co.ke/" class="nav-logo">Tax<span>ID</span></a>
+      <div class="footer-links">
+        <a href="https://taxid.co.ke/blog/">Blog</a>
+        <a href="./">Error codes</a>
+        <a href="faq.html">FAQ</a>
+        <a href="https://github.com/Linkd-TaxID/kra-etims-sdk">Python SDK</a>
+        <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new">Add a missing code</a>
+        <a href="mailto:support@taxid.co.ke">Contact</a>
+      </div>
+      <p class="footer-copy">© 2026 TaxID. Built for Kenya.</p>
+    </div>
   </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/7.0.0/fuse.min.js"></script>
-  <script src="errors.js"></script>
-  <script>
-    const resultsEl  = document.getElementById('results');
-    const emptyEl    = document.getElementById('empty-state');
-    const searchEl   = document.getElementById('search');
-    const countEl    = document.getElementById('result-count');
-    const filterBtns = document.querySelectorAll('.filter-btn');
-
-    let currentQuery  = '';
-    let currentFilter = 'All';
-
-    const fuse = new Fuse(ERRORS, {
-      threshold: 0.35,
-      ignoreLocation: true,
-      minMatchCharLength: 2,
-      keys: [
-        { name: 'code',        weight: 3.0 },
-        { name: 'title',       weight: 2.0 },
-        { name: 'description', weight: 1.5 },
-        { name: 'causes',      weight: 1.0 },
-        { name: 'fix',         weight: 1.0 },
-        { name: 'gotcha',      weight: 0.8 },
-      ]
-    });
-
-    // Restore query from URL on load (?q=901 or ?q=duplicate)
-    const params = new URLSearchParams(location.search);
-    if (params.has('q')) {
-      currentQuery = params.get('q');
-      searchEl.value = currentQuery;
-      document.title = 'resultCd ' + currentQuery + ' — KRA eTIMS Error Reference';
-    }
-
-    searchEl.addEventListener('input', () => {
-      currentQuery = searchEl.value.trim();
-
-      // Keep URL in sync so devs can copy/share the current search
-      history.replaceState(null, '',
-        currentQuery
-          ? location.pathname + '?q=' + encodeURIComponent(currentQuery)
-          : location.pathname
-      );
-
-      document.title = currentQuery
-        ? 'resultCd ' + currentQuery + ' — KRA eTIMS Error Reference'
-        : 'KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference';
-
-      filterAndRender();
-    });
-
-    filterBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        filterBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentFilter = btn.dataset.filter;
-        filterAndRender();
-      });
-    });
-
-    // '/' focuses the search from anywhere on the page (standard dev-tool convention)
-    // 'Escape' clears and unfocuses
-    document.addEventListener('keydown', e => {
-      if (e.key === '/' && document.activeElement !== searchEl) {
-        e.preventDefault();
-        searchEl.focus();
-        searchEl.select();
-      }
-      if (e.key === 'Escape' && document.activeElement === searchEl) {
-        searchEl.value = '';
-        currentQuery = '';
-        history.replaceState(null, '', location.pathname);
-        document.title = 'KRA eTIMS Error Codes — OSCU/VSCU resultCd Reference';
-        searchEl.blur();
-        filterAndRender();
-      }
-    });
-
-    function filterAndRender() {
-      let entries = currentQuery
-        ? fuse.search(currentQuery).map(r => r.item)
-        : ERRORS;
-
-      // "Has Notes" filters on the gotcha field being present, regardless of category
-      if (currentFilter === 'Gotcha') {
-        entries = entries.filter(e => !!e.gotcha);
-      } else if (currentFilter !== 'All') {
-        entries = entries.filter(e => e.category === currentFilter);
-      }
-
-      const total = ERRORS.length;
-      if (!currentQuery && currentFilter === 'All') {
-        countEl.textContent = total + ' codes';
-      } else {
-        countEl.textContent = entries.length
-          ? entries.length + ' result' + (entries.length !== 1 ? 's' : '')
-          : '';
-      }
-
-      renderCards(entries);
-    }
-
-    // Wrap each search term in <mark> so devs can see exactly what matched.
-    // Applied to text content only — code badges are never highlighted.
-    function hl(text, query) {
-      if (!query || !text) return text || '';
-      const words = query.trim().split(/\s+/).filter(w => w.length >= 2);
-      if (!words.length) return text;
-      const pattern = words
-        .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-        .join('|');
-      return text.replace(new RegExp('(' + pattern + ')', 'gi'), '<mark>$1</mark>');
-    }
-
-    function renderCards(entries) {
-      if (!entries.length) {
-        resultsEl.innerHTML = '';
-        emptyEl.style.display = 'block';
-        return;
-      }
-      emptyEl.style.display = 'none';
-      const q = currentQuery;
-      resultsEl.innerHTML = entries.map(e => `
-        <div class="card" id="${e.code}">
-          <div class="card-top">
-            <span class="code">${e.code}</span>
-            <span class="badge ${badgeClass(e.category)}">${e.category}</span>
-          </div>
-          <div class="card-title">${hl(e.title, q)}</div>
-          <p class="description">${hl(e.description, q)}</p>
-          ${e.causes && e.causes.length ? `
-            <div class="section-label">Likely Causes</div>
-            <ul>${e.causes.map(c => `<li>${hl(c, q)}</li>`).join('')}</ul>
-          ` : ''}
-          ${e.fix ? `
-            <div class="section-label">Resolution</div>
-            <div class="fix-box">${hl(e.fix, q)}</div>
-          ` : ''}
-          ${e.gotcha ? `
-            <div class="section-label">Notes</div>
-            <div class="gotcha-box">${hl(e.gotcha, q)}</div>
-          ` : ''}
-        </div>
-      `).join('');
-    }
-
-    function badgeClass(category) {
-      const map = { Official: 'badge-official', Reported: 'badge-production', Observed: 'badge-official', Client: 'badge-client' };
-      return map[category] || 'badge-official';
-    }
-
-    filterAndRender();
-  </script>
+</footer>
+<script src="assets/nav.js" defer></script>
+<script src="assets/fuse.min.js" defer></script>
+<script src="errors.js" defer></script>
+<script src="assets/search.js" defer></script>
 </body>
 </html>
