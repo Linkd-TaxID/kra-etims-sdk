@@ -17,8 +17,10 @@ requires merchant authorization, real KRA evidence and applicable approval.
 - Raw resultCd values differ from TaxID HTTP errors and transaction statuses.
   Duplicate codes do not recover receipt signatures or prove identical contents.
 - VSCU signing uses /trnsSales/saveSales. Do not invent a second saveInvoice call.
-- Initialization 902 does not recover cmcKey. Retain the original key securely;
-  missing device credentials require operator recovery.
+- Initialization 902 alone proves neither recovered credentials nor readiness.
+  OSCU requires matching identity and an issued/retained communication key; VSCU
+  requires its retained local device state and application checkpoint. Missing
+  state or credentials require operator/KRA recovery.
 - Rates and classifications require current reference data and merchant mapping.
   Historical sample rates are not current tax advice.
 

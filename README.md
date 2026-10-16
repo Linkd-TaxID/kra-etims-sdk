@@ -201,9 +201,7 @@ client.issue_credit_note(
 ```
 
 A stable `client_reference` or `idempotency_key` is required; retain it across retries.
-The currently supported flat-invoice path reverses the full original amount. Canonical
-itemised and partial-line corrections remain gated by the middleware. Passing `items`
-does not enable them. Creator-sale and platform-fee invoices need separate corrections
+Full original corrections and explicit original-line selections use the middleware canonical contract. Partial/repeated combinations remain synthetic-only until an official device contract is established; production corrections keep their separate approval gate. Creator-sale and platform-fee invoices need separate corrections
 under their original issuer grants. An uncertain correction reserves its amount and
 requires reconciliation; it cannot be assumed safe to replace with another request.
 Over-reversal raises `CreditNoteExceedsOriginalError`, with exact Decimal balances.
@@ -214,11 +212,10 @@ Over-reversal raises `CreditNoteExceedsOriginalError`, with exact Decimal balanc
 x = client.reports.get_x_report("2026-09-25")   # read-only, safe any time
 x.total_amount, x.band_b.taxable_amount, x.band_b.tax_amount
 
-z = client.reports.get_daily_z("2026-09-25")    # closes the fiscal day: irreversible
+z = client.reports.get_daily_z("2026-09-25")    # finalises a local aggregate; no remote fiscal close
 ```
 
-TaxID issues the Z report automatically at 23:59 Nairobi time. A second Z
-report for the same date raises `ZReportAlreadyIssuedError`. Do not retry it.
+Configured scheduling may finalize the local aggregate after unresolved work settles. This is neither device fiscal closure nor KRA acknowledgement. An already completed report raises `ZReportAlreadyIssuedError`; other conflicts retain their original code for investigation.
 
 ## Other operations
 
@@ -354,3 +351,22 @@ The [synthetic marketplace example](docs/synthetic-marketplace.md) exercises the
 against isolated middleware and PostgreSQL, including process restart. It is one example,
 not a restriction on supported platforms. Simulated receipts, payments and remittance
 documents do not establish real-KRA acceptance.
+
+[Connected creator and retail demonstrations](docs/connected-demonstrations.md) cover
+separate invoice obligations, withholding estimates and original-reference recovery.
+Use [control-unit onboarding](docs/control-unit-onboarding.md) and
+[registration recovery](docs/control-unit-registration.md) for explicit VSCU/OSCU
+provisioning, durable initialization and retained original operations.
+
+[Retail operations](docs/retail-operations.md) and [stock recovery](docs/stock-recovery.md)
+cover original itemised corrections, explicit stock movements and local closure.
+[Withholding operations](docs/withholding-operations.md) adds versioned assessed
+sandbox policies, separate approval, recorded deductions and supplied-evidence batching.
+Production withholding and automatic remittance remain gated; certificates remain
+supplied and unverified.
+
+[Product integration](docs/product-integration.md) exercises both synthetic adapters
+through TaxID HTTP and PostgreSQL with distinct seller/platform issuer grants and an
+installed SDK wheel. `capabilities()`, `metadata(kind)`, `initialize_branch()` and
+`device_monitoring()` use the stored branch adapter. Readiness and engineering support
+do not establish KRA approval, payment, remittance or authentic certificates.

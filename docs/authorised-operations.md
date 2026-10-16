@@ -68,4 +68,4 @@ One case per receipt; partial remittances and shared payment allocations are uns
 Reverse invoicing remains gated even when the feature flag is enabled: no verified
 reverse contract or supplier secondary-device adapter exists. Official WHT filing,
 payment and certificate contracts also remain unverified for this integration.
-See the middleware Phase 4 external-verification record for the exact outstanding items.
+Assess the exact integration, legal, device and approval prerequisites before production use.

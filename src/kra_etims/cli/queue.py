@@ -7,7 +7,7 @@ Schema:
   id           — autoincrement PK
   invoice_json — full SaleInvoice JSON
   queued_at    — ISO-8601 UTC timestamp
-  status       — pending | success | failed | already_processed
+  status       — pending | success | failed | already_processed (historical) | outcome_unknown
   attempts     — number of flush attempts
   last_error   — last error message (nullable)
 
@@ -97,6 +97,7 @@ class Queue:
         return {
             "pending":   counts.get("pending", 0),
             "failed":    counts.get("failed", 0),
+            "outcome_unknown": counts.get("outcome_unknown", 0),
             "completed": counts.get("success", 0) + counts.get("already_processed", 0),
             "total":     sum(counts.values()),
             "path":      str(self.path),
@@ -108,7 +109,7 @@ class Queue:
         Returns a result dict for reporting.
         """
         from kra_etims import SaleInvoice
-        from kra_etims.exceptions import KRADuplicateInvoiceError
+        from kra_etims.exceptions import KRADuplicateInvoiceError, KRADeviceInstalledError, TIaaSAmbiguousStateError
 
         row_id: int = row["id"]
         try:
@@ -118,10 +119,13 @@ class Queue:
             client.submit_sale(invoice, idempotency_key=idem_key)
             self._update(row_id, "success")
             return {"id": row_id, "invoice_no": invoice.invcNo, "status": "success"}
-        except KRADuplicateInvoiceError:
-            self._update(row_id, "already_processed")
-            return {"id": row_id, "status": "already_processed"}
+        except (KRADuplicateInvoiceError, KRADeviceInstalledError, TIaaSAmbiguousStateError) as exc:
+            self._update(row_id, "outcome_unknown", str(exc))
+            return {"id": row_id, "status": "outcome_unknown", "error": str(exc)}
         except Exception as exc:
+            if getattr(exc, "requires_reconciliation", False):
+                self._update(row_id, "outcome_unknown", str(exc))
+                return {"id": row_id, "status": "outcome_unknown", "error": str(exc)}
             self._update(row_id, "failed", str(exc))
             return {"id": row_id, "status": "failed", "error": str(exc)}
 

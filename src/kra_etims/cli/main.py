@@ -646,6 +646,7 @@ def queue_status(
         ("Pending",    str(counts["pending"])),
         ("Failed",     str(counts["failed"])),
         ("Completed",  str(counts["completed"])),
+        ("Outcome unknown", str(counts.get("outcome_unknown", 0))),
         ("Total",      str(counts["total"])),
         ("Queue file", str(counts["path"])),
     ], title="Offline Queue"))
@@ -687,8 +688,11 @@ def queue_flush(
         print_json(results)
         return
 
+    held = sum(1 for r in results if r["status"] == "outcome_unknown")
+    if held:
+        console.print(f"{held} outcome unknown; inspect original operations before considering replay.")
     ok = sum(1 for r in results if r["status"] in ("success", "already_processed"))
-    failed = len(results) - ok
+    failed = len(results) - ok - held
     console.print(success_panel(
         f"Flushed {ok}/{len(results)} invoice(s)."
         + (f" [red]{failed} failed[/red] — re-run to retry." if failed else "")

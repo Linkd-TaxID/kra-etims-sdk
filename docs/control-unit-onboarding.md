@@ -1,0 +1,11 @@
+# Control-unit onboarding
+
+Use an authenticated unbound operator client to call `provision_tenant(TenantProvisioning(...))`, then `issue_tenant_key(id, name, role="ROLE_ADMIN")`. Bind a separate client to that branch credential and call `initialize_device_handshake()`. Synchronous and asynchronous clients expose the same contract. Omission of `controlUnitType` preserves VSCU. Explicit OSCU rejects `vscuBaseUrl`; its approved KRA endpoint is configured in the middleware deployment, never supplied per request. The installation must declare its permitted protocols through `TAXID_CONTROL_UNITS`.
+
+Local provisioning does not register a taxpayer on KRA or grant OSCU/VSCU approval. A returned API credential is a one-time secret. Store it privately. Communication keys never appear in SDK responses. `READY`/`handshakeComplete=true` confirms a durable checkpoint. HTTP 202 with `OUTCOME_UNKNOWN` retains uncertain external outcome and blocks automatic replay across restart. `KEY_REQUIRED` is not initialized. `REJECTED` is terminal for that attempt. Operator summaries inspect the original device; changing mode, serial, PIN, branch, endpoint or environment is not a toggle. An audited migration and KRA approval are separate prerequisites.
+
+Use `sync_data` with `tyCd` `STRD`/`CODES`, `CDCLS`/`CLASSIFICATIONS`, or `NOTICES` and a 14-digit `lastReqDt`. OSCU injects its stored key privately on its independently documented read endpoints. Use explicit item/customer registration and durable stock helpers through the selected native adapter; production dispatch remains evidence-gated. See [registration and recovery](control-unit-registration.md) and [stock recovery](stock-recovery.md). Fiscal production guards remain. Local reporting is independent of protocol.
+
+Run the repository's `scripts/tests/phase-a-onboarding.py` only against its isolated loopback test servers and fresh PostgreSQL database. This establishes simulator behavior, never official KRA sandbox acceptance. Remote writes require an explicitly authorized environment and identity; no remote writes are enabled by this example.
+
+Use `device_status()` for a read-only checkpoint lookup and `device_health()` for a branch-scoped read-only protocol probe. One VSCU dependency failing does not make the shared core or unrelated OSCU branches unavailable.

@@ -89,7 +89,7 @@
       "name": "How should an operator handle initialization code 902?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The retained sandbox response says the device is already installed and returns data:null. Reuse the cmcKey persisted at successful initialization. A missing key requires operator recovery; never log the key or assume 902 recovers it."
+        "text": "902 is the documented installed-device condition. For OSCU, verify matching identity and an issued or retained communication key; for VSCU, verify retained device state and the application checkpoint. Missing state or credentials require operator/KRA recovery. The code alone proves neither recovered credentials nor transaction readiness."
       }
     },
     {
@@ -136,7 +136,7 @@
     <div class="faq-item"><h2>How should an application handle a timeout?</h2><p>Keep the original clientReference, idempotency key and exact submitted body. Retrieve GET /v2/etims/sales/search?clientReference= with the URL-encoded reference. OUTCOME_UNKNOWN or RECONCILIATION_REQUIRED requires operator investigation. Do not generate a replacement reference or blindly resubmit.</p></div>
     <div class="faq-item"><h2>Does a duplicate result recover the original receipt?</h2><p>No. A duplicate code does not provide the original signature or prove that identical contents were signed. Investigate the original transaction and retained receipt evidence. Counters alone are insufficient.</p></div>
     <div class="faq-item"><h2>Does VSCU signing require a second saveInvoice call?</h2><p>The implemented TaxID VSCU signing flow calls /trnsSales/saveSales. The cited VSCU v2.0 specification documents that sale endpoint. The wording of codes 921 and 922 does not establish an additional saveInvoice API contract.</p></div>
-    <div class="faq-item"><h2>How should an operator handle initialization code 902?</h2><p>The retained sandbox response says the device is already installed and returns data:null. Reuse the cmcKey persisted at successful initialization. A missing key requires operator recovery; never log the key or assume 902 recovers it.</p></div>
+    <div class="faq-item"><h2>How should an operator handle initialization code 902?</h2><p>902 is the documented installed-device condition. For OSCU, verify matching identity and an issued or retained communication key; for VSCU, verify retained device state and the application checkpoint. Missing state or credentials require operator/KRA recovery. The code alone proves neither recovered credentials nor transaction readiness.</p></div>
     <div class="faq-item"><h2>Where do tax rates and unit codes come from?</h2><p>Use the endpoint’s current reference data and merchant tax classification. Packaging-unit and quantity-unit code tables differ. Historical specification samples and SDK defaults are not current tax advice.</p></div>
 <!-- FAQ:END -->
     </div>

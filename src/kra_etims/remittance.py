@@ -1,11 +1,49 @@
 """Reviewed operator evidence; no KRA filing, payment or independent verification."""
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 from typing import Literal
 from pydantic import Field, model_validator
 from .withholding import LedgerModel, Money, Evidence, EventIdentifier
 
 Action = Literal["REVIEW", "APPROVE", "RECORD_EVIDENCE", "RECONCILE", "RECORD_CERTIFICATE", "CANCEL"]
 State = Literal["EXPORTED", "REVIEWED", "APPROVED", "EVIDENCE_RECORDED", "RECONCILED_SUPPLIED_EVIDENCE", "CERTIFICATE_RECORDED_UNVERIFIED", "CANCELLED"]
+
+
+class RemittanceCalendar(LedgerModel):
+    version: Evidence
+    validFrom: date
+    validUntil: date
+    holidays: list[date]
+    sourceEvidence: Evidence
+
+    def deadline(self, deducted_at: datetime) -> date:
+        if deducted_at.tzinfo is None:
+            raise ValueError("Deduction date requires a time zone")
+        current = deducted_at.astimezone(ZoneInfo("Africa/Nairobi")).date()
+        if current < self.validFrom or current >= self.validUntil:
+            raise ValueError("Calendar does not cover deduction")
+        if len(set(self.holidays)) != len(self.holidays) or any(d < self.validFrom or d > self.validUntil for d in self.holidays):
+            raise ValueError("Invalid calendar holiday coverage")
+        working = 0
+        while working < 5:
+            current += timedelta(days=1)
+            if current > self.validUntil:
+                raise ValueError("Calendar does not cover deadline")
+            if current.weekday() < 5 and current not in self.holidays:
+                working += 1
+        return current
+
+
+class RemittanceBatch(LedgerModel):
+    operationId: EventIdentifier
+    receiptIds: list[EventIdentifier] = Field(min_length=1, max_length=500)
+    evidence: Evidence
+
+    @model_validator(mode="after")
+    def unique_receipts(self):
+        if len(set(self.receiptIds)) != len(self.receiptIds):
+            raise ValueError("Unique receipt identities required")
+        return self
 
 
 class RemittanceExport(LedgerModel):
@@ -17,13 +55,16 @@ class RemittanceExport(LedgerModel):
     deadlineEvidence: Evidence
     assessmentEvidence: Evidence
     deductionEvidence: Evidence
+    calendar: RemittanceCalendar | None = None
 
     @model_validator(mode="after")
     def dates(self):
         if self.deductedAt.tzinfo is None:
             raise ValueError("Deduction date requires a time zone")
-        if self.dueDate < self.deductedAt.astimezone(timezone.utc).date():
+        if self.dueDate < self.deductedAt.astimezone(ZoneInfo("Africa/Nairobi")).date():
             raise ValueError("Due date predates deduction")
+        if self.calendar is not None and self.dueDate != self.calendar.deadline(self.deductedAt):
+            raise ValueError("Due date must equal five Kenya working days after deduction")
         return self
 
 
@@ -71,4 +112,8 @@ class RemittanceCase(LedgerModel):
     withholdingReviewRequired: bool
     pendingEvidence: Money
     reconciledSuppliedEvidence: Money
+    pendingRemittance: Money = 0
+    suppliedPaymentEvidence: Money = 0
+    verifiedRemittance: Money = 0
+    deadlineVerification: str = "OPERATOR_CALENDAR_SUPPLIED_UNVERIFIED"
     audit: list[RemittanceAudit]

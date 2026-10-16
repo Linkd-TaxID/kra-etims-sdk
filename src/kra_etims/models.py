@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import List, Optional
+from typing import Literal, List, Optional
 from decimal import Decimal, ROUND_HALF_UP
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
@@ -44,9 +44,26 @@ class DeviceInit(BaseSchema):
     bhfId: str = Field(..., description="Branch ID")
     dvcSrlNo: str = Field(..., description="Device Serial Number")
 
+class TenantProvisioning(BaseSchema):
+    """Operator-only local provisioning; KRA portal approval is a separate prerequisite."""
+    tin: str
+    bhfId: str
+    dvcSrlNo: str
+    controlUnitType: Literal["VSCU", "OSCU"] = "VSCU"
+    environment: Literal["SANDBOX", "PRODUCTION"] = "SANDBOX"
+    vscuBaseUrl: Optional[str] = None
+
+    @model_validator(mode="after")
+    def mode_endpoint(self):
+        if self.controlUnitType == "OSCU" and self.vscuBaseUrl:
+            raise ValueError("OSCU cannot use a VSCU sidecar endpoint")
+        return self
+
+
 # --- Category 2: Data Sync ---
 
 class DataSyncRequest(BaseSchema):
+    tyCd: str = "STRD"
     tin: str
     bhfId: str
     lastReqDt: str  # YYYYMMDDHHmmss — enforced by validator below
@@ -377,7 +394,7 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
     - ``amount``       ← ``invoice.totAmt``
     - ``invoiceDate``  ← ``invoice.confirmDt`` (``yyyyMMddHHmmss`` → ISO date)
     - ``taxBand``      ← the single band shared by every line, for a single-band
-      invoice. **Mixed-band or discounted invoices** send the ``items`` array
+      unclassified invoice. **Classified, mixed-band or discounted invoices** send the ``items`` array
       instead (middleware V14 per-band aggregation; per-line ``discount`` /
       ``discountRate``), and omit the receipt-level ``taxBand``. Each line then
       requires ``itemClsCd`` — a :class:`ValueError` is raised if any is missing.
@@ -403,11 +420,12 @@ def to_middleware_sale_payload(invoice: "SaleInvoice") -> dict:
     }
 
     discounted = any(i.dcRt or i.dcAmt for i in invoice.itemList)
-    if len(bands) > 1 or discounted:
+    itemised = any(i.itemClsCd for i in invoice.itemList)
+    if len(bands) > 1 or discounted or itemised:
         # Itemised: each line is booked under its own band and carries its own
         # discount; the flat path has nowhere to put either. Receipt-level taxBand is
         # omitted (it is only a label for the flat path).
-        reason = f"mixed-band ({sorted(bands)})" if len(bands) > 1 else "discounted"
+        reason = f"mixed-band ({sorted(bands)})" if len(bands) > 1 else "discounted or classified"
         missing = [i.itemCd for i in invoice.itemList if not i.itemClsCd]
         if missing:
             raise ValueError(
@@ -453,3 +471,116 @@ def _to_middleware_sale_line(item: "ItemDetail") -> dict:
     elif item.dcRt:
         line["discountRate"] = str(item.dcRt)
     return line
+
+
+class ReturnLine(BaseSchema):
+    """Select an immutable original line; prices, discounts and tax are derived by the server."""
+    originalItemSeq: int = Field(..., ge=1)
+    qty: Decimal = Field(..., gt=0, max_digits=11, decimal_places=2)
+
+
+class CreditNoteReason(str, Enum):
+    MISSING_QUANTITY = "01"
+    MISSING_ITEM = "02"
+    DAMAGED = "03"
+    WASTED = "04"
+    RAW_MATERIAL_SHORTAGE = "05"
+    REFUND = "06"
+    WRONG_CUSTOMER_PIN = "07"
+    WRONG_CUSTOMER_NAME = "08"
+    WRONG_PRICE = "09"
+    WRONG_QUANTITY = "10"
+    WRONG_ITEMS = "11"
+    WRONG_TAX_TYPE = "12"
+
+
+class StockOperationResult(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    operationKey: str
+    movementId: int
+    sarNo: int
+    status: str = Field(..., pattern="^(SYNCED|REJECTED|OUTCOME_UNKNOWN)$")
+    payloadSha256: str
+    totAmt: Decimal
+    totTaxAmt: Decimal
+    kraAcknowledged: bool = False
+
+    def __getitem__(self, key):
+        return self.model_dump()[key]
+
+    def get(self, key, default=None):
+        return self.model_dump().get(key, default)
+
+
+class BranchCustomerRegistration(BaseSchema):
+    """Immutable branch customer identity, routed using the stored control unit."""
+    pin: str = Field(pattern=r"^[A-Z][0-9]{9}[A-Z]$")
+    name: str = Field(min_length=1, max_length=60)
+
+
+class OriginalTransportSnapshot(BaseSchema):
+    """Safe operator inspection; exact authenticated wire bytes remain private."""
+    identity: str
+    business_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    wire_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    created_at: Optional[str] = None
+    execution_owner: Optional[str] = Field(default=None, alias="executionOwner")
+    transport_returned: Optional[bool] = Field(default=None, alias="transportReturned")
+
+
+class ItemRegistration(BaseSchema):
+    """Immutable branch catalogue mapping; fiscal item codes belong to the server."""
+    sku: str = Field(min_length=1, max_length=255)
+    itemNm: str = Field(min_length=1, max_length=200)
+    itemClsCd: str = Field(pattern=r"^[0-9]{8,10}$")
+    taxTyCd: TaxType
+    unitPrice: Decimal = Field(ge=0, max_digits=18, decimal_places=2)
+    qty: Decimal = Decimal("1")
+    bcd: Optional[str] = Field(default=None, max_length=20)
+    pkgUnitCd: str = "NT"
+    qtyUnitCd: str = "U"
+
+    @field_validator("unitPrice", mode="before")
+    @classmethod
+    def price_requires_decimal(cls, value):
+        if isinstance(value,float):
+            raise ValueError("Use Decimal or a decimal string for the default price")
+        return value
+
+
+class StockMasterRequest(BaseSchema):
+    """ERP-supplied absolute remaining quantity after confirmed original stock I/O."""
+    originalIoKey: str = Field(min_length=1, max_length=200)
+    itemCd: str = Field(min_length=1, max_length=20)
+    rsdQty: Decimal = Field(ge=0, max_digits=18, decimal_places=2)
+
+    @field_validator("rsdQty", mode="before")
+    @classmethod
+    def residual_requires_decimal(cls, value):
+        if isinstance(value, float):
+            raise ValueError("Use Decimal or a decimal string for residual quantity")
+        return value
+
+
+class StockMasterResult(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    operationKey: str
+    originalIoKey: str
+    itemCd: str
+    status: str = Field(pattern="^(SYNCED|REJECTED|OUTCOME_UNKNOWN)$")
+    payloadSha256: str
+    transport: List[OriginalTransportSnapshot] = Field(default_factory=list)
+    kraAcknowledged: bool = False
+    semantics: str = "ABSOLUTE_RESIDUAL_QUANTITY"
+
+
+class StockRecoveryEvidence(BaseSchema):
+    """Original hashes and worker provenance; an assertion does not establish a remote outcome."""
+    version: int = 1
+    identitySha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    businessSha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    wireSha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    outcome: str = Field(pattern="^(SYNCED|REJECTED)$")
+    provenance: str = Field(min_length=1)
+    executionOwner: Optional[str] = None
+    quiescenceEvidence: str = ""
