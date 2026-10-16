@@ -1,18 +1,18 @@
-## Unreleased — developer preview authentication
-
-- Support sync and async API-key clients without dummy OAuth credentials.
-- Make explicit API keys and base URLs override environment defaults, so
-  different merchant clients can coexist safely in one process.
-- Preserve the source invoice number as `clientReference` for workspace lookup.
-- Retain environment fallback and positional OAuth configuration.
-
 # Changelog
 
 All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-16
+
 ### Added
+- Sync and async API-key authentication without dummy OAuth credentials; explicit
+  API keys and base URLs override environment defaults.
+- Branch-key onboarding, VSCU/OSCU control-unit registration and recovery.
+- Authorised invoicing, platform sessions, withholding accounting and assisted
+  remittance operations, with matching sync and async clients.
+- Retail, stock recovery and itemised correction workflows and examples.
 - `KRAConflictError` for HTTP 409, with the server's error code in `.code`.
 
 ### Changed
@@ -22,6 +22,9 @@ All notable changes to kra-etims-sdk are documented here.
   raw JSON numbers).
 
 ### Fixed
+- Preserve source invoice numbers as `clientReference` for workspace lookup.
+- Require explicit receipt evidence before queued signing results count as signed;
+  ambiguous queue entries retain their mutation identity for reconciliation.
 - A 409 on a sale (`FISCAL_DAY_CLOSED`, `ETIMS_NOT_INITIALIZED`) raised `CreditNoteConflictError`.
   It now raises `KRAConflictError`; `CreditNoteConflictError` is a subclass raised only for
   credit-note requests. Code that caught `CreditNoteConflictError` for sale conflicts must catch
