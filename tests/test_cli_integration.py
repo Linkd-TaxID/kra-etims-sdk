@@ -173,12 +173,14 @@ _INVOICE_JSON = {
     "itemList": [_ITEM_JSON],
 }
 
-_SIGNING_RESPONSE = _kra_ok({
-    "rcptNo": "KRACU0100000001/001 NS",
-    "confirmDt": "20260426142211",
-    "intrlData": "INTR0001ABCD",
-    "rcptSign": "V249-J39C-FJ48-HE2W",
-})
+_SIGNING_RESPONSE = {
+    "purchaseId": 1,
+    "status": "SIGNED",
+    "cuInvoiceNumber": "KRACU0100000001/001 NS",
+    "sdcId": "KRACU0100000001",
+    "receiptSignature": "V249-J39C-FJ48-HE2W",
+    "vscuTimestamp": "20260426142211",
+}
 
 
 @pytest.mark.integration
@@ -193,6 +195,17 @@ def test_invoice_submit_integration(httpx_mock, tmp_path) -> None:
     result = runner.invoke(app, ["invoice", "submit", str(f)])
     assert result.exit_code == 0, result.output
     assert "KRACU" in result.output or "Signed" in result.output
+
+
+@pytest.mark.parametrize("state", ["PENDING_SYNC", "OUTCOME_UNKNOWN", "RECONCILIATION_REQUIRED"])
+def test_invoice_submit_does_not_claim_unsettled_invoice_signed(httpx_mock, tmp_path, state):
+    invoice = tmp_path / "invoice.json"
+    invoice.write_text(json.dumps(_INVOICE_JSON))
+    httpx_mock.add_response(method="POST", url=f"{_BASE}/v2/etims/sale", json={"purchaseId": 1, "status": state})
+    result = runner.invoke(app, ["invoice", "submit", str(invoice)])
+    assert result.exit_code == 0, result.output
+    assert state in result.output
+    assert "Invoice signed" not in result.output
 
 
 @pytest.mark.integration
