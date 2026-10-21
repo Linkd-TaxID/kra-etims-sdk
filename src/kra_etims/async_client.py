@@ -87,11 +87,16 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         client_secret: str = "",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        *,
+        timeout: float | httpx.Timeout | None = 30.0,
+        http_client: Optional[httpx.AsyncClient] = None,
     ) -> None:
         super().__init__(client_id, client_secret, api_key, base_url)
-        self._http = httpx.AsyncClient(
+        self._timeout = httpx.Timeout(timeout)
+        self._owns_http = http_client is None
+        self._http = http_client if http_client is not None else httpx.AsyncClient(
             headers={"X-TIaaS-Service": "Handshake"},
-            timeout=30.0,
+            timeout=self._timeout,
         )
         self._lock = asyncio.Lock()     # guards OAuth2 token refresh only
         self._reports = None
@@ -105,11 +110,12 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         return self
 
     async def __aexit__(self, *_: Any) -> None:
-        await self._http.aclose()
+        await self.aclose()
 
     async def aclose(self) -> None:
-        """Manually close the underlying httpx client."""
-        await self._http.aclose()
+        """Close an SDK-owned client; injected clients remain caller-owned."""
+        if self._owns_http:
+            await self._http.aclose()
 
     # ------------------------------------------------------------------
     # Sub-interface accessors
@@ -170,6 +176,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
                         f"{self.base_url}/oauth/token",
                         auth=(self.client_id, self._client_secret),
                         data={"grant_type": "client_credentials"},
+                        timeout=self._timeout,
                     )
                 except httpx.RequestError as exc:
                     raise KRAeTIMSAuthError(
@@ -216,7 +223,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             inject_trace_context(headers)
 
             try:
-                resp = await self._http.request(method, url, json=json, files=files, headers=headers)
+                resp = await self._http.request(method, url, json=json, files=files, headers=headers, timeout=self._timeout)
             except httpx.RequestError as exc:
                 raise self._transport_error(exc, method, idempotency_key) from exc
             return self._parse_response(resp, method, idempotency_key)
@@ -366,6 +373,16 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
                 json=to_middleware_sale_payload(invoice),
                 idempotency_key=idempotency_key,
             )
+
+    async def submit_sale_typed(self, invoice: SaleInvoice, idempotency_key: Optional[str] = None) -> "SaleResult":
+        """Submit once and return a validated result with response metadata."""
+        from .outcomes import SaleResult
+        return SaleResult.from_result(await self.submit_sale(invoice, idempotency_key=idempotency_key))
+
+    async def get_sale_status_typed(self, invc_no: int) -> "SaleStatusResult":
+        """Inspect the original sale without issuing another fiscal call."""
+        from .outcomes import SaleStatusResult
+        return SaleStatusResult.from_result(await self.get_sale_status(invc_no))
 
     async def lookup_customer(self, pin: str) -> Dict[str, Any]:
         """Read taxpayer information through this branch's protocol; does not register a customer."""

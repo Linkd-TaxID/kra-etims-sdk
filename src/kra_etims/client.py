@@ -83,12 +83,17 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         client_secret: str = "",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        *,
+        timeout: float | httpx.Timeout | None = 30.0,
+        http_client: Optional[httpx.Client] = None,
     ) -> None:
         super().__init__(client_id, client_secret, api_key, base_url)
         # httpx.Client is thread-safe — one instance handles all concurrent threads.
-        self._http = httpx.Client(
+        self._timeout = httpx.Timeout(timeout)
+        self._owns_http = http_client is None
+        self._http = http_client if http_client is not None else httpx.Client(
             headers={"X-TIaaS-Service": "Handshake"},
-            timeout=30.0,
+            timeout=self._timeout,
         )
         self._auth_lock = threading.Lock()   # guards OAuth2 token refresh
         self._init_lock = threading.Lock()   # guards lazy interface init
@@ -103,11 +108,12 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         return self
 
     def __exit__(self, *_: Any) -> None:
-        self._http.close()
+        self.close()
 
     def close(self) -> None:
-        """Manually close the underlying httpx client."""
-        self._http.close()
+        """Close an SDK-owned client; injected clients remain caller-owned."""
+        if self._owns_http:
+            self._http.close()
 
     # ------------------------------------------------------------------
     # Sub-interface accessors
@@ -161,6 +167,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
                         f"{self.base_url}/oauth/token",
                         auth=(self.client_id, self._client_secret),
                         data={"grant_type": "client_credentials"},
+                        timeout=self._timeout,
                     )
                 except httpx.RequestError as exc:
                     raise KRAeTIMSAuthError(
@@ -207,7 +214,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             inject_trace_context(headers)
 
             try:
-                resp = self._http.request(method, url, json=json, files=files, headers=headers)
+                resp = self._http.request(method, url, json=json, files=files, headers=headers, timeout=self._timeout)
             except httpx.RequestError as exc:
                 raise self._transport_error(exc, method, idempotency_key) from exc
             return self._parse_response(resp, method, idempotency_key)
@@ -362,6 +369,16 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
                 json=to_middleware_sale_payload(invoice),
                 idempotency_key=idempotency_key,
             )
+
+    def submit_sale_typed(self, invoice: SaleInvoice, idempotency_key: Optional[str] = None) -> "SaleResult":
+        """Submit once and return a validated result with response metadata."""
+        from .outcomes import SaleResult
+        return SaleResult.from_result(self.submit_sale(invoice, idempotency_key=idempotency_key))
+
+    def get_sale_status_typed(self, invc_no: int) -> "SaleStatusResult":
+        """Inspect the original sale without issuing another fiscal call."""
+        from .outcomes import SaleStatusResult
+        return SaleStatusResult.from_result(self.get_sale_status(invc_no))
 
     def lookup_customer(self, pin: str) -> Dict[str, Any]:
         """Read taxpayer information through this branch's protocol; does not register a customer."""

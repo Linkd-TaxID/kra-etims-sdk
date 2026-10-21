@@ -213,15 +213,11 @@ def test_retry_with_idempotency_key_returns_cached_receipt_not_new_signing(httpx
         method="POST",
         url=SALE_URL,
         json={
-            "resultCd": "000",
-            "resultMsg": "It is succeeded",
-            "data": {
-                "rcptNo":       "KRACU0100000001/042 NS",
-                "sdcId":        "KRACU0100000001",
-                "signature":    "V249-J39C-FJ48-HE2W",
-                "internalData": "INTR0042ABCDTEST",
-                "qrCode":       "20042026#120000#KRACU0100000001#042#INTR0042ABCDTEST#V249-J39C-FJ48-HE2W",
-            },
+            "purchaseId": 42,
+            "status": "SIGNED",
+            "cuInvoiceNumber": "KRACU0100000001/042 NS",
+            "sdcId": "KRACU0100000001",
+            "receiptSignature": "V249-J39C-FJ48-HE2W",
         },
         status_code=200,
     )

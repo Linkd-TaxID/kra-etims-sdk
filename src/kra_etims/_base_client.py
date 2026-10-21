@@ -11,10 +11,13 @@ Both transports use httpx:
 """
 
 import os
+import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
 import httpx
+from pydantic import ValidationError
+from .outcomes import FiscalResultDict, ResponseMetadata, SaleResult, SaleStatusResult
 
 from .exceptions import (
     KRA_ERROR_MAP,
@@ -240,6 +243,58 @@ class _BaseKRAeTIMSClient(ABC):
         method: str,
         idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
+        body, _, _ = self._error_fields(resp)
+        metadata = ResponseMetadata(
+            http_status=resp.status_code,
+            request_id=resp.headers.get("X-Request-Id") or body.get("requestId"),
+            environment=resp.headers.get("X-TaxID-Environment") or body.get("environment"),
+            retry_after=resp.headers.get("Retry-After"),
+        )
+        result_model: Optional[type[SaleResult]] = None
+        if resp.request.url.path.endswith("/v2/etims/sale"):
+            result_model = SaleResult
+        elif re.search(r"/v2/etims/sales/[^/]+/status$", resp.request.url.path):
+            result_model = SaleStatusResult
+        try:
+            result = self._parse_response_body(resp, method, idempotency_key)
+            if result_model is not None:
+                self._validate_sale_result(result, method, idempotency_key, result_model)
+                return FiscalResultDict(result, metadata)
+            return result
+        except KRAeTIMSError as error:
+            if (result_model is not None and resp.is_success and method.upper() in _MUTATING_METHODS
+                    and not isinstance(error, TIaaSAmbiguousStateError)
+                    and getattr(error, "result_cd", None) is None):
+                error = TIaaSAmbiguousStateError(
+                    "Unusable fiscal mutation response; inspect the original operation before replay.",
+                    idempotency_key=idempotency_key,
+                )
+            error.response_metadata = metadata
+            error.request_id = metadata.request_id
+            error.environment = metadata.environment
+            error.retry_after = metadata.retry_after
+            error.http_status = metadata.http_status
+            error.idempotency_key = idempotency_key
+            raise error
+
+    @staticmethod
+    def _validate_sale_result(
+        result: Any, method: str, idempotency_key: Optional[str], result_model: type[SaleResult]
+    ) -> None:
+        try:
+            result_model.model_validate(result)
+        except ValidationError as invalid:
+            message = "Malformed or incomplete fiscal outcome; retain the original identity and inspect its status before replay."
+            if method.upper() in _MUTATING_METHODS:
+                raise TIaaSAmbiguousStateError(message, idempotency_key=idempotency_key) from invalid
+            raise KRAeTIMSError(message) from invalid
+
+    def _parse_response_body(
+        self,
+        resp: httpx.Response,
+        method: str,
+        idempotency_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Parse an httpx.Response into a typed result dict, raising on any error.
 
@@ -420,10 +475,13 @@ class _BaseKRAeTIMSClient(ABC):
         idempotency key, never re-issued under a new one.
         """
         if isinstance(exc, _NOT_SENT_ERRORS):
-            return TIaaSUnavailableError()
-        if method.upper() in _MUTATING_METHODS:
-            return TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
-        return TIaaSUnavailableError()
+            error = TIaaSUnavailableError()
+        elif method.upper() in _MUTATING_METHODS:
+            error = TIaaSAmbiguousStateError(idempotency_key=idempotency_key)
+        else:
+            error = TIaaSUnavailableError()
+        error.idempotency_key = idempotency_key
+        return error
 
     # ------------------------------------------------------------------
     # Abstract transport interface

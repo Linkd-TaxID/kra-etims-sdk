@@ -28,7 +28,7 @@ def test_sync_idempotency_header_injection(httpx_mock):
     httpx_mock.add_response(
         method="POST",
         url="https://api.test/v2/etims/sale",
-        json={"resultCd": "000", "resultMsg": "It is succeeded", "data": {}},
+        json={"purchaseId": 1, "status": "PENDING_SYNC"},
         status_code=200,
     )
 

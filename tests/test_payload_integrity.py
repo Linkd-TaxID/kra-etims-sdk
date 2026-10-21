@@ -17,7 +17,7 @@ def test_payload_integrity_excludes_none(httpx_mock):
     httpx_mock.add_response(
         method="POST",
         url="https://api.test/v2/etims/sale",
-        json={"resultCd": "000", "resultMsg": "It is succeeded", "data": {}},
+        json={"purchaseId": 1, "status": "PENDING_SYNC"},
         status_code=200,
     )
 

@@ -59,7 +59,7 @@ async def test_async_idempotency_key_passed(httpx_mock):
     httpx_mock.add_response(
         method="POST",
         url="https://api.test.co.ke/v2/etims/sale",
-        json={"status": "success"},
+        json={"purchaseId": 1, "status": "PENDING_SYNC"},
         status_code=200,
     )
 

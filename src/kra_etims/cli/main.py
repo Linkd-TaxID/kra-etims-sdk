@@ -450,12 +450,13 @@ def invoice_submit(
         return
 
     data_out = result.get("data", result)
-    console.print(success_panel("Invoice signed"))
+    status = result.get("status")
+    console.print(success_panel("Invoice signed" if status == "SIGNED" else f"Invoice status: {status or 'unavailable'}"))
     console.print(kv_table([
-        ("Control Number", str(data_out.get("rcptNo") or data_out.get("controlNumber") or "—")),
-        ("Timestamp",      str(data_out.get("confirmDt") or data_out.get("timestamp") or "—")),
-        ("Signature",      str(data_out.get("intrlData") or data_out.get("signature") or "—")[:60]),
-        ("QR",             str(data_out.get("rcptSign") or data_out.get("qr") or "—")[:60]),
+        ("Control Number", str(data_out.get("cuInvoiceNumber") or data_out.get("rcptNo") or data_out.get("controlNumber") or "—")),
+        ("Timestamp",      str(data_out.get("vscuTimestamp") or data_out.get("confirmDt") or data_out.get("timestamp") or "—")),
+        ("Signature",      str(data_out.get("receiptSignature") or data_out.get("signature") or "—")[:60]),
+        ("QR",             str(data_out.get("kraQrPayload") or data_out.get("qr") or "—")[:60]),
     ]))
 
 
