@@ -4,6 +4,8 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-21
+
 ### Added
 - Sync/async `submit_sale_typed` and `get_sale_status_typed` methods, response
   metadata, configurable HTTP timeouts and caller-owned transport injection.
