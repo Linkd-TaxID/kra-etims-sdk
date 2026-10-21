@@ -7,6 +7,11 @@ is shared by sync/async transports. `SYNCED` remains a recognized historical sta
 it is not converted to `SIGNED`. Optional historical metadata remains unavailable.
 Other endpoint parsers and KRA error-code mappings retain their behavior.
 Configured API URL path prefixes retain the same fiscal validation.
+Responses must use the `/v2` JSON field names (`purchaseId`, `cuInvoiceNumber`,
+`sdcId`, `receiptSignature`); Python attribute names do not substitute for them.
+Status responses also validate `failureReason` as a string or null. Malformed
+responses raise SDK exceptions with response metadata in both dictionary and
+typed methods.
 
 ```python
 import httpx
@@ -45,32 +50,3 @@ added by injection.
 
 The CLI renders flat `/v2` receipt fields and only calls an invoice signed when
 its state is `SIGNED`; pending/unknown/reconciliation states are displayed directly.
-
-## Packet 2 task and evidence
-
-Base: `b35d59fa4592064322782738115864c9ce800b7a`, freshly fetched 2026-10-20.
-Isolated branch: `feat/fiscal-outcome-validation`. The original SDK checkout is
-preserved. Allowed files: shared parser, sync/async transports, additive outcome
-models/exports, affected tests/docs, and the CLI result renderer where a boundary
-test exposed incorrect signing claims. Preserve all authentication, payload,
-idempotency, recovery, CLI and KRA error taxonomy assertions. Replace only response
-fixtures that did not match `/v2` sale/status contracts.
-
-Reproduce with the SDK test environment:
-
-```sh
-PYTHONPATH=src /home/officialnyabuto/Desktop/kra-etims-sdk/.venv-test/bin/python -m pytest -q
-```
-
-The new matrix covers both public transports: malformed objects/scalars/arrays,
-strict purchase identity, incomplete signed evidence, valid synthetic receipts,
-pending/unknown/historical outcomes, malformed JSON and empty HTTP 204/205,
-429/502/503/504, read/write timeouts, preserved metadata, one-attempt mutations,
-typed methods and owned/borrowed context closure. Existing auth/header/body and
-recovery assertions remain. A CLI regression covers unsettled outcomes.
-
-Verification, 2026-10-20: **535 passed, 1 skipped** in 59.79 seconds. The skipped
-test explicitly requires a live middleware; this packet used synthetic HTTP only.
-The earlier suite exposed five invalid response fixtures and the CLI field/state
-rendering bug. Those fixtures now reflect the middleware contract and their
-original behavioral assertions remain. No live government request was made.

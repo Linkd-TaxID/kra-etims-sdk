@@ -4,6 +4,22 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+### Added
+- Sync/async `submit_sale_typed` and `get_sale_status_typed` methods, response
+  metadata, configurable HTTP timeouts and caller-owned transport injection.
+  See [validated fiscal outcomes](docs/fiscal-outcomes.md).
+
+### Changed
+- Dictionary-returning sale and status methods now reject malformed fiscal
+  responses, missing wire identity/state and incomplete `SIGNED` receipt evidence.
+  Invalid successful sale responses raise `TIaaSAmbiguousStateError`; malformed
+  status responses raise `KRAeTIMSError`. Response metadata is retained and
+  mutations are not automatically replayed.
+
+### Fixed
+- CLI invoice output reads `/v2` receipt fields and only claims signing for
+  `SIGNED` outcomes.
+
 ## [0.7.0] - 2026-10-16
 
 ### Added

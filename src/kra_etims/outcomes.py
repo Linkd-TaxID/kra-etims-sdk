@@ -21,7 +21,7 @@ class FiscalResultDict(dict):
 
 
 class SaleResult(BaseModel):
-    model_config = ConfigDict(extra="allow", strict=True, populate_by_name=True)
+    model_config = ConfigDict(extra="allow", strict=True)
 
     purchase_id: int = Field(alias="purchaseId", gt=0)
     status: Literal["SIGNED", "PENDING_SYNC", "OUTCOME_UNKNOWN", "RECONCILIATION_REQUIRED", "NOT_SENT", "FAILED", "SYNCED"]

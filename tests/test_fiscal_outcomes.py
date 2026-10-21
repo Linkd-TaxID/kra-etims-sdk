@@ -57,6 +57,73 @@ async def test_invalid_fiscal_results_never_look_successful(async_mode, mutation
 
 
 @pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("mutation", [False, True])
+@pytest.mark.parametrize("wire_name,python_name", [
+    ("purchaseId", "purchase_id"),
+    ("cuInvoiceNumber", "cu_invoice_number"),
+    ("sdcId", "sdc_id"),
+    ("receiptSignature", "receipt_signature"),
+])
+async def test_fiscal_results_require_wire_field_names(async_mode, mutation, wire_name, python_name, minimal_invoice):
+    body = RECEIPT.copy()
+    body[python_name] = body.pop(wire_name)
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json=body, headers=HEADERS)
+
+    client, raw = make_client(async_mode, handler)
+    try:
+        with pytest.raises(TIaaSAmbiguousStateError if mutation else KRAeTIMSError) as caught:
+            if mutation:
+                await invoke(client, "submit_sale", minimal_invoice, idempotency_key="original")
+            else:
+                await invoke(client, "get_sale_status", 1)
+        assert caught.value.request_id == "synthetic-request"
+        assert caught.value.environment == "SIMULATED"
+        assert caught.value.http_status == 200
+        assert len(calls) == 1
+        if mutation:
+            assert caught.value.idempotency_key == "original"
+    finally:
+        await cleanup(client, raw)
+
+
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("method", ["get_sale_status", "get_sale_status_typed"])
+async def test_malformed_status_reason_preserves_sdk_error_metadata(async_mode, method):
+    body = {"purchaseId": 1, "status": "FAILED", "failureReason": {"unexpected": "object"}}
+    client, raw = make_client(async_mode, lambda request: httpx.Response(200, json=body, headers=HEADERS))
+    try:
+        with pytest.raises(KRAeTIMSError) as caught:
+            await invoke(client, method, 1)
+        assert not isinstance(caught.value, TIaaSAmbiguousStateError)
+        assert caught.value.request_id == "synthetic-request"
+        assert caught.value.environment == "SIMULATED"
+        assert caught.value.retry_after == "17"
+        assert caught.value.http_status == 200
+    finally:
+        await cleanup(client, raw)
+
+
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("reason", [None, "Synthetic prerequisite rejected"])
+async def test_valid_status_reason_preserves_dictionary_and_typed_results(async_mode, reason):
+    body = {"purchaseId": 1, "status": "FAILED", "failureReason": reason, "extension": {"future": True}}
+    client, raw = make_client(async_mode, lambda request: httpx.Response(200, json=body, headers=HEADERS))
+    try:
+        result = await invoke(client, "get_sale_status", 1)
+        assert result == body
+        typed = await invoke(client, "get_sale_status_typed", 1)
+        assert typed.failure_reason == reason
+        assert typed.model_extra == {"extension": {"future": True}}
+        assert typed.response_metadata.request_id == "synthetic-request"
+    finally:
+        await cleanup(client, raw)
+
+
+@pytest.mark.parametrize("async_mode", [False, True])
 @pytest.mark.parametrize("state", ["SIGNED", "PENDING_SYNC", "OUTCOME_UNKNOWN", "RECONCILIATION_REQUIRED", "NOT_SENT", "FAILED", "SYNCED"])
 async def test_valid_dictionary_and_typed_outcomes_preserve_body_and_metadata(async_mode, state, minimal_invoice):
     body = {**RECEIPT, "status": state, "extension": {"future": True}}

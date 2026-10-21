@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 from pydantic import ValidationError
-from .outcomes import FiscalResultDict, ResponseMetadata, SaleResult
+from .outcomes import FiscalResultDict, ResponseMetadata, SaleResult, SaleStatusResult
 
 from .exceptions import (
     KRA_ERROR_MAP,
@@ -250,17 +250,19 @@ class _BaseKRAeTIMSClient(ABC):
             environment=resp.headers.get("X-TaxID-Environment") or body.get("environment"),
             retry_after=resp.headers.get("Retry-After"),
         )
-        fiscal = resp.request.url.path.endswith("/v2/etims/sale") or re.search(
-            r"/v2/etims/sales/[^/]+/status$", resp.request.url.path
-        ) is not None
+        result_model: Optional[type[SaleResult]] = None
+        if resp.request.url.path.endswith("/v2/etims/sale"):
+            result_model = SaleResult
+        elif re.search(r"/v2/etims/sales/[^/]+/status$", resp.request.url.path):
+            result_model = SaleStatusResult
         try:
             result = self._parse_response_body(resp, method, idempotency_key)
-            if fiscal:
-                self._validate_sale_result(result, method, idempotency_key)
+            if result_model is not None:
+                self._validate_sale_result(result, method, idempotency_key, result_model)
                 return FiscalResultDict(result, metadata)
             return result
         except KRAeTIMSError as error:
-            if (fiscal and resp.is_success and method.upper() in _MUTATING_METHODS
+            if (result_model is not None and resp.is_success and method.upper() in _MUTATING_METHODS
                     and not isinstance(error, TIaaSAmbiguousStateError)
                     and getattr(error, "result_cd", None) is None):
                 error = TIaaSAmbiguousStateError(
@@ -276,9 +278,11 @@ class _BaseKRAeTIMSClient(ABC):
             raise error
 
     @staticmethod
-    def _validate_sale_result(result: Any, method: str, idempotency_key: Optional[str]) -> None:
+    def _validate_sale_result(
+        result: Any, method: str, idempotency_key: Optional[str], result_model: type[SaleResult]
+    ) -> None:
         try:
-            SaleResult.model_validate(result)
+            result_model.model_validate(result)
         except ValidationError as invalid:
             message = "Malformed or incomplete fiscal outcome; retain the original identity and inspect its status before replay."
             if method.upper() in _MUTATING_METHODS:
