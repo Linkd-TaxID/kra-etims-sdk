@@ -4,6 +4,16 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-22
+
+### Tests
+- Cover sync/async platform session expiry, response validation, cache isolation,
+  exchange denial/recovery and failed capability revocation retry.
+
+### Documentation
+- Document the supported session managers' TTL, refresh margin and server-owned
+  revocation. No SDK runtime API or behavior changes.
+
 ## [0.8.0] - 2026-10-21
 
 ### Added
