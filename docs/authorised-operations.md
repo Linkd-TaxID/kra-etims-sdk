@@ -25,6 +25,11 @@ client keeps its fixed capability: reacquire for later operations. There is no a
 replay on revoked/expired permission or an ambiguous fiscal outcome. Cache state cannot
 prove ongoing grant validity; server authentication checks every request.
 
+The managers request a 900-second TTL; the server caps the actual lifetime. Cached
+capabilities are reused only while more than 30 seconds remain. The response must
+match the requested grant, environment and exact scopes and include a timezone-aware
+expiry more than 30 seconds away. TTL and refresh margin are not configurable.
+
 Session `accessToken` is a SecretStr hidden from repr. It is never persisted by this
 module. A platform credential goes only to `/v2/platform/branch-sessions` and revocation,
 never into a fiscal client. Revoke a capability by its server ID; cache eviction precedes
