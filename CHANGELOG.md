@@ -11,6 +11,10 @@ All notable changes to kra-etims-sdk are documented here.
 `WORKER_STOPPING`) and 409 `code` fields that #53 adds or completes.
 
 ### Breaking changes
+- httpx 0.25–0.27 are no longer supported: the minimum is now `httpx>=0.28`, so
+  pip/uv refuse to install 0.8.2 alongside an older httpx. **Migration:** upgrade
+  httpx to 0.28 or later together with the SDK. The SDK's request bytes already
+  match httpx 0.28's JSON format (see the idempotency upgrade note under Fixed).
 - A 503 is `KRAConnectivityTimeoutError` only when the body's code is
   `KRA_CONNECTIVITY_TIMEOUT` (the 24-hour offline ceiling). `WORKER_STOPPING` now
   raises `WorkerStoppingError` (retryable), an unrecognised 503 on a GET raises
@@ -80,10 +84,6 @@ All notable changes to kra-etims-sdk are documented here.
   `Z_REPORT_ALREADY_ISSUED`, `report_date` and the 409's `http_status` and
   `response_metadata`), so generic 409 handlers match it.
 - Sync `lookup_pin` uses `/v2/etims/customers/lookup`, like the async client.
-
-### Changed
-- Minimum httpx is now 0.28 (`httpx>=0.28`). The SDK's request bytes already
-  match httpx 0.28's JSON format; older httpx releases are no longer supported.
 
 ### Added
 - `WorkerDeferredError` (403 `WORKER_DEFERRED`) and `WorkerStoppingError`
