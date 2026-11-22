@@ -24,6 +24,7 @@ from .exceptions import (
     KRADuplicateInvoiceError,
     CreditNoteConflictError,
     CreditNoteExceedsOriginalError,
+    IdempotentOutcomeUnresolvedError,
     KRAConflictError,
     KRAConnectivityTimeoutError,
     KRAeTIMSAuthError,
@@ -53,6 +54,12 @@ _MUTATING_METHODS: frozenset = frozenset({"POST", "PUT", "DELETE", "PATCH"})
 # Sale body states where TaxID holds a receipt that is not (yet) signed.
 _UNSETTLED_SALE_STATES: frozenset = frozenset(
     {"PENDING_SYNC", "OUTCOME_UNKNOWN", "RECONCILIATION_REQUIRED"}
+)
+
+# IdempotencyFilter refusals where an earlier claim for the key exists but its
+# outcome cannot be returned: the original may have been applied.
+_UNRESOLVED_IDEMPOTENCY_CODES: frozenset = frozenset(
+    {"IDEMPOTENT_RESULT_LOOKUP_REQUIRED", "IDEMPOTENT_IDENTITY_UNAVAILABLE", "IDEMPOTENCY_SCOPE_UNBOUND"}
 )
 
 # Failures where the request provably never reached the server: no TCP/TLS
@@ -322,6 +329,12 @@ class _BaseKRAeTIMSClient(ABC):
             if sc == 409:
                 body, msg, code = self._error_fields(exc.response)
                 message = f"Conflict (HTTP 409){f' [{code}]' if code else ''}: {msg}"
+                if code in _UNRESOLVED_IDEMPOTENCY_CODES:
+                    raise IdempotentOutcomeUnresolvedError(
+                        f"{message} Retain the original idempotency key and look up the original "
+                        "operation; do not resubmit under a new key.",
+                        idempotency_key=idempotency_key, code=code,
+                    ) from exc
                 if "/credit-note" in exc.request.url.path:
                     raise CreditNoteConflictError(
                         message,
@@ -334,11 +347,11 @@ class _BaseKRAeTIMSClient(ABC):
                 # IDEMPOTENT_REQUEST_IN_FLIGHT: the first request with this key is
                 # still running. Its outcome is not known yet, and the fix is the
                 # same as for any ambiguous mutation — retry with the same key.
-                _, msg, _ = self._error_fields(exc.response)
-                raise TIaaSAmbiguousStateError(
+                _, msg, code = self._error_fields(exc.response)
+                raise IdempotentOutcomeUnresolvedError(
                     f"Request with this idempotency key is still in flight (HTTP 425): {msg} "
                     "Retain the original key and inspect its status before considering replay.",
-                    idempotency_key=idempotency_key,
+                    idempotency_key=idempotency_key, code=code,
                 ) from exc
             if sc == 422:
                 # 422 covers VSCU terminal rejections AND the credit-note

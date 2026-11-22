@@ -80,3 +80,58 @@ def test_queue_flush_never_counts_unvalidated_return_as_success(tmp_path: Path):
     q2.enqueue(_QUEUED)
     client.submit_sale.return_value = {"purchaseId": 7, "status": "SIGNED"}  # no evidence
     assert q2.flush_one(client, q2.pending()[0])["status"] != "success"
+
+
+# ---------------------------------------------------------------------------
+# B2 — IdempotencyFilter 409 codes are ambiguous outcomes, not plain conflicts
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("code", ["IDEMPOTENT_RESULT_LOOKUP_REQUIRED", "IDEMPOTENT_IDENTITY_UNAVAILABLE",
+                                  "IDEMPOTENCY_SCOPE_UNBOUND"])
+@pytest.mark.parametrize("operation", ["sale", "credit_note"])
+async def test_idempotency_409_codes_raise_ambiguous_state(async_mode, code, operation, minimal_invoice):
+    from kra_etims.exceptions import KRAConflictError, TIaaSAmbiguousStateError
+    body = {"status": 409, "code": code, "message": "synthetic"}
+    client, raw = make_client(async_mode, respond(409, body))
+    try:
+        with pytest.raises(TIaaSAmbiguousStateError) as caught:
+            if operation == "sale":
+                await invoke(client, "submit_sale", minimal_invoice, idempotency_key="original-key")
+            else:
+                await invoke(client, "issue_credit_note", 7, idempotency_key="original-key")
+        assert caught.value.idempotency_key == "original-key"
+        assert caught.value.code == code
+        assert caught.value.http_status == 409
+        assert isinstance(caught.value, KRAConflictError)  # existing except-clauses keep matching
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_in_flight_425_keeps_code(async_mode, minimal_invoice):
+    from kra_etims.exceptions import TIaaSAmbiguousStateError
+    body = {"status": 425, "code": "IDEMPOTENT_RESULT_LOOKUP_REQUIRED", "message": "synthetic"}
+    client, raw = make_client(async_mode, respond(425, body))
+    try:
+        with pytest.raises(TIaaSAmbiguousStateError) as caught:
+            await invoke(client, "submit_sale", minimal_invoice, idempotency_key="original-key")
+        assert caught.value.code == "IDEMPOTENT_RESULT_LOOKUP_REQUIRED"
+        assert caught.value.idempotency_key == "original-key"
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_other_409_codes_stay_plain_conflicts(async_mode, minimal_invoice):
+    from kra_etims.exceptions import KRAConflictError, TIaaSAmbiguousStateError
+    client, raw = make_client(async_mode, respond(409, {"status": 409, "code": "FISCAL_DAY_CLOSED", "message": "x"}))
+    try:
+        with pytest.raises(KRAConflictError) as caught:
+            await invoke(client, "submit_sale", minimal_invoice, idempotency_key="k")
+        assert not isinstance(caught.value, TIaaSAmbiguousStateError)
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")

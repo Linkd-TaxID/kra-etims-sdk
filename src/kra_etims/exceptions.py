@@ -218,6 +218,24 @@ class KRAConflictError(KRAeTIMSError):
         self.code = code
 
 
+class IdempotentOutcomeUnresolvedError(TIaaSAmbiguousStateError, KRAConflictError):
+    """
+    The server holds an earlier claim for this idempotency key but cannot
+    return its result (HTTP 409/425 from TaxID's idempotency layer).
+
+    ``code`` is one of ``IDEMPOTENT_RESULT_LOOKUP_REQUIRED`` (original still in
+    flight or its cached response is unavailable), ``IDEMPOTENT_IDENTITY_UNAVAILABLE``
+    (the claim exists but cannot be read back) or ``IDEMPOTENCY_SCOPE_UNBOUND``
+    (a historical claim recorded before request scopes were stored). In every
+    case the original may have been applied: keep ``idempotency_key``, look the
+    original up (``find_sale(operation_key=...)``) and never resubmit under a
+    new key. Subclasses :class:`KRAConflictError` so existing 409 handlers match.
+    """
+    def __init__(self, message: str, idempotency_key: Optional[str] = None, code: Optional[str] = None):
+        TIaaSAmbiguousStateError.__init__(self, message, idempotency_key=idempotency_key)
+        self.code = code
+
+
 class CreditNoteConflictError(KRAConflictError):
     """
     HTTP 409 on a credit-note request (for example ``ETIMS_NOT_INITIALIZED``).
