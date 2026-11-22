@@ -20,7 +20,11 @@ class KRAeTIMSError(Exception):
     Root exception for all KRA eTIMS SDK errors.
 
     Full result code reference: https://linkd-taxid.github.io/kra-etims-sdk/
+
+    ``code`` is the server's machine-readable error code (e.g. ``INVALID_REQUEST``)
+    when the response carried one, else ``None``.
     """
+    code: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +92,36 @@ class KRAAuthorizationError(KRAeTIMSError):
     the required role for this endpoint (e.g. ROLE_SDK_CLIENT attempting
     an ROLE_ADMIN endpoint such as /v2/etims/init-handshake).
     """
+
+
+class RateLimitError(KRAeTIMSError):
+    """
+    HTTP 429 (``code`` usually ``RATE_LIMITED``). Nothing was processed.
+
+    ``retry_after`` keeps the raw ``Retry-After`` header (as on every SDK
+    error); ``retry_after_seconds`` is its parsed value in seconds (RFC 9110
+    §10.2.3: delay-seconds or an HTTP-date), or ``None`` when absent or invalid.
+    """
+    retry_after_seconds: Optional[float] = None
+
+    @staticmethod
+    def parse_retry_after(value: Optional[str]) -> Optional[float]:
+        if value is None:
+            return None
+        value = value.strip()
+        if value.isdigit():
+            return float(value)
+        try:
+            from email.utils import parsedate_to_datetime
+            from datetime import datetime, timezone
+            when = parsedate_to_datetime(value)
+        except (TypeError, ValueError, IndexError):
+            return None
+        if when is None:
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
 
 
 class TIaaSUnavailableError(KRAeTIMSError):

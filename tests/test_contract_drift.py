@@ -450,3 +450,59 @@ def test_cli_device_status_reports_unsupported_route():
         raw.close()
     assert result.exit_code == 1
     assert "not supported" in result.output
+
+
+# ---------------------------------------------------------------------------
+# B7 — typed 429 with parsed Retry-After; .code on generic errors
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("header,expected", [
+    ("30", 30.0), ("0", 0.0), (None, None), ("soon", None), ("-5", None),
+])
+async def test_rate_limit_error_parses_retry_after_seconds(async_mode, header, expected):
+    from kra_etims.exceptions import KRAeTIMSError, RateLimitError
+    headers = {"Retry-After": header} if header is not None else {}
+    body = {"status": 429, "code": "RATE_LIMITED", "message": "Too many requests"}
+    client, raw = make_client(async_mode, respond(429, body, headers))
+    try:
+        with pytest.raises(RateLimitError) as caught:
+            await invoke(client, "get_sale_status", 7)
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+    err = caught.value
+    assert isinstance(err, KRAeTIMSError)
+    assert err.code == "RATE_LIMITED" and err.http_status == 429
+    assert err.retry_after == header  # raw header kept for compatibility
+    assert err.retry_after_seconds == expected
+
+
+def test_rate_limit_error_parses_http_date():
+    from datetime import datetime, timedelta, timezone
+    from email.utils import format_datetime
+    from kra_etims.exceptions import RateLimitError
+    future = datetime.now(timezone.utc) + timedelta(seconds=120)
+    client, raw = make_client(False, respond(429, {"code": "RATE_LIMITED", "message": "x"},
+                                             {"Retry-After": format_datetime(future, usegmt=True)}))
+    try:
+        with pytest.raises(RateLimitError) as caught:
+            client.get_sale_status(7)
+    finally:
+        raw.close()
+    assert 100 <= caught.value.retry_after_seconds <= 121
+    past = format_datetime(datetime.now(timezone.utc) - timedelta(seconds=60), usegmt=True)
+    assert RateLimitError.parse_retry_after(past) == 0.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_generic_errors_expose_code(async_mode):
+    client, raw = make_client(async_mode, respond(400, {"status": 400, "code": "INVALID_REQUEST", "message": "bad"}))
+    try:
+        from kra_etims.exceptions import KRAeTIMSError
+        with pytest.raises(KRAeTIMSError) as caught:
+            await invoke(client, "get_sale_status", 7)
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+    assert caught.value.code == "INVALID_REQUEST"

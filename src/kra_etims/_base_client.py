@@ -36,6 +36,7 @@ from .exceptions import (
     KRAAuthorizationError,
     KRAeTIMSError,
     OSCUUnavailableError,
+    RateLimitError,
     TIaaSAmbiguousStateError,
     TIaaSUnavailableError,
     WorkerDeferredError,
@@ -297,7 +298,7 @@ class _BaseKRAeTIMSClient(ABC):
         method: str,
         idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
-        body, _, _ = self._error_fields(resp)
+        body, _, body_code = self._error_fields(resp)
         metadata = ResponseMetadata(
             http_status=resp.status_code,
             request_id=resp.headers.get("X-Request-Id") or body.get("requestId"),
@@ -327,6 +328,8 @@ class _BaseKRAeTIMSClient(ABC):
             error.retry_after = metadata.retry_after
             error.http_status = metadata.http_status
             error.idempotency_key = idempotency_key
+            if error.code is None and body_code is not None and not resp.is_success:
+                error.code = body_code
             raise error
 
     @staticmethod
@@ -446,6 +449,13 @@ class _BaseKRAeTIMSClient(ABC):
                 raise KRAeTIMSError(
                     f"Resource not found (HTTP 404){detail}: {message}"
                 ) from exc
+            if sc == 429:
+                _, message, code = self._error_fields(exc.response)
+                suffix = f" [{code}]" if code else ""
+                error = RateLimitError(f"Rate limited (HTTP 429){suffix}: {message}")
+                error.retry_after_seconds = RateLimitError.parse_retry_after(
+                    exc.response.headers.get("Retry-After"))
+                raise error from exc
             if sc in (502, 504):
                 # Gateway failures from an edge proxy: the upstream may have
                 # committed before the proxy gave up.
