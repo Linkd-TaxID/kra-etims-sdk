@@ -6,6 +6,24 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [0.8.2] - unreleased
 
+**Release order:** deploy the TaxID backend change (taxID#53) first, then publish
+0.8.2. This release reads the backend's worker codes (`WORKER_DEFERRED`,
+`WORKER_STOPPING`) and 409 `code` fields that #53 adds or completes.
+
+### Breaking changes
+- A 503 is `KRAConnectivityTimeoutError` only when the body's code is
+  `KRA_CONNECTIVITY_TIMEOUT` (the 24-hour offline ceiling). `WORKER_STOPPING` now
+  raises `WorkerStoppingError` (retryable), an unrecognised 503 on a GET raises
+  `TIaaSUnavailableError`, and on a mutation `MutationServiceUnavailableError`.
+  0.8.1 raised `KRAConnectivityTimeoutError` for every 503 without `oscu_code`.
+  **Migration:** if you used `except KRAConnectivityTimeoutError` to catch every
+  503, also catch `TIaaSUnavailableError` (it covers `WorkerStoppingError` and
+  `MutationServiceUnavailableError`). Put a handler for `TIaaSAmbiguousStateError`
+  before it: an unrecognised 503 on a mutation may follow a commit, so inspect the
+  original with the same idempotency key (`find_sale(operation_key=...)`) instead
+  of resending. `WorkerStoppingError`/`WorkerDeferredError` (`retryable = True`)
+  are safe to retry with the same key and body after `retry_after_seconds`.
+
 ### Fixed
 - CLI `etims queue flush` classifies each result by the sale body: only `SIGNED`
   with CU invoice number, SDC id and signature is `success`; `PENDING_SYNC` is
