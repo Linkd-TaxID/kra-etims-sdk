@@ -20,7 +20,7 @@ import httpx
 from pydantic import ValidationError
 from pydantic import BaseModel
 from .outcomes import (
-    CreditNoteResult, FiscalResultDict, ResponseMetadata, SaleOriginalResult, SaleResult, SaleStatusResult,
+    CreditNoteResult, FiscalResultDict, has_signed_evidence, ResponseMetadata, SaleOriginalResult, SaleResult, SaleStatusResult,
 )
 from .models import StockMasterResult, StockOperationResult
 
@@ -39,6 +39,7 @@ from .exceptions import (
     RateLimitError,
     TIaaSAmbiguousStateError,
     TIaaSUnavailableError,
+    UnsupportedOperationError,
     WorkerDeferredError,
     WorkerStoppingError,
 )
@@ -215,6 +216,28 @@ class _BaseKRAeTIMSClient(ABC):
     def _build_url(self, path: str) -> str:
         return f"{self.base_url}/{path.lstrip('/')}"
 
+    @staticmethod
+    def _encode_request_body(json: Any, headers: Dict[str, str]) -> Optional[bytes]:
+        """SDK-owned JSON body bytes (see _encode_json_body); sets Content-Type."""
+        if json is None:
+            return None
+        headers["Content-Type"] = "application/json"
+        return _encode_json_body(json)
+
+    @staticmethod
+    def _unsupported_compliance() -> None:
+        import warnings
+        warnings.warn(
+            "check_compliance() targets a route TaxID does not serve and will be removed. "
+            "Use device_health() or lookup_customer().",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        raise UnsupportedOperationError(
+            "check_compliance() is not supported: TaxID has no compliance-check route. "
+            "Use device_health() for branch reachability or lookup_customer(pin) for a taxpayer PIN."
+        )
+
     def _build_auth_headers(
         self, idempotency_key: Optional[str] = None
     ) -> Dict[str, str]:
@@ -380,8 +403,6 @@ class _BaseKRAeTIMSClient(ABC):
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             sc = exc.response.status_code
-            if sc == 503:
-                self._raise_for_503(exc.response)
             if sc == 409:
                 body, msg, code = self._error_fields(exc.response)
                 if code is None and _MACHINE_CODE.match(str(body.get("error", ""))):
@@ -452,10 +473,7 @@ class _BaseKRAeTIMSClient(ABC):
             if sc == 429:
                 _, message, code = self._error_fields(exc.response)
                 suffix = f" [{code}]" if code else ""
-                error = RateLimitError(f"Rate limited (HTTP 429){suffix}: {message}")
-                error.retry_after_seconds = RateLimitError.parse_retry_after(
-                    exc.response.headers.get("Retry-After"))
-                raise error from exc
+                raise RateLimitError(f"Rate limited (HTTP 429){suffix}: {message}") from exc
             if sc in (502, 504):
                 # Gateway failures from an edge proxy: the upstream may have
                 # committed before the proxy gave up.
@@ -539,10 +557,7 @@ class _BaseKRAeTIMSClient(ABC):
             "invoice_no":      invoice_no,
             "status":          "success",
             "data":            outcome,
-            "signed":          sale_state == "SIGNED" and all(
-                isinstance(outcome.get(field), str) and outcome[field].strip()
-                for field in ("cuInvoiceNumber", "sdcId", "receiptSignature")
-            ),
+            "signed":          has_signed_evidence(outcome),
             "sale_status":     sale_state,
             "idempotency_key": idem_key,
         }

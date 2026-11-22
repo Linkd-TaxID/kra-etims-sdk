@@ -102,7 +102,9 @@ class RateLimitError(KRAeTIMSError):
     error); ``retry_after_seconds`` is its parsed value in seconds (RFC 9110
     §10.2.3: delay-seconds or an HTTP-date), or ``None`` when absent or invalid.
     """
-    retry_after_seconds: Optional[float] = None
+    @property
+    def retry_after_seconds(self) -> Optional[float]:
+        return self.parse_retry_after(getattr(self, "retry_after", None))
 
     @staticmethod
     def parse_retry_after(value: Optional[str]) -> Optional[float]:

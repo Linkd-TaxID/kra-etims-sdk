@@ -23,14 +23,21 @@ class FiscalResultDict(dict):
 _FiscalStatus = Literal["SIGNED", "PENDING_SYNC", "OUTCOME_UNKNOWN", "RECONCILIATION_REQUIRED", "NOT_SENT", "FAILED", "SYNCED"]
 
 
+# Mirrors the backend's minimum (VscuSignedReceiptDto.hasCompleteReceiptData:
+# rcptNo, sdcId, signature). kraQrPayload is deliberately not required: SIGNED
+# rows recorded before the protocol-evidence check can lack it.
+SIGNED_EVIDENCE_FIELDS = ("cuInvoiceNumber", "sdcId", "receiptSignature")
+
+
+def has_signed_evidence(body) -> bool:
+    """True when a wire body is SIGNED and carries every evidence field."""
+    return isinstance(body, dict) and body.get("status") == "SIGNED" and all(
+        isinstance(body.get(field), str) and body[field].strip() for field in SIGNED_EVIDENCE_FIELDS
+    )
+
+
 def _require_signed_evidence(result):
-    # Mirrors the backend's minimum (VscuSignedReceiptDto.hasCompleteReceiptData:
-    # rcptNo, sdcId, signature). kraQrPayload is deliberately not required: SIGNED
-    # rows recorded before the protocol-evidence check can lack it.
-    if result.status == "SIGNED" and not all(
-        value is not None and value.strip()
-        for value in (result.cu_invoice_number, result.sdc_id, result.receipt_signature)
-    ):
+    if result.status == "SIGNED" and not has_signed_evidence(result.model_dump(by_alias=True)):
         raise ValueError("SIGNED requires CU invoice number, device identity and receipt signature")
     return result
 

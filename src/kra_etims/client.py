@@ -13,10 +13,9 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from ._base_client import _BaseKRAeTIMSClient, _encode_json_body
+from ._base_client import _BaseKRAeTIMSClient
 from ._telemetry import inject_trace_context, span as _span
 from .exceptions import (
-    UnsupportedOperationError,
     KRAConnectivityTimeoutError,
     KRADuplicateInvoiceError,
     KRAeTIMSAuthError,
@@ -214,10 +213,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             headers = self._build_auth_headers(idempotency_key)
             inject_trace_context(headers)
 
-            content = None
-            if json is not None:
-                content = _encode_json_body(json)
-                headers["Content-Type"] = "application/json"
+            content = self._encode_request_body(json, headers)
             try:
                 resp = self._http.request(method, url, content=content, files=files, headers=headers, timeout=self._timeout)
             except httpx.RequestError as exc:
@@ -633,16 +629,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             sending a request. Use :meth:`device_health` for branch reachability
             and :meth:`lookup_customer` for a taxpayer PIN.
         """
-        warnings.warn(
-            "check_compliance() targets a route TaxID does not serve and will be removed. "
-            "Use device_health() or lookup_customer().",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        raise UnsupportedOperationError(
-            "check_compliance() is not supported: TaxID has no compliance-check route. "
-            "Use device_health() for branch reachability or lookup_customer(pin) for a taxpayer PIN."
-        )
+        self._unsupported_compliance()
 
     def lookup_pin(self, pin: str) -> Dict[str, Any]:
         """Compatibility alias for :meth:`lookup_customer`; does not register a buyer."""

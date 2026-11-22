@@ -27,6 +27,8 @@ from typing import Any
 
 _SQLITE_VERSION = tuple(int(x) for x in sqlite3.sqlite_version.split("."))
 
+from kra_etims.outcomes import has_signed_evidence
+
 from .config import data_dir
 
 _DB_NAME = "queue.db"
@@ -42,16 +44,11 @@ CREATE TABLE IF NOT EXISTS queue (
 """
 
 
-_EVIDENCE_FIELDS = ("cuInvoiceNumber", "sdcId", "receiptSignature")
-
-
 def _classify_sale_outcome(outcome: Any) -> tuple[str, str | None]:
     """Map a returned sale body to a queue status; only evidenced SIGNED is success."""
     sale_status = outcome.get("status") if isinstance(outcome, dict) else None
     purchase = outcome.get("purchaseId") if isinstance(outcome, dict) else None
-    if sale_status == "SIGNED" and all(
-        isinstance(outcome.get(field), str) and outcome[field].strip() for field in _EVIDENCE_FIELDS
-    ):
+    if has_signed_evidence(outcome):
         return "success", None
     detail = f"Sale status {sale_status or 'missing'} (purchaseId={purchase})"
     if sale_status == "PENDING_SYNC":
