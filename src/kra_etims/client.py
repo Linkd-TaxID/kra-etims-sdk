@@ -428,10 +428,17 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         from :meth:`submit_sale` (middleware Track C4).
 
         ``invc_no`` is the ``purchaseId`` from the original :meth:`submit_sale`
-        response, not the KRA ``invcNo`` sequence number. Prefer a registered
-        ``receipt.signed``/``receipt.failed`` webhook over polling this in a
-        loop; this endpoint is the authoritative fallback for tenants with no
-        webhook configured or a missed delivery.
+        response, not the KRA ``invcNo`` sequence number. Polling this method
+        is the supported way to follow a sale: poll with exponential backoff
+        and jitter (for example 2 s doubling to 60 s), and honour
+        ``RateLimitError.retry_after_seconds`` on HTTP 429. A
+        ``RECONCILIATION_REQUIRED`` sale can still become ``SIGNED`` under the
+        same ``purchaseId`` once TaxID stores its receipt evidence; never
+        resubmit it.
+
+        Webhooks are optional: whether they are sent depends on the deployment
+        configuration, delivery is at-least-once, and deliveries are signed
+        with a per-tenant secret. Do not rely on receiving ``receipt.signed``.
 
         :raises KRAeTIMSError: HTTP 404 — no sale with this ``purchaseId`` for
             the authenticated tenant.
