@@ -11,7 +11,7 @@ def test_sync_correction_identity_wire(identity):
     seen = []
     def handler(request):
         seen.append(request)
-        return httpx.Response(201,json={"creditNoteId":2,"originalPurchaseId":1,"status":"SIGNED"})
+        return httpx.Response(201,json={"creditNoteId":2,"originalPurchaseId":1,"status":"SIGNED","cuInvoiceNumber":"SIM01/2 NC","sdcId":"SIM01","receiptSignature":"synthetic"})
     with KRAeTIMSClient(api_key="synthetic",base_url="https://taxid.test") as client:
         client._http.close()
         client._http = httpx.Client(transport=httpx.MockTransport(handler))
@@ -31,7 +31,7 @@ def test_async_correction_identity_wire():
         seen = []
         def handler(request):
             seen.append(request)
-            return httpx.Response(201,json={"creditNoteId":2,"status":"SIGNED"})
+            return httpx.Response(201,json={"creditNoteId":2,"originalPurchaseId":1,"status":"SIGNED","cuInvoiceNumber":"SIM01/2 NC","sdcId":"SIM01","receiptSignature":"synthetic"})
         async with AsyncKRAeTIMSClient(api_key="synthetic",base_url="https://taxid.test") as client:
             await client._http.aclose()
             client._http = httpx.AsyncClient(transport=httpx.MockTransport(handler))

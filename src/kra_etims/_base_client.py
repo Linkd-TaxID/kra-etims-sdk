@@ -18,7 +18,11 @@ from typing import Any, Dict, Optional
 
 import httpx
 from pydantic import ValidationError
-from .outcomes import FiscalResultDict, ResponseMetadata, SaleResult, SaleStatusResult
+from pydantic import BaseModel
+from .outcomes import (
+    CreditNoteResult, FiscalResultDict, ResponseMetadata, SaleOriginalResult, SaleResult, SaleStatusResult,
+)
+from .models import StockMasterResult, StockOperationResult
 
 from .exceptions import (
     KRA_ERROR_MAP,
@@ -61,6 +65,21 @@ _UNSETTLED_SALE_STATES: frozenset = frozenset(
 # outcome cannot be returned: the original may have been applied.
 _UNRESOLVED_IDEMPOTENCY_CODES: frozenset = frozenset(
     {"IDEMPOTENT_RESULT_LOOKUP_REQUIRED", "IDEMPOTENT_IDENTITY_UNAVAILABLE", "IDEMPOTENCY_SCOPE_UNBOUND"}
+)
+
+# Routes whose 2xx bodies are fiscal outcomes: validated before they are returned
+# (an invalid mutation body is ambiguous, never a raw pydantic error) and returned
+# with response metadata attached.
+_RESULT_MODELS: tuple = (
+    (re.compile(r"/v2/etims/sale$"), SaleResult),
+    (re.compile(r"/v2/etims/sales/[^/]+/status$"), SaleStatusResult),
+    (re.compile(r"/v2/etims/sales/search$"), SaleStatusResult),
+    (re.compile(r"/v2/etims/sales/[^/]+/original$"), SaleOriginalResult),
+    (re.compile(r"/v2/etims/sale/[^/]+/credit-note$"), CreditNoteResult),
+    (re.compile(r"/v2/etims/stock/adjustment$"), StockOperationResult),
+    (re.compile(r"/v2/etims/stock/operations/[^/]+$"), StockOperationResult),
+    (re.compile(r"/v2/etims/stock/master$"), StockMasterResult),
+    (re.compile(r"/v2/etims/stock/master/operations/[^/]+$"), StockMasterResult),
 )
 
 # Failures where the request provably never reached the server: no TCP/TLS
@@ -273,11 +292,9 @@ class _BaseKRAeTIMSClient(ABC):
             environment=resp.headers.get("X-TaxID-Environment") or body.get("environment"),
             retry_after=resp.headers.get("Retry-After"),
         )
-        result_model: Optional[type[SaleResult]] = None
-        if resp.request.url.path.endswith("/v2/etims/sale"):
-            result_model = SaleResult
-        elif re.search(r"/v2/etims/sales/[^/]+/status$", resp.request.url.path):
-            result_model = SaleStatusResult
+        path = resp.request.url.path
+        result_model: Optional[type[BaseModel]] = next(
+            (model for pattern, model in _RESULT_MODELS if pattern.search(path)), None)
         try:
             result = self._parse_response_body(resp, method, idempotency_key)
             if result_model is not None:
@@ -302,7 +319,7 @@ class _BaseKRAeTIMSClient(ABC):
 
     @staticmethod
     def _validate_sale_result(
-        result: Any, method: str, idempotency_key: Optional[str], result_model: type[SaleResult]
+        result: Any, method: str, idempotency_key: Optional[str], result_model: type[BaseModel]
     ) -> None:
         try:
             result_model.model_validate(result)
@@ -311,6 +328,13 @@ class _BaseKRAeTIMSClient(ABC):
             if method.upper() in _MUTATING_METHODS:
                 raise TIaaSAmbiguousStateError(message, idempotency_key=idempotency_key) from invalid
             raise KRAeTIMSError(message) from invalid
+
+    @staticmethod
+    def _typed_result(model: type[BaseModel], result: Any) -> Any:
+        """Build a typed stock result from an already-validated body, keeping its metadata."""
+        typed = model.model_validate(result)
+        typed.response_metadata = getattr(result, "response_metadata", None)
+        return typed
 
     def _parse_response_body(
         self,

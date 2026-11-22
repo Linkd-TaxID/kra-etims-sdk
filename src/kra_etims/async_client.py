@@ -545,13 +545,13 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             json=request.model_dump(mode="json", exclude_none=True),
             idempotency_key=idempotency_key,
         )
-        return StockOperationResult.model_validate(result)
+        return self._typed_result(StockOperationResult, result)
 
     async def inspect_stock_operation(self, operation_key: str) -> StockOperationResult:
         """Read retained current stock outcome; a cached POST response may be older."""
         from urllib.parse import quote
         result = await self._request("GET", "/v2/etims/stock/operations/" + quote(operation_key, safe=""))
-        return StockOperationResult.model_validate(result)
+        return self._typed_result(StockOperationResult, result)
 
     async def submit_stock_master(self, request: StockMasterRequest, *, idempotency_key: str) -> StockMasterResult:
         """Send supplied absolute residual quantity after confirmed original I/O.
@@ -563,13 +563,13 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             raise ValueError("Stock master requires a stable idempotency_key")
         result = await self._request("POST", "/v2/etims/stock/master",
             json=request.model_dump(mode="json"), idempotency_key=idempotency_key)
-        return StockMasterResult.model_validate(result)
+        return self._typed_result(StockMasterResult, result)
 
     async def inspect_stock_master(self, operation_key: str) -> StockMasterResult:
         """Inspect the original absolute stock operation without fiscal dispatch."""
         from urllib.parse import quote
         result = await self._request("GET", "/v2/etims/stock/master/operations/" + quote(operation_key, safe=""))
-        return StockMasterResult.model_validate(result)
+        return self._typed_result(StockMasterResult, result)
 
     async def batch_update_stock(
         self, items: List[StockItem]

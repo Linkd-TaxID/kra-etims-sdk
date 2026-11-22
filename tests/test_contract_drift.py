@@ -190,3 +190,116 @@ def test_body_encoder_rejects_nan():
     from kra_etims._base_client import _encode_json_body
     with pytest.raises(ValueError):
         _encode_json_body({"amount": float("nan")})
+
+
+# ---------------------------------------------------------------------------
+# B4 — outcome validation + response metadata on the other fiscal routes
+# ---------------------------------------------------------------------------
+
+META = {"X-Request-Id": "synthetic-request", "X-TaxID-Environment": "SIMULATED"}
+CREDIT_NOTE = {"creditNoteId": 11, "originalPurchaseId": 7, "status": "SIGNED",
+               "cuInvoiceNumber": "SIM01/11 NC", "sdcId": "SIM01", "receiptSignature": "sig"}
+STOCK = {"operationKey": "op-1", "movementId": 1, "sarNo": 1, "status": "SYNCED",
+         "payloadSha256": "a" * 64, "totAmt": 10, "totTaxAmt": 0}
+STOCK_MASTER = {"operationKey": "m-1", "originalIoKey": "op-1", "itemCd": "KE1", "status": "SYNCED",
+                "payloadSha256": "b" * 64}
+
+
+def _stock_line():
+    from kra_etims.models import StockAdjustmentLine
+    from decimal import Decimal
+    return StockAdjustmentLine(itemCd="KE1NTXU0000001", itemNm="Chai", ioType="M",
+                               qty=Decimal("1"), prc=Decimal("10"), taxTyCd="A")
+
+
+def _stock_master():
+    from kra_etims.models import StockMasterRequest
+    return StockMasterRequest(originalIoKey="op-1", itemCd="KE1NTXU0000001", rsdQty="1")
+
+
+_READS = [
+    ("find_sale", (), {"client_reference": "ref-1"}),
+    ("get_sale_original", (7,), {}),
+]
+_MUTATIONS = [
+    ("issue_credit_note", (7,), {"idempotency_key": "cn-key"}, "cn-key"),
+    ("submit_stock_adjustment", (), {"idempotency_key": "st-key"}, "st-key"),
+    ("submit_stock_master", (), {"idempotency_key": "sm-key"}, "sm-key"),
+]
+
+
+def _mutation_args(method, args):
+    if method == "submit_stock_adjustment":
+        return ([_stock_line()],)
+    if method == "submit_stock_master":
+        return (_stock_master(),)
+    return args
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("body", [{"purchaseId": 7, "status": "SIGNED"}, {"purchaseId": 7, "status": "NEW_UNKNOWN"},
+                                  {"status": "SIGNED"}, []])
+async def test_find_sale_rejects_incomplete_outcomes(async_mode, body):
+    from kra_etims.exceptions import KRAeTIMSError, TIaaSAmbiguousStateError
+    client, raw = make_client(async_mode, respond(200, body, META))
+    try:
+        with pytest.raises(KRAeTIMSError) as caught:
+            await invoke(client, "find_sale", client_reference="ref-1")
+        assert not isinstance(caught.value, TIaaSAmbiguousStateError)
+        assert caught.value.request_id == "synthetic-request"
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_reads_return_dicts_with_metadata(async_mode):
+    original = {"purchaseId": 7, "payload": "{}", "payloadKind": "BUSINESS_SNAPSHOT_BEFORE_PROTOCOL_ADAPTATION"}
+    for method, args, kwargs in _READS:
+        body = {**RECEIPT, "status": "PENDING_SYNC"} if method == "find_sale" else original
+        client, raw = make_client(async_mode, respond(200, body, META))
+        try:
+            result = await invoke(client, method, *args, **kwargs)
+        finally:
+            await invoke(raw, "aclose" if async_mode else "close")
+        assert isinstance(result, dict) and result == body
+        assert result.response_metadata.request_id == "synthetic-request", method
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("method,args,kwargs,key", _MUTATIONS)
+async def test_fiscal_mutations_raise_ambiguous_on_malformed_body(async_mode, method, args, kwargs, key):
+    from pydantic import ValidationError
+    from kra_etims.exceptions import TIaaSAmbiguousStateError
+    malformed = {"creditNoteId": 11, "originalPurchaseId": 7, "status": "SIGNED"} \
+        if method == "issue_credit_note" else {"status": "SYNCED"}
+    client, raw = make_client(async_mode, respond(200, malformed, META))
+    try:
+        with pytest.raises(TIaaSAmbiguousStateError) as caught:
+            await invoke(client, method, *_mutation_args(method, args), **kwargs)
+        assert not isinstance(caught.value, ValidationError)
+        assert caught.value.idempotency_key == key
+        assert caught.value.request_id == "synthetic-request"
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("method,args,kwargs,key", _MUTATIONS)
+async def test_fiscal_mutations_keep_return_types_and_metadata(async_mode, method, args, kwargs, key):
+    body = {"issue_credit_note": CREDIT_NOTE, "submit_stock_adjustment": STOCK,
+            "submit_stock_master": STOCK_MASTER}[method]
+    client, raw = make_client(async_mode, respond(200, body, META))
+    try:
+        result = await invoke(client, method, *_mutation_args(method, args), **kwargs)
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+    if method == "issue_credit_note":
+        assert isinstance(result, dict) and result == CREDIT_NOTE
+    else:
+        assert result.operationKey == body["operationKey"]
+        assert "response_metadata" not in result.model_dump()
+    assert result.response_metadata.request_id == "synthetic-request"

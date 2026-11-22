@@ -56,7 +56,7 @@ Exceptions
 # Clients
 from .client import KRAeTIMSClient
 from .async_client import AsyncKRAeTIMSClient
-from .outcomes import ResponseMetadata, SaleResult, SaleStatusResult
+from .outcomes import CreditNoteResult, ResponseMetadata, SaleOriginalResult, SaleResult, SaleStatusResult
 
 # GavaConnect — direct KRA API (no TIaaS subscription required)
 from .gavaconnect import (
@@ -148,7 +148,7 @@ from .exceptions import (
 __version__ = "0.8.1"
 
 __all__ = [
-    "ResponseMetadata", "SaleResult", "SaleStatusResult",
+    "ResponseMetadata", "SaleResult", "SaleStatusResult", "CreditNoteResult", "SaleOriginalResult",
     # Clients
     "KRAeTIMSClient",
     "AsyncKRAeTIMSClient",
