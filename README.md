@@ -187,10 +187,11 @@ Failures are split by whether the request could have had an effect:
 |---|---|---|
 | Never left the client (connect error, pool timeout), or any failure on a GET | `TIaaSUnavailableError` | Yes |
 | Sent, then no usable response (read timeout, dropped connection, HTTP 500/502/504), or HTTP 425 because an earlier request with this key is still running | `TIaaSAmbiguousStateError` | Look up the original reference first; preserve `exc.idempotency_key`. Do not blindly resubmit. |
-| HTTP 409 `IDEMPOTENT_RESULT_LOOKUP_REQUIRED`, `IDEMPOTENT_IDENTITY_UNAVAILABLE` or `IDEMPOTENCY_SCOPE_UNBOUND`: an earlier request with this key exists but its result cannot be returned | `IdempotentOutcomeUnresolvedError` (a `TIaaSAmbiguousStateError` and `KRAConflictError`) | As above: look up the original; never resubmit under a new key |
+| HTTP 409 `IDEMPOTENT_RESULT_LOOKUP_REQUIRED`, `IDEMPOTENT_IDENTITY_UNAVAILABLE` or `IDEMPOTENCY_SCOPE_UNBOUND`: an earlier request with this key exists but its result cannot be returned | `IdempotentOutcomeUnresolvedError` (a `TIaaSAmbiguousStateError` and `KRAConflictError`); on `issue_credit_note`, `CreditNoteOutcomeUnresolvedError` (also a `CreditNoteConflictError`) | As above: look up the original; never resubmit under a new key |
 | Refused by the fiscal worker before dispatch: HTTP 403 `WORKER_DEFERRED`, HTTP 503 `WORKER_STOPPING` | `WorkerDeferredError` / `WorkerStoppingError` (`retryable = True`) | Yes, with the same key and body after a backoff |
 | HTTP 503 `KRA_CONNECTIVITY_TIMEOUT` (24-hour offline ceiling) | `KRAConnectivityTimeoutError` | After connectivity is restored; inspect mutations first |
-| Any other HTTP 503 | `TIaaSUnavailableError` (`exc.code` has the server code) | GETs yes; inspect a mutation's original first |
+| Any other HTTP 503 on a GET | `TIaaSUnavailableError` (`exc.code` has the server code) | Yes |
+| Any other HTTP 503 on a mutation | `MutationServiceUnavailableError` (a `TIaaSUnavailableError` and `TIaaSAmbiguousStateError`, `retryable = False`) | Inspect the original first; catch it before any `except TIaaSUnavailableError` that retries |
 | HTTP 429 | `RateLimitError` (`exc.retry_after_seconds`) | Yes, after the delay; nothing was processed |
 
 The implemented server cache replays a stored response for the same key and exact
@@ -332,7 +333,7 @@ All exceptions inherit from `KRAeTIMSError`.
 | `KRAInvalidPINError`, `KRAInvalidItemCodeError`, `KRAInvalidBranchError`, `KRAVSCUMemoryFullError`, `KRAServerError` | VSCU codes 10, 13, 14, 11, and 20/96/99 |
 | `CreditNoteExceedsOriginalError` | 422: the credit notes would exceed the receipt |
 | `KRAConflictError` | 409. `exc.code` is `FISCAL_DAY_CLOSED` (the date is already Z-closed) or `ETIMS_NOT_INITIALIZED` (the branch has not completed its handshake). |
-| `CreditNoteConflictError` | A `KRAConflictError` raised on a credit-note request |
+| `CreditNoteConflictError` | A `KRAConflictError` raised on a credit-note request (`CreditNoteOutcomeUnresolvedError` for the unresolved idempotency codes) |
 | `ZReportAlreadyIssuedError` | 409: a Z report already exists for that date |
 | `GavaConnectAuthError`, `GavaConnectPINNotFoundError`, `GavaConnectTCCError`, `GavaConnectError` | GavaConnect failures |
 
