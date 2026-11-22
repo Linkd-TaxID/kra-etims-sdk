@@ -98,6 +98,35 @@ class TIaaSUnavailableError(KRAeTIMSError):
         super().__init__(message)
 
 
+class FiscalWorkerUnavailableError(TIaaSUnavailableError):
+    """
+    TaxID's fiscal worker refused the request before dispatching it to the
+    control unit, and the server marked the refusal ``retryable``. Safe to
+    retry with the same idempotency key and body after a backoff.
+
+    ``code`` carries the server code (``WORKER_DEFERRED`` or ``WORKER_STOPPING``).
+    """
+    retryable: bool = True
+
+    def __init__(self, message: str = (
+        "TaxID fiscal worker unavailable: the request was refused before dispatch. "
+        "Retry with the same idempotency key after a backoff."
+    ), code: Optional[str] = None):
+        super().__init__(message)
+        self.code = code
+
+
+class WorkerDeferredError(FiscalWorkerUnavailableError, KRAAuthorizationError):
+    """HTTP 403 ``WORKER_DEFERRED``: worker-gate refusal, safe to retry.
+
+    Also a :class:`KRAAuthorizationError` so existing 403 handlers still match.
+    """
+
+
+class WorkerStoppingError(FiscalWorkerUnavailableError):
+    """HTTP 503 ``WORKER_STOPPING``: the worker is shutting down, safe to retry."""
+
+
 class TIaaSAmbiguousStateError(KRAeTIMSError):
     """
     Network dropped after the request was sent but before a response was

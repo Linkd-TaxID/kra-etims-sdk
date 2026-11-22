@@ -2,7 +2,7 @@ import pytest
 from decimal import Decimal
 from kra_etims.client import KRAeTIMSClient
 from kra_etims.async_client import AsyncKRAeTIMSClient
-from kra_etims.exceptions import KRAConnectivityTimeoutError, KRAeTIMSError, OSCUUnavailableError
+from kra_etims.exceptions import KRAConnectivityTimeoutError, KRAeTIMSError, OSCUUnavailableError, TIaaSUnavailableError
 from kra_etims.models import SaleInvoice, ReceiptLabel, TaxType
 
 
@@ -23,6 +23,7 @@ def test_vscu_503_mapping(httpx_mock):
         method="GET",
         url="https://api.test.co.ke/v2/etims/compliance/P000000000X",
         status_code=503,
+        json={"status": 503, "code": "KRA_CONNECTIVITY_TIMEOUT", "message": "System suspended"},
     )
 
     with pytest.raises(KRAConnectivityTimeoutError):
@@ -64,11 +65,12 @@ def test_oscu_503_mapping_is_not_confused_with_vscu_ceiling(httpx_mock):
     assert exc_info.value.oscu_code == "894"
 
 
-def test_vscu_503_with_json_body_but_no_oscu_code_still_raises_connectivity_timeout(httpx_mock):
+def test_vscu_503_with_json_body_but_no_oscu_code_is_not_the_24_hour_ceiling(httpx_mock):
     """
     Scenario: a 503 body IS present (VSCU's own ProblemDetail shape has
     `vscu_code`, not `oscu_code`) -- must not be misread as an OSCU failure.
-    Assertion: still raises KRAConnectivityTimeoutError, matching pre-OSCU behavior.
+    Assertion: a transient VSCU error (GlobalExceptionHandler.handleVscuSigning)
+    is a generic TIaaSUnavailableError, neither OSCU nor the 24-hour ceiling.
     """
     client = KRAeTIMSClient(
         client_id="test_id",
@@ -91,8 +93,10 @@ def test_vscu_503_with_json_body_but_no_oscu_code_still_raises_connectivity_time
         },
     )
 
-    with pytest.raises(KRAConnectivityTimeoutError):
+    with pytest.raises(TIaaSUnavailableError) as exc_info:
         client.check_compliance("P000000000X")
+    assert not isinstance(exc_info.value, (KRAConnectivityTimeoutError, OSCUUnavailableError))
+    assert exc_info.value.vscu_code == "90"
 
 
 def test_flush_offline_queue_sends_exact_requests(httpx_mock):
@@ -153,7 +157,8 @@ async def test_async_vscu_503_mapping(httpx_mock):
         httpx_mock.add_response(
             method="GET",
             url="https://api.test.co.ke/v2/etims/compliance/P000000000X",
-            status_code=503
+            status_code=503,
+            json={"status": 503, "code": "KRA_CONNECTIVITY_TIMEOUT", "message": "System suspended"},
         )
 
         with pytest.raises(KRAConnectivityTimeoutError):

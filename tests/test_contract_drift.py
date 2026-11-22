@@ -303,3 +303,95 @@ async def test_fiscal_mutations_keep_return_types_and_metadata(async_mode, metho
         assert result.operationKey == body["operationKey"]
         assert "response_metadata" not in result.model_dump()
     assert result.response_metadata.request_id == "synthetic-request"
+
+
+# ---------------------------------------------------------------------------
+# B5 — worker refusals are retryable; 503 is not always the 24-hour ceiling;
+#      Z-report 409 code is read from "code" or legacy "error"
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("status,code,error_type", [
+    (403, "WORKER_DEFERRED", "WorkerDeferredError"),
+    (503, "WORKER_STOPPING", "WorkerStoppingError"),
+])
+async def test_worker_refusals_are_retryable(async_mode, status, code, error_type, minimal_invoice):
+    import kra_etims.exceptions as exc_mod
+    from kra_etims.exceptions import TIaaSAmbiguousStateError, TIaaSUnavailableError
+    body = {"status": status, "code": code, "message": "synthetic", "retryable": True}
+    client, raw = make_client(async_mode, respond(status, body))
+    try:
+        with pytest.raises(getattr(exc_mod, error_type)) as caught:
+            await invoke(client, "submit_sale", minimal_invoice, idempotency_key="k")
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+    err = caught.value
+    assert isinstance(err, TIaaSUnavailableError) and isinstance(err, exc_mod.FiscalWorkerUnavailableError)
+    assert not isinstance(err, TIaaSAmbiguousStateError)
+    assert err.code == code and err.retryable is True
+    assert not getattr(err, "requires_reconciliation", False)
+    assert err.idempotency_key == "k" and err.http_status == status
+    if status == 403:
+        assert isinstance(err, exc_mod.KRAAuthorizationError)  # existing 403 handlers still match
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("body", [{}, {"status": 503, "code": "SOMETHING_NEW", "message": "x"},
+                                  {"title": "VSCU Temporarily Unavailable", "status": 503, "vscu_code": "96"}])
+async def test_unknown_503_is_not_the_24_hour_ceiling(async_mode, body):
+    from kra_etims.exceptions import KRAConnectivityTimeoutError, TIaaSUnavailableError
+    client, raw = make_client(async_mode, respond(503, body))
+    try:
+        with pytest.raises(TIaaSUnavailableError) as caught:
+            await invoke(client, "get_sale_status", 7)
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+    assert not isinstance(caught.value, KRAConnectivityTimeoutError)
+    assert caught.value.http_status == 503
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_suspended_503_is_the_24_hour_ceiling(async_mode, minimal_invoice):
+    from kra_etims.exceptions import KRAConnectivityTimeoutError
+    body = {"status": 503, "code": "KRA_CONNECTIVITY_TIMEOUT", "message": "System suspended"}
+    client, raw = make_client(async_mode, respond(503, body))
+    try:
+        with pytest.raises(KRAConnectivityTimeoutError) as caught:
+            await invoke(client, "submit_sale", minimal_invoice, idempotency_key="k")
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+    assert caught.value.code == "KRA_CONNECTIVITY_TIMEOUT"
+    assert caught.value.requires_reconciliation is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("body", [
+    {"error": "Z_REPORT_ALREADY_ISSUED", "message": "already issued"},                       # older backends
+    {"status": 409, "code": "Z_REPORT_ALREADY_ISSUED", "error": "Z_REPORT_ALREADY_ISSUED", "message": "x"},
+    {"status": 409, "code": "Z_REPORT_ALREADY_ISSUED", "message": "x"},
+])
+async def test_z_report_conflict_raises_typed_error(async_mode, body):
+    from kra_etims.exceptions import ZReportAlreadyIssuedError
+    client, raw = make_client(async_mode, respond(409, body))
+    try:
+        with pytest.raises(ZReportAlreadyIssuedError):
+            await invoke(client.reports, "get_daily_z", "2026-11-20")
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_other_z_report_conflicts_propagate(async_mode):
+    from kra_etims.exceptions import KRAConflictError, ZReportAlreadyIssuedError
+    client, raw = make_client(async_mode, respond(409, {"error": "Conflict", "message": "x"}))
+    try:
+        with pytest.raises(KRAConflictError) as caught:
+            await invoke(client.reports, "get_daily_z", "2026-11-20")
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+    assert not isinstance(caught.value, ZReportAlreadyIssuedError)

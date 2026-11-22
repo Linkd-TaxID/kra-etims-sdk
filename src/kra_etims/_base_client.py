@@ -38,6 +38,8 @@ from .exceptions import (
     OSCUUnavailableError,
     TIaaSAmbiguousStateError,
     TIaaSUnavailableError,
+    WorkerDeferredError,
+    WorkerStoppingError,
 )
 
 # KRA eTIMS success result codes — two officially documented variants:
@@ -81,6 +83,9 @@ _RESULT_MODELS: tuple = (
     (re.compile(r"/v2/etims/stock/master$"), StockMasterResult),
     (re.compile(r"/v2/etims/stock/master/operations/[^/]+$"), StockMasterResult),
 )
+
+# An UPPER_SNAKE machine code, as opposed to a reason phrase such as "Conflict".
+_MACHINE_CODE = re.compile(r"^[A-Z][A-Z0-9_]+$")
 
 # Failures where the request provably never reached the server: no TCP/TLS
 # connection was established, or no pooled connection became free in time.
@@ -252,24 +257,21 @@ class _BaseKRAeTIMSClient(ABC):
     @staticmethod
     def _raise_for_503(resp: httpx.Response) -> None:
         """
-        Discriminates a 503 between two unrelated conditions that happen to
-        share an HTTP status code: the 24-hour VSCU offline ceiling (VSCU
-        Spec §2.2 Policy 4) and a transient OSCU-side failure (OSCU Spec
-        v2.0 §4.18 — OSCU has zero offline tolerance by design, so it has
-        no 24-hour-ceiling concept at all). Every 503 was treated as the
-        former until this method existed; that stopped being safe once the
-        middleware could actually sign through OSCU.
+        Discriminate a TaxID 503. Several unrelated conditions share the status:
 
-        TIaaS's ``GlobalExceptionHandler`` puts an ``oscu_code`` property on
-        the response body specifically for OSCU failures (``vscu_code`` for
-        VSCU ones) — presence of ``oscu_code`` is the discriminator. Falls
-        back to the historical ``KRAConnectivityTimeoutError`` behavior if
-        the body doesn't parse or doesn't carry either marker, so an older
-        middleware version (or a 503 from something other than a signing
-        call) doesn't change behavior.
+        - ``code: KRA_CONNECTIVITY_TIMEOUT`` — the 24-hour VSCU offline ceiling
+          (``SystemSuspendedException``): :class:`KRAConnectivityTimeoutError`.
+        - ``oscu_code`` property — transient OSCU failure (OSCU Spec v2.0 §4.18
+          has no offline ceiling): :class:`OSCUUnavailableError`.
+        - ``code: WORKER_STOPPING`` — worker shutdown, refused before dispatch:
+          :class:`WorkerStoppingError` (retryable).
+        - anything else (transient VSCU ``vscu_code``, worker role not fiscal,
+          held stock dispatch, token outage, a proxy, an empty body):
+          :class:`TIaaSUnavailableError`. These are not the 24-hour ceiling, so
+          they no longer default to it.
         """
-        body, message, _ = _BaseKRAeTIMSClient._error_fields(resp)
-        if isinstance(body, dict) and "oscu_code" in body:
+        body, message, code = _BaseKRAeTIMSClient._error_fields(resp)
+        if "oscu_code" in body:
             raise OSCUUnavailableError(
                 message=message or (
                     f"OSCU Temporarily Unavailable (code {body.get('oscu_code')}): "
@@ -277,7 +279,17 @@ class _BaseKRAeTIMSClient(ABC):
                 ),
                 oscu_code=body.get("oscu_code"),
             )
-        raise KRAConnectivityTimeoutError()
+        if code == "KRA_CONNECTIVITY_TIMEOUT":
+            error: KRAeTIMSError = KRAConnectivityTimeoutError()
+        elif code == "WORKER_STOPPING":
+            error = WorkerStoppingError(f"TaxID fiscal worker is stopping (HTTP 503): {message}", code=code)
+        else:
+            detail = f" [{code}]" if code else ""
+            error = TIaaSUnavailableError(f"TaxID service unavailable (HTTP 503){detail}: {message}")
+            if body.get("vscu_code") is not None:
+                error.vscu_code = str(body["vscu_code"])
+        error.code = code
+        raise error
 
     def _parse_response(
         self,
@@ -356,7 +368,8 @@ class _BaseKRAeTIMSClient(ABC):
             except KRAeTIMSError as error:
                 error.http_status = resp.status_code
                 error.idempotency_key = idempotency_key
-                error.requires_reconciliation = method.upper() in _MUTATING_METHODS
+                error.requires_reconciliation = (method.upper() in _MUTATING_METHODS
+                                                 and not getattr(error, "retryable", False))
                 error.result_cd = getattr(error, "oscu_code", None)
                 raise
 
@@ -368,6 +381,10 @@ class _BaseKRAeTIMSClient(ABC):
                 self._raise_for_503(exc.response)
             if sc == 409:
                 body, msg, code = self._error_fields(exc.response)
+                if code is None and _MACHINE_CODE.match(str(body.get("error", ""))):
+                    # Older backends put the 409 code (e.g. Z_REPORT_ALREADY_ISSUED)
+                    # only in "error"; newer ones send both "code" and "error".
+                    code = body["error"]
                 message = f"Conflict (HTTP 409){f' [{code}]' if code else ''}: {msg}"
                 if code in _UNRESOLVED_IDEMPOTENCY_CODES:
                     raise IdempotentOutcomeUnresolvedError(
@@ -415,6 +432,10 @@ class _BaseKRAeTIMSClient(ABC):
                 ) from exc
             if sc == 403:
                 _, message, code = self._error_fields(exc.response)
+                if code == "WORKER_DEFERRED":
+                    raise WorkerDeferredError(
+                        f"TaxID fiscal worker deferred the request (HTTP 403): {message}", code=code
+                    ) from exc
                 detail = f" [{code}]" if code else ""
                 raise KRAAuthorizationError(
                     f"Authorization denied (HTTP 403){detail}: {message}"
@@ -495,7 +516,8 @@ class _BaseKRAeTIMSClient(ABC):
                 "message":         str(outcome),
                 "error_type":      type(outcome).__name__,
                 "ambiguous":       isinstance(outcome, TIaaSAmbiguousStateError) or getattr(outcome, "requires_reconciliation", False),
-                "retryable":       isinstance(outcome, TIaaSUnavailableError),
+                "retryable":       isinstance(outcome, TIaaSUnavailableError)
+                                   and not getattr(outcome, "requires_reconciliation", False),
                 "result_cd":       getattr(outcome, "result_cd", None),
                 "http_status":     getattr(outcome, "http_status", None),
                 "idempotency_key": idem_key,
