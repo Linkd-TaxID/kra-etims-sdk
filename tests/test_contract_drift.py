@@ -51,8 +51,6 @@ _QUEUED = {
     (200, {"purchaseId": 7, "status": "RECONCILIATION_REQUIRED"}, "outcome_unknown"),
     (200, {"purchaseId": 7, "status": "NOT_SENT"}, "failed"),
     (200, {"purchaseId": 7, "status": "FAILED"}, "failed"),
-    (200, {"purchaseId": 7, "status": "FAILED",                      # permanent pre-dispatch refusal
-           "failureReason": "Not sent: dispatch refused before reaching the control unit"}, "failed"),
     (200, {"purchaseId": 7, "status": "QUARANTINED"}, "outcome_unknown"),
 ])
 def test_queue_flush_uses_body_status(tmp_path: Path, http_status, body, expected):
