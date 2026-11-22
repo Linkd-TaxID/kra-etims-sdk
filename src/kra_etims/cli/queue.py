@@ -60,6 +60,13 @@ def _classify_sale_outcome(outcome: Any) -> tuple[str, str | None]:
     return "outcome_unknown", f"{detail}; inspect the original before any resubmission"
 
 
+def _is_retryable_refusal(exc: BaseException) -> bool:
+    """Same rule as flush_offline_queue's ``retryable``: nothing was processed."""
+    from kra_etims.exceptions import RateLimitError, TIaaSUnavailableError
+    return isinstance(exc, RateLimitError) or (
+        isinstance(exc, TIaaSUnavailableError) and not getattr(exc, "requires_reconciliation", False))
+
+
 class Queue:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or (data_dir() / _DB_NAME)
@@ -150,6 +157,11 @@ class Queue:
             if getattr(exc, "requires_reconciliation", False):
                 self._update(row_id, "outcome_unknown", str(exc))
                 return {"id": row_id, "status": "outcome_unknown", "error": str(exc)}
+            if _is_retryable_refusal(exc):
+                # Refused before processing (worker refusal, 429, connect failure):
+                # keep it pending so the next flush retries it under the same key.
+                self._update(row_id, "pending", str(exc))
+                return {"id": row_id, "status": "pending", "retryable": True, "error": str(exc)}
             self._update(row_id, "failed", str(exc))
             return {"id": row_id, "status": "failed", "error": str(exc)}
 

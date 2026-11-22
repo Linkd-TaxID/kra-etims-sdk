@@ -101,3 +101,45 @@ async def test_unknown_503_on_read_is_not_ambiguous(async_mode):
     finally:
         await close(raw, async_mode)
     assert not isinstance(caught.value, TIaaSAmbiguousStateError)
+
+
+# ---------------------------------------------------------------------------
+# P8 — a queued sale refused before dispatch must stay re-flushable
+# ---------------------------------------------------------------------------
+
+def _connect_refused(request):
+    raise httpx.ConnectError("synthetic connect failure", request=request)
+
+
+@pytest.mark.parametrize("handler", [
+    respond(503, {"status": "ERROR", "code": "WORKER_STOPPING", "message": "x", "retryable": True},
+            {"Retry-After": "5"}),
+    respond(403, {"status": "ERROR", "code": "WORKER_DEFERRED", "message": "x", "retryable": True}),
+    respond(429, {"status": "ERROR", "code": "RATE_LIMITED", "message": "x"}, {"Retry-After": "1"}),
+    _connect_refused,
+], ids=["worker_stopping", "worker_deferred", "rate_limited", "connect_error"])
+def test_queue_retryable_refusal_stays_pending(tmp_path: Path, handler):
+    from kra_etims.cli.queue import Queue
+    q = Queue(path=tmp_path / "queue.db")
+    q.enqueue(_QUEUED)
+    client, raw = make_client(False, handler)
+    try:
+        result = q.flush_one(client, q.pending()[0])
+    finally:
+        raw.close()
+    assert result["status"] == "pending", result
+    assert len(q.pending()) == 1  # the next `etims queue flush` retries it
+    assert q.status()["failed"] == 0
+
+
+def test_queue_rejection_still_fails(tmp_path: Path):
+    from kra_etims.cli.queue import Queue
+    q = Queue(path=tmp_path / "queue.db")
+    q.enqueue(_QUEUED)
+    client, raw = make_client(False, respond(400, {"status": "ERROR", "code": "VALIDATION_FAILED", "message": "x"}))
+    try:
+        result = q.flush_one(client, q.pending()[0])
+    finally:
+        raw.close()
+    assert result["status"] == "failed"
+    assert q.pending() == []

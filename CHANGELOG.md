@@ -17,6 +17,10 @@ All notable changes to kra-etims-sdk are documented here.
   `KRAConflictError`, carrying the original idempotency key and code. On
   `issue_credit_note` these codes are no longer `CreditNoteConflictError`; catch
   `KRAConflictError` or `TIaaSAmbiguousStateError`.
+- `etims queue flush` keeps a row `pending` when the request was refused before
+  processing (`WORKER_STOPPING`, `WORKER_DEFERRED`, HTTP 429, connection
+  failure), so the next flush retries it; it was marked `failed` and never
+  retried. Rejected rows stay `failed`.
 - The supplier gateway no longer resends a mutation after a server-side 503;
   `flush_offline_queue` marks HTTP 429 rows `retryable`.
 - `etims pin validate` (TaxID path) shows the customer-lookup `status` and
