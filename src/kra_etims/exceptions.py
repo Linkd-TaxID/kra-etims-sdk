@@ -22,9 +22,35 @@ class KRAeTIMSError(Exception):
     Full result code reference: https://linkd-taxid.github.io/kra-etims-sdk/
 
     ``code`` is the server's machine-readable error code (e.g. ``INVALID_REQUEST``)
-    when the response carried one, else ``None``.
+    when the response carried one, else ``None``. ``retry_after`` is the raw
+    ``Retry-After`` header and ``retry_after_seconds`` its parsed value.
     """
     code: Optional[str] = None
+
+    @property
+    def retry_after_seconds(self) -> Optional[float]:
+        """The raw ``retry_after`` header parsed to seconds (RFC 9110 §10.2.3:
+        delay-seconds or an HTTP-date), or ``None`` when absent or invalid."""
+        return self.parse_retry_after(getattr(self, "retry_after", None))
+
+    @staticmethod
+    def parse_retry_after(value: Optional[str]) -> Optional[float]:
+        if value is None:
+            return None
+        value = value.strip()
+        if value.isascii() and value.isdigit():
+            return float(value)
+        try:
+            from email.utils import parsedate_to_datetime
+            from datetime import datetime, timezone
+            when = parsedate_to_datetime(value)
+        except (TypeError, ValueError, IndexError):
+            return None
+        if when is None:
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
 
 
 # ---------------------------------------------------------------------------
@@ -98,32 +124,8 @@ class RateLimitError(KRAeTIMSError):
     """
     HTTP 429 (``code`` usually ``RATE_LIMITED``). Nothing was processed.
 
-    ``retry_after`` keeps the raw ``Retry-After`` header (as on every SDK
-    error); ``retry_after_seconds`` is its parsed value in seconds (RFC 9110
-    §10.2.3: delay-seconds or an HTTP-date), or ``None`` when absent or invalid.
+    Use ``retry_after_seconds`` (inherited) for the delay.
     """
-    @property
-    def retry_after_seconds(self) -> Optional[float]:
-        return self.parse_retry_after(getattr(self, "retry_after", None))
-
-    @staticmethod
-    def parse_retry_after(value: Optional[str]) -> Optional[float]:
-        if value is None:
-            return None
-        value = value.strip()
-        if value.isascii() and value.isdigit():
-            return float(value)
-        try:
-            from email.utils import parsedate_to_datetime
-            from datetime import datetime, timezone
-            when = parsedate_to_datetime(value)
-        except (TypeError, ValueError, IndexError):
-            return None
-        if when is None:
-            return None
-        if when.tzinfo is None:
-            when = when.replace(tzinfo=timezone.utc)
-        return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
 
 
 class TIaaSUnavailableError(KRAeTIMSError):

@@ -43,9 +43,10 @@ All notable changes to kra-etims-sdk are documented here.
 - `WorkerDeferredError` (403 `WORKER_DEFERRED`) and `WorkerStoppingError`
   (503 `WORKER_STOPPING`), both `FiscalWorkerUnavailableError` with
   `retryable = True`.
-- `RateLimitError` for HTTP 429 with `retry_after_seconds` parsed from
-  `Retry-After` (seconds or HTTP-date). `KRAeTIMSError.code` exposes the server's
-  error code on every HTTP error.
+- `RateLimitError` for HTTP 429. Every `KRAeTIMSError` gains `retry_after_seconds`
+  (the `Retry-After` header parsed as seconds or an HTTP-date; TaxID sends it on
+  429, `WORKER_DEFERRED` and `WORKER_STOPPING`) and `code`, the server's error
+  code on every HTTP error.
 - `CreditNoteResult` and `SaleOriginalResult` models; `UnsupportedOperationError`.
 
 ### Deprecated

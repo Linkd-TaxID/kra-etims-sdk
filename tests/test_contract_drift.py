@@ -51,6 +51,8 @@ _QUEUED = {
     (200, {"purchaseId": 7, "status": "RECONCILIATION_REQUIRED"}, "outcome_unknown"),
     (200, {"purchaseId": 7, "status": "NOT_SENT"}, "failed"),
     (200, {"purchaseId": 7, "status": "FAILED"}, "failed"),
+    (200, {"purchaseId": 7, "status": "FAILED",                      # permanent pre-dispatch refusal
+           "failureReason": "Not sent: dispatch refused before reaching the control unit"}, "failed"),
     (200, {"purchaseId": 7, "status": "QUARANTINED"}, "outcome_unknown"),
 ])
 def test_queue_flush_uses_body_status(tmp_path: Path, http_status, body, expected):
@@ -93,7 +95,7 @@ def test_queue_flush_never_counts_unvalidated_return_as_success(tmp_path: Path):
 @pytest.mark.parametrize("operation", ["sale", "credit_note"])
 async def test_idempotency_409_codes_raise_ambiguous_state(async_mode, code, operation, minimal_invoice):
     from kra_etims.exceptions import KRAConflictError, TIaaSAmbiguousStateError
-    body = {"status": 409, "code": code, "message": "synthetic"}
+    body = {"status": "ERROR", "code": code, "message": "synthetic"}
     client, raw = make_client(async_mode, respond(409, body))
     try:
         with pytest.raises(TIaaSAmbiguousStateError) as caught:
@@ -113,7 +115,7 @@ async def test_idempotency_409_codes_raise_ambiguous_state(async_mode, code, ope
 @pytest.mark.parametrize("async_mode", [False, True])
 async def test_in_flight_425_keeps_code(async_mode, minimal_invoice):
     from kra_etims.exceptions import TIaaSAmbiguousStateError
-    body = {"status": 425, "code": "IDEMPOTENT_RESULT_LOOKUP_REQUIRED", "message": "synthetic"}
+    body = {"status": "ERROR", "code": "IDEMPOTENT_RESULT_LOOKUP_REQUIRED", "message": "synthetic"}
     client, raw = make_client(async_mode, respond(425, body))
     try:
         with pytest.raises(TIaaSAmbiguousStateError) as caught:
@@ -128,7 +130,7 @@ async def test_in_flight_425_keeps_code(async_mode, minimal_invoice):
 @pytest.mark.parametrize("async_mode", [False, True])
 async def test_other_409_codes_stay_plain_conflicts(async_mode, minimal_invoice):
     from kra_etims.exceptions import KRAConflictError, TIaaSAmbiguousStateError
-    client, raw = make_client(async_mode, respond(409, {"status": 409, "code": "FISCAL_DAY_CLOSED", "message": "x"}))
+    client, raw = make_client(async_mode, respond(409, {"status": "ERROR", "code": "FISCAL_DAY_CLOSED", "message": "x"}))
     try:
         with pytest.raises(KRAConflictError) as caught:
             await invoke(client, "submit_sale", minimal_invoice, idempotency_key="k")
@@ -319,8 +321,8 @@ async def test_fiscal_mutations_keep_return_types_and_metadata(async_mode, metho
 async def test_worker_refusals_are_retryable(async_mode, status, code, error_type, minimal_invoice):
     import kra_etims.exceptions as exc_mod
     from kra_etims.exceptions import TIaaSAmbiguousStateError, TIaaSUnavailableError
-    body = {"status": status, "code": code, "message": "synthetic", "retryable": True}
-    client, raw = make_client(async_mode, respond(status, body))
+    body = {"status": "ERROR", "code": code, "message": "synthetic", "retryable": True}
+    client, raw = make_client(async_mode, respond(status, body, {"Retry-After": "5"}))
     try:
         with pytest.raises(getattr(exc_mod, error_type)) as caught:
             await invoke(client, "submit_sale", minimal_invoice, idempotency_key="k")
@@ -332,13 +334,14 @@ async def test_worker_refusals_are_retryable(async_mode, status, code, error_typ
     assert err.code == code and err.retryable is True
     assert not getattr(err, "requires_reconciliation", False)
     assert err.idempotency_key == "k" and err.http_status == status
+    assert err.retry_after == "5" and err.retry_after_seconds == 5.0
     if status == 403:
         assert isinstance(err, exc_mod.KRAAuthorizationError)  # existing 403 handlers still match
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("async_mode", [False, True])
-@pytest.mark.parametrize("body", [{}, {"status": 503, "code": "SOMETHING_NEW", "message": "x"},
+@pytest.mark.parametrize("body", [{}, {"status": "ERROR", "code": "SOMETHING_NEW", "message": "x"},
                                   {"title": "VSCU Temporarily Unavailable", "status": 503, "vscu_code": "96"}])
 async def test_unknown_503_is_not_the_24_hour_ceiling(async_mode, body):
     from kra_etims.exceptions import KRAConnectivityTimeoutError, TIaaSUnavailableError
@@ -356,7 +359,7 @@ async def test_unknown_503_is_not_the_24_hour_ceiling(async_mode, body):
 @pytest.mark.parametrize("async_mode", [False, True])
 async def test_suspended_503_is_the_24_hour_ceiling(async_mode, minimal_invoice):
     from kra_etims.exceptions import KRAConnectivityTimeoutError
-    body = {"status": 503, "code": "KRA_CONNECTIVITY_TIMEOUT", "message": "System suspended"}
+    body = {"status": "ERROR", "code": "KRA_CONNECTIVITY_TIMEOUT", "message": "System suspended"}
     client, raw = make_client(async_mode, respond(503, body))
     try:
         with pytest.raises(KRAConnectivityTimeoutError) as caught:
@@ -371,8 +374,8 @@ async def test_suspended_503_is_the_24_hour_ceiling(async_mode, minimal_invoice)
 @pytest.mark.parametrize("async_mode", [False, True])
 @pytest.mark.parametrize("body", [
     {"error": "Z_REPORT_ALREADY_ISSUED", "message": "already issued"},                       # older backends
-    {"status": 409, "code": "Z_REPORT_ALREADY_ISSUED", "error": "Z_REPORT_ALREADY_ISSUED", "message": "x"},
-    {"status": 409, "code": "Z_REPORT_ALREADY_ISSUED", "message": "x"},
+    {"code": "Z_REPORT_ALREADY_ISSUED", "error": "Z_REPORT_ALREADY_ISSUED", "message": "x"},  # taxID#53
+    {"status": "ERROR", "code": "Z_REPORT_ALREADY_ISSUED", "message": "x"},
 ])
 async def test_z_report_conflict_raises_typed_error(async_mode, body):
     from kra_etims.exceptions import ZReportAlreadyIssuedError
@@ -464,7 +467,7 @@ def test_cli_device_status_reports_unsupported_route():
 async def test_rate_limit_error_parses_retry_after_seconds(async_mode, header, expected):
     from kra_etims.exceptions import KRAeTIMSError, RateLimitError
     headers = {"Retry-After": header} if header is not None else {}
-    body = {"status": 429, "code": "RATE_LIMITED", "message": "Too many requests"}
+    body = {"status": "ERROR", "code": "RATE_LIMITED", "message": "Too many requests"}
     client, raw = make_client(async_mode, respond(429, body, headers))
     try:
         with pytest.raises(RateLimitError) as caught:
@@ -498,7 +501,7 @@ def test_rate_limit_error_parses_http_date():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("async_mode", [False, True])
 async def test_generic_errors_expose_code(async_mode):
-    client, raw = make_client(async_mode, respond(400, {"status": 400, "code": "INVALID_REQUEST", "message": "bad"}))
+    client, raw = make_client(async_mode, respond(400, {"status": "ERROR", "code": "INVALID_REQUEST", "message": "bad"}))
     try:
         from kra_etims.exceptions import KRAeTIMSError
         with pytest.raises(KRAeTIMSError) as caught:
