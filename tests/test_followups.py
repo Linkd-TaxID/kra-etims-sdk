@@ -401,3 +401,31 @@ async def test_z_report_already_issued_is_a_conflict(async_mode):
     assert caught.value.code == "Z_REPORT_ALREADY_ISSUED"
     assert caught.value.report_date == "2026-11-20"
     assert caught.value.http_status == 409
+
+
+_KEYED_CALLS = {"submit_stock_adjustment", "submit_stock_master"}
+
+
+def _calls_missing_idempotency_key(source: str, origin: str) -> list[str]:
+    import ast
+    missing = []
+    for node in ast.walk(ast.parse(source)):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr in _KEYED_CALLS
+                and not any(kw.arg in ("idempotency_key", None) for kw in node.keywords)):
+            missing.append(f"{origin}:{node.lineno}")
+    return missing
+
+
+def test_examples_pass_idempotency_key_to_stock_calls():
+    import textwrap
+    missing = []
+    for path in sorted((ROOT / "examples").rglob("*.py")):
+        missing += _calls_missing_idempotency_key(path.read_text(), path.relative_to(ROOT).as_posix())
+    for path in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]:
+        for i, block in enumerate(re.findall(r"```python\n(.*?)```", path.read_text(), re.S)):
+            try:
+                missing += _calls_missing_idempotency_key(textwrap.dedent(block), f"{path.name}#block{i}")
+            except SyntaxError:
+                continue  # illustrative fragments
+    assert missing == [], f"stock calls without idempotency_key (raise ValueError): {missing}"

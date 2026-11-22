@@ -265,6 +265,7 @@ def main():
                                         taxTyCd=TaxType.B),
                 ],
                 remark="Dagoretti roastery + central bakery van — delivery note DN-20441",
+                idempotency_key=f"stock-in-delivery-{TODAY}",
             )
             log("MUTHONI", "STOCK-IN", "30 bean bags, 40 loaves, 16 cake slices", resp)
         except Exception as e:
@@ -423,6 +424,7 @@ def main():
                                        qty=Decimal("6"), prc=Decimal("115.00"),
                                        taxTyCd=TaxType.A)],
             remark="End-of-day bakery waste — 6 loaves past sell-by, disposed",
+            idempotency_key=f"stock-out-waste-{TODAY}",
         )
         log("MUTHONI", "STOCK-OUT", "Write-off 6 expired loaves", resp)
     except Exception as e:
