@@ -8,9 +8,14 @@ All notable changes to kra-etims-sdk are documented here.
 
 ### Fixed
 - CLI `etims queue flush` classifies each result by the sale body: only `SIGNED`
-  with CU invoice number, SDC id and signature is `success`; `PENDING_SYNC` stays
-  `pending`; `NOT_SENT`/`FAILED` are `failed`; `OUTCOME_UNKNOWN`,
+  with CU invoice number, SDC id and signature is `success`; `PENDING_SYNC` is
+  `accepted`; `NOT_SENT`/`FAILED` are `failed`; `OUTCOME_UNKNOWN`,
   `RECONCILIATION_REQUIRED` and unknown statuses are `outcome_unknown`.
+- Later `etims queue flush` runs poll `get_sale_status` for `accepted` rows and
+  never resubmit them; each settles to `success`, `failed` or `outcome_unknown`,
+  or stays `accepted` while still `PENDING_SYNC`. Queue files from older SDKs keep
+  working (a nullable `purchase_id` column is added on open). `etims queue status`
+  shows the accepted count.
 - HTTP 409 `IDEMPOTENT_RESULT_LOOKUP_REQUIRED`, `IDEMPOTENT_IDENTITY_UNAVAILABLE`
   and `IDEMPOTENCY_SCOPE_UNBOUND` (and 425 in-flight) raise
   `IdempotentOutcomeUnresolvedError`, a `TIaaSAmbiguousStateError` that is also a

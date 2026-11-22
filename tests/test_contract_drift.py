@@ -46,7 +46,7 @@ _QUEUED = {
 
 @pytest.mark.parametrize("http_status,body,expected", [
     (200, RECEIPT, "success"),
-    (202, {"purchaseId": 7, "status": "PENDING_SYNC"}, "pending"),
+    (202, {"purchaseId": 7, "status": "PENDING_SYNC"}, "accepted"),
     (200, {"purchaseId": 7, "status": "OUTCOME_UNKNOWN"}, "outcome_unknown"),
     (200, {"purchaseId": 7, "status": "RECONCILIATION_REQUIRED"}, "outcome_unknown"),
     (200, {"purchaseId": 7, "status": "NOT_SENT"}, "failed"),

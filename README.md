@@ -300,7 +300,7 @@ etims invoice submit invoice.json --idempotency-key INV-0001
 etims report x --date 2026-09-25
 etims report z                           # asks for confirmation
 etims queue status                       # local SQLite queue of unsent invoices
-etims queue flush
+etims queue flush                        # sends pending rows; polls PENDING_SYNC (accepted) rows
 etims pin validate A000123456B
 etims tcc check --pin A000123456B --tcc-number TCC2026001234
 ```

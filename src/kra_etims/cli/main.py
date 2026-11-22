@@ -650,6 +650,7 @@ def queue_status(
 
     console.print(kv_table([
         ("Pending",    str(counts["pending"])),
+        ("Accepted (PENDING_SYNC)", str(counts.get("accepted", 0))),
         ("Failed",     str(counts["failed"])),
         ("Completed",  str(counts["completed"])),
         ("Outcome unknown", str(counts.get("outcome_unknown", 0))),
@@ -663,14 +664,15 @@ def queue_flush(
     api_key: Annotated[Optional[str], typer.Option(help="Override API key.")] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Emit raw JSON.")] = False,
 ) -> None:
-    """Submit all pending offline invoices to TIaaS."""
+    """Submit pending offline invoices and poll the status of accepted (PENDING_SYNC) ones."""
     from ._client import get_client
     from .queue import Queue
 
     q = Queue()
     pending = q.pending()
+    accepted = q.accepted()
 
-    if not pending:
+    if not pending and not accepted:
         console.print(success_panel("Queue is empty — nothing to flush."))
         return
 
@@ -684,7 +686,12 @@ def queue_flush(
         console=console,
         transient=True,
     ) as progress:
-        task = progress.add_task(f"Flushing {len(pending)} invoice(s)...", total=len(pending))
+        total = len(pending) + len(accepted)
+        task = progress.add_task(f"Flushing {total} invoice(s)...", total=total)
+        for row in accepted:
+            # Accepted sales are followed by status, never resubmitted.
+            results.append(q.poll_one(client, row))
+            progress.advance(task)
         for row in pending:
             result = q.flush_one(client, row)
             results.append(result)
@@ -697,10 +704,10 @@ def queue_flush(
     held = sum(1 for r in results if r["status"] == "outcome_unknown")
     if held:
         console.print(f"{held} outcome unknown; inspect original operations before considering replay.")
-    retry = sum(1 for r in results if r["status"] == "pending" and r.get("retryable"))
-    queued = sum(1 for r in results if r["status"] == "pending" and not r.get("retryable"))
+    retry = sum(1 for r in results if r["status"] == "pending")
+    queued = sum(1 for r in results if r["status"] == "accepted")
     if queued:
-        console.print(f"{queued} accepted as PENDING_SYNC, not yet signed; poll get_sale_status with backoff.")
+        console.print(f"{queued} accepted as PENDING_SYNC, not yet signed; re-run flush later to poll their status.")
     ok = sum(1 for r in results if r["status"] in ("success", "already_processed"))
     failed = len(results) - ok - held - queued - retry
     console.print(success_panel(

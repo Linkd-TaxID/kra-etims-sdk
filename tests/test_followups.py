@@ -143,3 +143,74 @@ def test_queue_rejection_still_fails(tmp_path: Path):
         raw.close()
     assert result["status"] == "failed"
     assert q.pending() == []
+
+
+# ---------------------------------------------------------------------------
+# D4 — PENDING_SYNC rows become 'accepted' and are polled, never resubmitted
+# ---------------------------------------------------------------------------
+
+_runner = None
+
+
+def _flush_cli(db_path: Path, handler):
+    global _runner
+    from typer.testing import CliRunner
+    from kra_etims.cli.main import app
+    _runner = _runner or CliRunner()
+    client, raw = make_client(False, handler)
+    try:
+        with patch("kra_etims.cli.queue.data_dir", return_value=db_path.parent), \
+                patch("kra_etims.cli._client.get_client", return_value=client):
+            return _runner.invoke(app, ["queue", "flush", "--api-key", "dummy", "--json"])
+    finally:
+        raw.close()
+
+
+def _row_status(db_path: Path) -> str:
+    with sqlite3.connect(db_path) as conn:
+        return conn.execute("SELECT status FROM queue").fetchone()[0]
+
+
+@pytest.mark.parametrize("polled,expected", [
+    ({**RECEIPT}, "success"),
+    ({"purchaseId": 7, "status": "FAILED", "failureReason": "x"}, "failed"),
+    ({"purchaseId": 7, "status": "OUTCOME_UNKNOWN"}, "outcome_unknown"),
+    ({"purchaseId": 7, "status": "RECONCILIATION_REQUIRED"}, "outcome_unknown"),
+    ({"purchaseId": 7, "status": "PENDING_SYNC"}, "accepted"),
+])
+def test_accepted_rows_are_polled_not_resubmitted(tmp_path: Path, polled, expected):
+    from kra_etims.cli.queue import Queue
+    db_path = tmp_path / "queue.db"
+    Queue(path=db_path).enqueue(_QUEUED)
+
+    first = _flush_cli(db_path, respond(202, {"purchaseId": 7, "status": "PENDING_SYNC"}))
+    assert first.exit_code == 0, first.output
+    assert _row_status(db_path) == "accepted"
+
+    seen = []
+
+    def poll(request):
+        seen.append((request.method, request.url.path))
+        if request.method == "GET" and request.url.path == "/v2/etims/sales/7/status":
+            return httpx.Response(200, json=polled)
+        return httpx.Response(500, json={})
+
+    second = _flush_cli(db_path, poll)
+    assert second.exit_code == 0, second.output
+    assert seen == [("GET", "/v2/etims/sales/7/status")]  # never POST /sale again
+    assert _row_status(db_path) == expected
+
+
+def test_queue_db_from_older_sdk_keeps_working(tmp_path: Path):
+    from kra_etims.cli.queue import Queue
+    db_path = tmp_path / "queue.db"
+    with sqlite3.connect(db_path) as conn:  # 0.8.1 schema
+        conn.execute("""CREATE TABLE queue (id INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_json TEXT NOT NULL, queued_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT)""")
+        conn.execute("INSERT INTO queue (invoice_json, queued_at) VALUES (?, '2026-11-01T00:00:00+00:00')",
+                     (json.dumps(_QUEUED),))
+    Queue(path=db_path)
+    result = _flush_cli(db_path, respond(202, {"purchaseId": 7, "status": "PENDING_SYNC"}))
+    assert result.exit_code == 0, result.output
+    assert _row_status(db_path) == "accepted"
