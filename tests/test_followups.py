@@ -247,3 +247,28 @@ def test_readme_stock_example_runs():
         raw.close()
     assert seen and seen[0].url.path == "/v2/etims/stock/adjustment"
     assert seen[0].headers.get("Idempotency-Key")
+
+
+# ---------------------------------------------------------------------------
+# P10 — legacy update_stock targets a route TaxID answers 501 for
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_update_stock_is_unsupported_without_a_request(async_mode):
+    from kra_etims.exceptions import UnsupportedOperationError
+    from kra_etims.models import StockItem
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, json={"anything": "unvalidated"})
+
+    client, raw = make_client(async_mode, handler)
+    try:
+        with pytest.raises(UnsupportedOperationError), pytest.warns(DeprecationWarning):
+            await invoke(client, "update_stock",
+                         StockItem(tin="A000123456B", bhfId="00", itemCd="KE1", rsonCd="01", qty="1"))
+    finally:
+        await close(raw, async_mode)
+    assert seen == []

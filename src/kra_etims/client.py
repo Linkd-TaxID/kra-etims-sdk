@@ -514,11 +514,14 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
     # ------------------------------------------------------------------
 
     def update_stock(self, data: StockItem) -> Dict[str, Any]:
-        """Restricted legacy stock route; use submit_stock_adjustment with an original operation key."""
-        return self._request(
-            "POST", "/v2/etims/stock",
-            json=data.model_dump(mode="json", exclude_none=True),
-        )
+        """
+        .. deprecated::
+            TaxID refuses the legacy ``/v2/etims/stock`` route (HTTP 501). This
+            warns and raises :class:`~kra_etims.exceptions.UnsupportedOperationError`
+            without sending a request; use :meth:`submit_stock_adjustment` with a
+            stable ``idempotency_key``.
+        """
+        self._unsupported_update_stock()
 
     def submit_stock_adjustment(
         self,

@@ -226,6 +226,21 @@ class _BaseKRAeTIMSClient(ABC):
         return _encode_json_body(json)
 
     @staticmethod
+    def _unsupported_update_stock() -> None:
+        import warnings
+        warnings.warn(
+            "update_stock() targets the legacy /v2/etims/stock route, which TaxID refuses "
+            "(HTTP 501), and will be removed. Use submit_stock_adjustment(..., idempotency_key=...).",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        raise UnsupportedOperationError(
+            "update_stock() is not supported: TaxID refuses the legacy /v2/etims/stock route "
+            "because it has no durable identity. Use submit_stock_adjustment(lines, "
+            "idempotency_key=...) with a stable key."
+        )
+
+    @staticmethod
     def _unsupported_compliance() -> None:
         import warnings
         warnings.warn(

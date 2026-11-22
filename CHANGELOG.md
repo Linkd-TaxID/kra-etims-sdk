@@ -70,6 +70,9 @@ All notable changes to kra-etims-sdk are documented here.
 - `CreditNoteResult` and `SaleOriginalResult` models; `UnsupportedOperationError`.
 
 ### Deprecated
+- `update_stock()` targets the legacy `/v2/etims/stock` route, which TaxID
+  refuses (HTTP 501). It now warns and raises `UnsupportedOperationError` without
+  sending a request; use `submit_stock_adjustment(..., idempotency_key=...)`.
 - `check_compliance()` targets a route TaxID does not serve. It now warns and
   raises `UnsupportedOperationError` without sending a request; use
   `device_health()` or `lookup_customer()`.
