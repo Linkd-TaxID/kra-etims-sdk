@@ -58,6 +58,9 @@ All notable changes to kra-etims-sdk are documented here.
   inspect the original instead.
 - `ZReportAlreadyIssuedError` is raised when the 409 code is in `code` or only in
   the legacy `error` field (which current backends send).
+- `ZReportAlreadyIssuedError` is now also a `KRAConflictError` (with `code`
+  `Z_REPORT_ALREADY_ISSUED`, `report_date` and the 409's `http_status` and
+  `response_metadata`), so generic 409 handlers match it.
 - Sync `lookup_pin` uses `/v2/etims/customers/lookup`, like the async client.
 
 ### Changed

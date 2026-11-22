@@ -410,9 +410,11 @@ class CreditNoteExceedsOriginalError(KRAeTIMSError):
         self.original_purchase_id = original_purchase_id
 
 
-class ZReportAlreadyIssuedError(KRAeTIMSError):
+class ZReportAlreadyIssuedError(KRAConflictError):
     """
-    The Z-report for the requested date has already been issued (HTTP 409).
+    The Z-report for the requested date has already been issued (HTTP 409,
+    ``code`` ``Z_REPORT_ALREADY_ISSUED``). Also a :class:`KRAConflictError`, so
+    generic 409 handlers match it.
 
     This records completion of the local daily aggregate. No remote device
     fiscal-close request or central KRA acknowledgement is implied. Retrieve
@@ -429,8 +431,9 @@ class ZReportAlreadyIssuedError(KRAeTIMSError):
             "for totals; no remote fiscal-close acknowledgement is implied."
         ),
         report_date: Optional[str] = None,
+        code: Optional[str] = "Z_REPORT_ALREADY_ISSUED",
     ):
-        super().__init__(message)
+        super().__init__(message, code=code)
         self.report_date = report_date
 
 

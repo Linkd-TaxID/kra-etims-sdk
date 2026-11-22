@@ -334,7 +334,7 @@ All exceptions inherit from `KRAeTIMSError`.
 | `CreditNoteExceedsOriginalError` | 422: the credit notes would exceed the receipt |
 | `KRAConflictError` | 409. `exc.code` is `FISCAL_DAY_CLOSED` (the date is already Z-closed) or `ETIMS_NOT_INITIALIZED` (the branch has not completed its handshake). |
 | `CreditNoteConflictError` | A `KRAConflictError` raised on a credit-note request (`CreditNoteOutcomeUnresolvedError` for the unresolved idempotency codes) |
-| `ZReportAlreadyIssuedError` | 409: a Z report already exists for that date |
+| `ZReportAlreadyIssuedError` | 409 `Z_REPORT_ALREADY_ISSUED`: a Z report already exists for that date (also a `KRAConflictError`) |
 | `GavaConnectAuthError`, `GavaConnectPINNotFoundError`, `GavaConnectTCCError`, `GavaConnectError` | GavaConnect failures |
 
 Any other 4xx/5xx raises `KRAeTIMSError` with the server's `code` and `message`.

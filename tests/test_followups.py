@@ -380,3 +380,24 @@ async def test_sale_unresolved_outcome_is_not_a_credit_note_error(async_mode, mi
     finally:
         await close(raw, async_mode)
     assert not isinstance(caught.value, exc_mod.CreditNoteConflictError)
+
+
+# ---------------------------------------------------------------------------
+# D7 — ZReportAlreadyIssuedError is a KRAConflictError
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_z_report_already_issued_is_a_conflict(async_mode):
+    from kra_etims.exceptions import KRAConflictError, ZReportAlreadyIssuedError
+    body = {"status": "ERROR", "code": "Z_REPORT_ALREADY_ISSUED", "message": "x"}
+    client, raw = make_client(async_mode, respond(409, body))
+    try:
+        with pytest.raises(KRAConflictError) as caught:
+            await invoke(client.reports, "get_daily_z", "2026-11-20")
+    finally:
+        await close(raw, async_mode)
+    assert isinstance(caught.value, ZReportAlreadyIssuedError)
+    assert caught.value.code == "Z_REPORT_ALREADY_ISSUED"
+    assert caught.value.report_date == "2026-11-20"
+    assert caught.value.http_status == 409
