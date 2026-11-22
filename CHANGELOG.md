@@ -38,6 +38,8 @@ All notable changes to kra-etims-sdk are documented here.
   such an install returns 422 `IDEMPOTENCY_KEY_REUSED`. Settle in-flight
   (ambiguous) operations with `find_sale` before upgrading; never resubmit them
   under a new key.
+- `GavaConnectClient` / `AsyncGavaConnectClient` serialize POST bodies the same
+  way, instead of leaving it to httpx.
 - `find_sale`, `get_sale_original`, `issue_credit_note` and the stock adjustment /
   stock master calls validate their results and carry `response_metadata`. Invalid
   mutation bodies raise `TIaaSAmbiguousStateError`, never a raw pydantic error.

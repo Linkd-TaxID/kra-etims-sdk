@@ -272,3 +272,32 @@ async def test_update_stock_is_unsupported_without_a_request(async_mode):
     finally:
         await close(raw, async_mode)
     assert seen == []
+
+
+# ---------------------------------------------------------------------------
+# P11 — GavaConnect POST bodies are SDK-serialised (same bytes on every httpx)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_gavaconnect_body_bytes_are_sdk_owned(async_mode):
+    from kra_etims.gavaconnect import AsyncGavaConnectClient, GavaConnectClient
+    bodies = []
+
+    def handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        bodies.append(request.content)
+        return httpx.Response(200, json={"ResponseCode": "23000", "PINDATA": {"KRAPIN": "A000123456B"}})
+
+    gc = (AsyncGavaConnectClient if async_mode else GavaConnectClient)(consumer_key="k", consumer_secret="s")
+    raw = (httpx.AsyncClient if async_mode else httpx.Client)(transport=httpx.MockTransport(handler))
+    gc._http = raw
+    try:
+        try:
+            await invoke(gc, "lookup_pin", "A000123456B")
+        except Exception:
+            pass  # only the request bytes matter here
+    finally:
+        await close(raw, async_mode)
+    assert bodies == [b'{"KRAPIN":"A000123456B"}']
