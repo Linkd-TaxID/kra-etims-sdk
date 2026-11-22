@@ -4,6 +4,49 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+## [0.8.2] - unreleased
+
+### Fixed
+- CLI `etims queue flush` classifies each result by the sale body: only `SIGNED`
+  with CU invoice number, SDC id and signature is `success`; `PENDING_SYNC` stays
+  `pending`; `NOT_SENT`/`FAILED` are `failed`; `OUTCOME_UNKNOWN`,
+  `RECONCILIATION_REQUIRED` and unknown statuses are `outcome_unknown`.
+- HTTP 409 `IDEMPOTENT_RESULT_LOOKUP_REQUIRED`, `IDEMPOTENT_IDENTITY_UNAVAILABLE`
+  and `IDEMPOTENCY_SCOPE_UNBOUND` (and 425 in-flight) raise
+  `IdempotentOutcomeUnresolvedError`, a `TIaaSAmbiguousStateError` that is also a
+  `KRAConflictError`, carrying the original idempotency key and code.
+- Request bodies are serialized by the SDK (compact separators, UTF-8, no NaN,
+  insertion order) and sent as `application/json`, so the bytes TaxID hashes for
+  idempotency no longer depend on the installed httpx version (0.27 vs 0.28).
+- `find_sale`, `get_sale_original`, `issue_credit_note` and the stock adjustment /
+  stock master calls validate their results and carry `response_metadata`. Invalid
+  mutation bodies raise `TIaaSAmbiguousStateError`, never a raw pydantic error.
+  Return types are unchanged.
+- A 503 is `KRAConnectivityTimeoutError` only for code `KRA_CONNECTIVITY_TIMEOUT`;
+  other 503s without `oscu_code` raise `TIaaSUnavailableError` with the server code.
+- `ZReportAlreadyIssuedError` is raised when the 409 code is in `code` or only in
+  the legacy `error` field (which current backends send).
+- Sync `lookup_pin` uses `/v2/etims/customers/lookup`, like the async client.
+
+### Added
+- `WorkerDeferredError` (403 `WORKER_DEFERRED`) and `WorkerStoppingError`
+  (503 `WORKER_STOPPING`), both `FiscalWorkerUnavailableError` with
+  `retryable = True`.
+- `RateLimitError` for HTTP 429 with `retry_after_seconds` parsed from
+  `Retry-After` (seconds or HTTP-date). `KRAeTIMSError.code` exposes the server's
+  error code on every HTTP error.
+- `CreditNoteResult` and `SaleOriginalResult` models; `UnsupportedOperationError`.
+
+### Deprecated
+- `check_compliance()` targets a route TaxID does not serve. It now warns and
+  raises `UnsupportedOperationError` without sending a request; use
+  `device_health()` or `lookup_customer()`.
+
+### Documentation
+- Polling `get_sale_status` with backoff is the supported way to follow a sale.
+  Webhooks are optional, deployment-dependent, at-least-once and signed with a
+  per-tenant secret. The recovery example uses `find_sale()`.
+
 ## [0.8.1] - 2026-10-22
 
 ### Tests
