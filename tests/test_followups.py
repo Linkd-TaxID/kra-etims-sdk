@@ -214,3 +214,36 @@ def test_queue_db_from_older_sdk_keeps_working(tmp_path: Path):
     result = _flush_cli(db_path, respond(202, {"purchaseId": 7, "status": "PENDING_SYNC"}))
     assert result.exit_code == 0, result.output
     assert _row_status(db_path) == "accepted"
+
+
+# ---------------------------------------------------------------------------
+# P9 — the README stock example must run as written
+# ---------------------------------------------------------------------------
+
+def _readme_call(name: str) -> str:
+    text = (ROOT / "README.md").read_text()
+    start = text.index(f"client.{name}(")
+    depth = 0
+    for i in range(start, len(text)):
+        depth += {"(": 1, ")": -1}.get(text[i], 0)
+        if depth == 0 and text[i] == ")":
+            return text[start:i + 1]
+    raise AssertionError("unbalanced snippet")
+
+
+def test_readme_stock_example_runs():
+    from kra_etims import StockAdjustmentLine
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(201, json=STOCK)
+
+    client, raw = make_client(False, handler)
+    try:
+        exec(_readme_call("submit_stock_adjustment"),
+             {"client": client, "StockAdjustmentLine": StockAdjustmentLine})
+    finally:
+        raw.close()
+    assert seen and seen[0].url.path == "/v2/etims/stock/adjustment"
+    assert seen[0].headers.get("Idempotency-Key")

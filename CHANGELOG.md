@@ -75,6 +75,9 @@ All notable changes to kra-etims-sdk are documented here.
   `device_health()` or `lookup_customer()`.
 
 ### Documentation
+- The README stock example and `examples/petrol_station_day.py` pass the
+  `idempotency_key` that `submit_stock_adjustment` requires; as written they
+  raised `ValueError`. A test runs the README snippet against a mock.
 - Polling `get_sale_status` with backoff is the supported way to follow a sale.
   Webhooks are optional, deployment-dependent, at-least-once and signed with a
   per-branch secret. The recovery example uses `find_sale()`.

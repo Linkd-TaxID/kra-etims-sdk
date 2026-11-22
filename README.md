@@ -244,7 +244,8 @@ Configured scheduling may finalize the local aggregate after unresolved work set
 client.get_sale_status(purchase_id)                       # current status and receipt fields
 client.submit_stock_adjustment([StockAdjustmentLine(
     itemCd="SKU1", itemNm="Laptop", ioType="M", qty=10, prc=5000, totDcAmt=0, taxTyCd="B",
-)], remark="Stock in")                                    # ioType: M in, A adjust out, I issue out
+)], remark="Stock in", idempotency_key="stock-in-SKU1-2026-09-25")  # ioType: M in, A adjust out, I issue out
+                                                          # reuse the same key on any retry
 client.bulk_import_items("catalog.csv")                   # CSV item registration
 client.initialize_device_handshake()                      # needs a branch admin key
 
