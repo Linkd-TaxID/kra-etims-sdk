@@ -341,3 +341,42 @@ def test_gateway_caps_retry_after(monkeypatch):
     assert gw._retry_delay(err, 0) == gw._MAX_RETRY_AFTER
     err.retry_after = None
     assert gw._retry_delay(err, 0) == 0.1
+
+
+# ---------------------------------------------------------------------------
+# D6 — unresolved idempotency on a credit note is also a CreditNoteConflictError
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("status,code", [
+    (409, "IDEMPOTENT_RESULT_LOOKUP_REQUIRED"), (409, "IDEMPOTENT_IDENTITY_UNAVAILABLE"),
+    (409, "IDEMPOTENCY_SCOPE_UNBOUND"), (425, "IDEMPOTENT_RESULT_LOOKUP_REQUIRED"),
+])
+async def test_credit_note_unresolved_outcome_error(async_mode, status, code):
+    import kra_etims.exceptions as exc_mod
+    client, raw = make_client(async_mode, respond(status, {"status": "ERROR", "code": code, "message": "x"}))
+    try:
+        with pytest.raises(exc_mod.IdempotentOutcomeUnresolvedError) as caught:
+            await invoke(client, "issue_credit_note", 7, idempotency_key="cn-key")
+    finally:
+        await close(raw, async_mode)
+    err = caught.value
+    assert type(err).__name__ == "CreditNoteOutcomeUnresolvedError"
+    assert isinstance(err, exc_mod.CreditNoteConflictError)
+    assert isinstance(err, exc_mod.TIaaSAmbiguousStateError)
+    assert err.code == code and err.idempotency_key == "cn-key"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_sale_unresolved_outcome_is_not_a_credit_note_error(async_mode, minimal_invoice):
+    import kra_etims.exceptions as exc_mod
+    body = {"status": "ERROR", "code": "IDEMPOTENT_RESULT_LOOKUP_REQUIRED", "message": "x"}
+    client, raw = make_client(async_mode, respond(409, body))
+    try:
+        with pytest.raises(exc_mod.IdempotentOutcomeUnresolvedError) as caught:
+            await invoke(client, "submit_sale", minimal_invoice, idempotency_key="k")
+    finally:
+        await close(raw, async_mode)
+    assert not isinstance(caught.value, exc_mod.CreditNoteConflictError)

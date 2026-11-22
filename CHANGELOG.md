@@ -20,8 +20,9 @@ All notable changes to kra-etims-sdk are documented here.
   and `IDEMPOTENCY_SCOPE_UNBOUND` (and 425 in-flight) raise
   `IdempotentOutcomeUnresolvedError`, a `TIaaSAmbiguousStateError` that is also a
   `KRAConflictError`, carrying the original idempotency key and code. On
-  `issue_credit_note` these codes are no longer `CreditNoteConflictError`; catch
-  `KRAConflictError` or `TIaaSAmbiguousStateError`.
+  `issue_credit_note` they raise `CreditNoteOutcomeUnresolvedError`, which is both
+  an `IdempotentOutcomeUnresolvedError` and a `CreditNoteConflictError`, so
+  existing credit-note 409 handlers still match.
 - `etims queue flush` keeps a row `pending` when the request was refused before
   processing (`WORKER_STOPPING`, `WORKER_DEFERRED`, HTTP 429, connection
   failure), so the next flush retries it; it was marked `failed` and never
@@ -71,7 +72,8 @@ All notable changes to kra-etims-sdk are documented here.
   (the `Retry-After` header parsed as seconds or an HTTP-date; TaxID sends it on
   429, `WORKER_DEFERRED` and `WORKER_STOPPING`) and `code`, the server's error
   code on every HTTP error.
-- `CreditNoteResult` and `SaleOriginalResult` models; `UnsupportedOperationError`.
+- `CreditNoteResult` and `SaleOriginalResult` models; `UnsupportedOperationError`;
+  `CreditNoteOutcomeUnresolvedError`; `MutationServiceUnavailableError`.
 
 ### Deprecated
 - `update_stock()` targets the legacy `/v2/etims/stock` route, which TaxID

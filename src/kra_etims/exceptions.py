@@ -361,6 +361,23 @@ class CreditNoteConflictError(KRAConflictError):
         self.existing_cu_invoice_no = existing_cu_invoice_no
 
 
+class CreditNoteOutcomeUnresolvedError(IdempotentOutcomeUnresolvedError, CreditNoteConflictError):
+    """
+    :class:`IdempotentOutcomeUnresolvedError` raised by ``issue_credit_note``:
+    TaxID holds an earlier claim for this credit-note idempotency key but cannot
+    return its result. The original correction may have been applied; keep
+    ``idempotency_key``, inspect the original and never resubmit under a new key.
+
+    Also a :class:`CreditNoteConflictError` (and so a :class:`KRAConflictError`),
+    so credit-note 409 handlers written for SDK 0.8.1 still match.
+    """
+    def __init__(self, message: str, idempotency_key: Optional[str] = None, code: Optional[str] = None):
+        IdempotentOutcomeUnresolvedError.__init__(self, message, idempotency_key=idempotency_key, code=code)
+        self.original_purchase_id = None
+        self.existing_credit_note_id = None
+        self.existing_cu_invoice_no = None
+
+
 class CreditNoteExceedsOriginalError(KRAeTIMSError):
     """
     Issuing this credit note would exceed the original receipt's reversible

@@ -29,6 +29,7 @@ from .exceptions import (
     KRADuplicateInvoiceError,
     CreditNoteConflictError,
     CreditNoteExceedsOriginalError,
+    CreditNoteOutcomeUnresolvedError,
     IdempotentOutcomeUnresolvedError,
     KRAConflictError,
     KRAConnectivityTimeoutError,
@@ -86,6 +87,14 @@ _RESULT_MODELS: tuple = (
     (re.compile(r"/v2/etims/stock/master$"), StockMasterResult),
     (re.compile(r"/v2/etims/stock/master/operations/[^/]+$"), StockMasterResult),
 )
+
+_CREDIT_NOTE_PATH = re.compile(r"/v2/etims/sale/[^/]+/credit-note$")
+
+
+def _unresolved_error_type(path: str) -> type[IdempotentOutcomeUnresolvedError]:
+    """Credit notes get the subclass that is also a CreditNoteConflictError."""
+    return CreditNoteOutcomeUnresolvedError if _CREDIT_NOTE_PATH.search(path) else IdempotentOutcomeUnresolvedError
+
 
 # An UPPER_SNAKE machine code, as opposed to a reason phrase such as "Conflict".
 _MACHINE_CODE = re.compile(r"^[A-Z][A-Z0-9_]+$")
@@ -434,7 +443,7 @@ class _BaseKRAeTIMSClient(ABC):
                     code = body["error"]
                 message = f"Conflict (HTTP 409){f' [{code}]' if code else ''}: {msg}"
                 if code in _UNRESOLVED_IDEMPOTENCY_CODES:
-                    raise IdempotentOutcomeUnresolvedError(
+                    raise _unresolved_error_type(exc.request.url.path)(
                         f"{message} Retain the original idempotency key and look up the original "
                         "operation; do not resubmit under a new key.",
                         idempotency_key=idempotency_key, code=code,
@@ -452,7 +461,7 @@ class _BaseKRAeTIMSClient(ABC):
                 # still running. Its outcome is not known yet, and the fix is the
                 # same as for any ambiguous mutation — retry with the same key.
                 _, msg, code = self._error_fields(exc.response)
-                raise IdempotentOutcomeUnresolvedError(
+                raise _unresolved_error_type(exc.request.url.path)(
                     f"Request with this idempotency key is still in flight (HTTP 425): {msg} "
                     "Retain the original key and inspect its status before considering replay.",
                     idempotency_key=idempotency_key, code=code,
