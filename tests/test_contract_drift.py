@@ -135,3 +135,58 @@ async def test_other_409_codes_stay_plain_conflicts(async_mode, minimal_invoice)
         assert not isinstance(caught.value, TIaaSAmbiguousStateError)
     finally:
         await invoke(raw, "aclose" if async_mode else "close")
+
+
+# ---------------------------------------------------------------------------
+# B3 — request body bytes are SDK-owned, not httpx-version-dependent
+# ---------------------------------------------------------------------------
+
+_PINNED_PAYLOAD = {"supplierPin": "A000111222B", "customerName": "Café Ndovu", "amount": 116.0,
+                   "items": [{"itemName": "Chai", "qty": 1}]}
+_PINNED_BYTES = ('{"supplierPin":"A000111222B","customerName":"Café Ndovu","amount":116.0,'
+                 '"items":[{"itemName":"Chai","qty":1}]}').encode("utf-8")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_request_body_bytes_are_pinned(async_mode):
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, json=RECEIPT)
+
+    client, raw = make_client(async_mode, handler)
+    try:
+        await invoke(client, "_request", "POST", "/v2/etims/sale", json=_PINNED_PAYLOAD, idempotency_key="k")
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+    assert seen[0].content == _PINNED_BYTES
+    assert seen[0].headers["Content-Type"] == "application/json"
+    assert seen[0].headers["Content-Length"] == str(len(_PINNED_BYTES))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_submit_sale_body_is_compact_utf8(async_mode, minimal_invoice):
+    from kra_etims.models import to_middleware_sale_payload
+    seen = []
+
+    def handler(request):
+        seen.append(request.content)
+        return httpx.Response(200, json=RECEIPT)
+
+    client, raw = make_client(async_mode, handler)
+    try:
+        await invoke(client, "submit_sale", minimal_invoice, idempotency_key="k")
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+    expected = json.dumps(to_middleware_sale_payload(minimal_invoice), ensure_ascii=False,
+                          separators=(",", ":"), allow_nan=False).encode("utf-8")
+    assert seen == [expected]
+
+
+def test_body_encoder_rejects_nan():
+    from kra_etims._base_client import _encode_json_body
+    with pytest.raises(ValueError):
+        _encode_json_body({"amount": float("nan")})

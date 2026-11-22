@@ -10,6 +10,7 @@ Both transports use httpx:
   httpx.AsyncClient  — async, used by AsyncKRAeTIMSClient
 """
 
+import json as _json
 import os
 import re
 from abc import ABC, abstractmethod
@@ -65,6 +66,21 @@ _UNRESOLVED_IDEMPOTENCY_CODES: frozenset = frozenset(
 # Failures where the request provably never reached the server: no TCP/TLS
 # connection was established, or no pooled connection became free in time.
 _NOT_SENT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
+
+
+def _encode_json_body(payload: Any) -> bytes:
+    """Serialize a request body the same way under every httpx version.
+
+    TaxID's IdempotencyFilter hashes the exact body bytes with the route and
+    rejects a reused key whose bytes differ (422 IDEMPOTENCY_KEY_REUSED).
+    httpx 0.27 sent ``json.dumps(obj)`` (spaced, ASCII-escaped) and 0.28 sends
+    compact UTF-8, so the same retry could hash differently depending on the
+    installed httpx. This matches the 0.28 format exactly, keeping keys first
+    sent from 0.28 installs replayable. Keys are not sorted: the server
+    digests bytes, not a canonical form, and sorting would change the bytes
+    of every request an earlier SDK version already sent under a key.
+    """
+    return _json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
 
 
 class _BaseKRAeTIMSClient(ABC):

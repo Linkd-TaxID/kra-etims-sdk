@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from ._base_client import _BaseKRAeTIMSClient
+from ._base_client import _BaseKRAeTIMSClient, _encode_json_body
 from ._telemetry import inject_trace_context, span as _span
 from .exceptions import (
     KRAConnectivityTimeoutError,
@@ -222,8 +222,12 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             headers = self._build_auth_headers(idempotency_key)
             inject_trace_context(headers)
 
+            content = None
+            if json is not None:
+                content = _encode_json_body(json)
+                headers["Content-Type"] = "application/json"
             try:
-                resp = await self._http.request(method, url, json=json, files=files, headers=headers, timeout=self._timeout)
+                resp = await self._http.request(method, url, content=content, files=files, headers=headers, timeout=self._timeout)
             except httpx.RequestError as exc:
                 raise self._transport_error(exc, method, idempotency_key) from exc
             return self._parse_response(resp, method, idempotency_key)
