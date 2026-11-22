@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING, Union
 
 from pydantic import BaseModel, Field
 
-from .exceptions import OSCUUnavailableError, TIaaSUnavailableError
+from .exceptions import OSCUUnavailableError, RateLimitError, TIaaSUnavailableError
 
 if TYPE_CHECKING:
     from .client import KRAeTIMSClient
@@ -37,11 +37,16 @@ _MAX_RETRIES = 3
 # Backoff cap in seconds doubles per attempt: 0.5s, 1.0s, 2.0s (full jitter).
 _BASE_DELAY = 0.5
 
+# Longest server Retry-After honoured on a 429 before giving up waiting longer.
+_MAX_RETRY_AFTER = 30.0
+
 
 def _is_retryable(exc: Exception, method: str, idempotency_key: Optional[str]) -> bool:
     """
     Retry only what cannot have produced a side effect.
 
+    RateLimitError (HTTP 429) means nothing was processed; the retry waits at
+    least the server's Retry-After (capped at _MAX_RETRY_AFTER).
     TIaaSUnavailableError means the request never left the client, was a
     read, or was refused before dispatch (FiscalWorkerUnavailableError); a
     server-side 503 on a mutation is marked requires_reconciliation and is not
@@ -50,6 +55,9 @@ def _is_retryable(exc: Exception, method: str, idempotency_key: Optional[str]) -
     (KRAConnectivityTimeoutError) lasts hours and is never retried here, nor
     is TIaaSAmbiguousStateError, which needs reconciliation, not a resend.
     """
+    if isinstance(exc, RateLimitError):
+        # HTTP 429: nothing was processed, so resending the same request is safe.
+        return True
     if isinstance(exc, TIaaSUnavailableError):
         # A server-side 503 on a mutation may follow a commit; only errors that
         # never reached the server, reads, or pre-dispatch worker refusals retry.
@@ -62,6 +70,12 @@ def _is_retryable(exc: Exception, method: str, idempotency_key: Optional[str]) -
 def _backoff(attempt: int) -> float:
     # Full jitter de-correlates many POS terminals recovering from one outage.
     return random.uniform(0, _BASE_DELAY * (2 ** attempt))
+
+
+def _retry_delay(exc: Exception, attempt: int) -> float:
+    """Jittered backoff, but never sooner than the server's Retry-After (capped)."""
+    retry_after = getattr(exc, "retry_after_seconds", None) or 0.0
+    return max(_backoff(attempt), min(retry_after, _MAX_RETRY_AFTER))
 
 
 def _money(amount: Union[Decimal, float, int, str]) -> str:
@@ -230,7 +244,8 @@ class TaxIDSupplierGateway:
             except KRAeTIMSError as exc:
                 if attempt == _MAX_RETRIES or not _is_retryable(exc, method, idempotency_key):
                     raise
-            time.sleep(_backoff(attempt))
+                delay = _retry_delay(exc, attempt)
+            time.sleep(delay)
         raise AssertionError("unreachable")
 
     def onboard_supplier(
@@ -369,7 +384,8 @@ class AsyncTaxIDSupplierGateway:
             except KRAeTIMSError as exc:
                 if attempt == _MAX_RETRIES or not _is_retryable(exc, method, idempotency_key):
                     raise
-            await asyncio.sleep(_backoff(attempt))
+                delay = _retry_delay(exc, attempt)
+            await asyncio.sleep(delay)
         raise AssertionError("unreachable")
 
     async def onboard_supplier(

@@ -26,6 +26,8 @@ All notable changes to kra-etims-sdk are documented here.
   processing (`WORKER_STOPPING`, `WORKER_DEFERRED`, HTTP 429, connection
   failure), so the next flush retries it; it was marked `failed` and never
   retried. Rejected rows stay `failed`.
+- The supplier gateway retries HTTP 429 (nothing was processed), waiting at least
+  the server's `Retry-After` (capped at 30 s) between attempts.
 - The supplier gateway no longer resends a mutation after a server-side 503;
   `flush_offline_queue` marks HTTP 429 rows `retryable`.
 - `etims pin validate` (TaxID path) shows the customer-lookup `status` and

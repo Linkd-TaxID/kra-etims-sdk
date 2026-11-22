@@ -301,3 +301,43 @@ async def test_gavaconnect_body_bytes_are_sdk_owned(async_mode):
     finally:
         await close(raw, async_mode)
     assert bodies == [b'{"KRAPIN":"A000123456B"}']
+
+
+# ---------------------------------------------------------------------------
+# P12 — the supplier gateway honours 429 Retry-After instead of giving up
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_gateway_retries_rate_limit_after_retry_after(async_mode, monkeypatch):
+    import asyncio
+    import time
+    import kra_etims.gateway as gw
+    slept = []
+    monkeypatch.setattr(gw, "_backoff", lambda attempt: 0)
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+
+    async def fake_async_sleep(s):
+        slept.append(s)
+    monkeypatch.setattr(asyncio, "sleep", fake_async_sleep)
+    replies = [httpx.Response(429, json={"status": "ERROR", "code": "RATE_LIMITED", "message": "x"},
+                              headers={"Retry-After": "2"}),
+               httpx.Response(200, json={"requestId": 5, "phone": "+254700000000", "status": "PENDING"})]
+    client, raw = make_client(async_mode, lambda request: replies.pop(0))
+    try:
+        status = await invoke(client.gateway, "get_status", 5)
+    finally:
+        await close(raw, async_mode)
+    assert status.request_id == 5
+    assert 2.0 in slept
+
+
+def test_gateway_caps_retry_after(monkeypatch):
+    import kra_etims.gateway as gw
+    from kra_etims.exceptions import RateLimitError
+    monkeypatch.setattr(gw, "_backoff", lambda attempt: 0.1)
+    err = RateLimitError("limited")
+    err.retry_after = "3600"
+    assert gw._retry_delay(err, 0) == gw._MAX_RETRY_AFTER
+    err.retry_after = None
+    assert gw._retry_delay(err, 0) == 0.1
