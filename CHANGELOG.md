@@ -39,6 +39,10 @@ All notable changes to kra-etims-sdk are documented here.
   the legacy `error` field (which current backends send).
 - Sync `lookup_pin` uses `/v2/etims/customers/lookup`, like the async client.
 
+### Changed
+- Minimum httpx is now 0.28 (`httpx>=0.28`). The SDK's request bytes already
+  match httpx 0.28's JSON format; older httpx releases are no longer supported.
+
 ### Added
 - `WorkerDeferredError` (403 `WORKER_DEFERRED`) and `WorkerStoppingError`
   (503 `WORKER_STOPPING`), both `FiscalWorkerUnavailableError` with
