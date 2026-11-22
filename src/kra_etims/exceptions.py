@@ -150,6 +150,13 @@ class TIaaSAmbiguousStateError(KRAeTIMSError):
         self.idempotency_key = idempotency_key
 
 
+class UnsupportedOperationError(KRAeTIMSError, NotImplementedError):
+    """The SDK method targets a route the TaxID backend does not serve.
+
+    Raised locally without sending a request. Also a ``NotImplementedError``.
+    """
+
+
 # ---------------------------------------------------------------------------
 # KRA Application Errors (business / validation layer)
 # ---------------------------------------------------------------------------

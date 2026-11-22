@@ -16,6 +16,7 @@ import httpx
 from ._base_client import _BaseKRAeTIMSClient, _encode_json_body
 from ._telemetry import inject_trace_context, span as _span
 from .exceptions import (
+    UnsupportedOperationError,
     KRAConnectivityTimeoutError,
     KRADuplicateInvoiceError,
     KRAeTIMSAuthError,
@@ -623,9 +624,25 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     # ------------------------------------------------------------------
 
     async def check_compliance(self, pin: str) -> Dict[str, Any]:
-        """Verify device compliance for the given TIN/PIN."""
-        return await self._request("GET", f"/v2/etims/compliance/{pin}")
+        """
+        .. deprecated:: 0.8.2
+            TaxID serves no ``/v2/etims/compliance/{pin}`` route; this method
+            only ever received HTTP 404. It now raises
+            :class:`~kra_etims.exceptions.UnsupportedOperationError` without
+            sending a request. Use :meth:`device_health` for branch reachability
+            and :meth:`lookup_customer` for a taxpayer PIN.
+        """
+        warnings.warn(
+            "check_compliance() targets a route TaxID does not serve and will be removed. "
+            "Use device_health() or lookup_customer().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        raise UnsupportedOperationError(
+            "check_compliance() is not supported: TaxID has no compliance-check route. "
+            "Use device_health() for branch reachability or lookup_customer(pin) for a taxpayer PIN."
+        )
 
     async def lookup_pin(self, pin: str) -> Dict[str, Any]:
-        """Compatibility alias for taxpayer lookup; does not register a buyer."""
+        """Compatibility alias for :meth:`lookup_customer`; does not register a buyer."""
         return await self.lookup_customer(pin)

@@ -175,14 +175,14 @@ def test_http_500_on_get_raises_unavailable_not_ambiguous(httpx_mock):
     """
     httpx_mock.add_response(
         method="GET",
-        url=f"{BASE}/v2/etims/compliance/A000111222B",
+        url=f"{BASE}/v2/etims/device",
         json={"error": "Internal Server Error"},
         status_code=500,
     )
 
     client = _authed_client()
     with pytest.raises(TIaaSUnavailableError):
-        client.check_compliance("A000111222B")
+        client.device_status()
 
 
 # ---------------------------------------------------------------------------

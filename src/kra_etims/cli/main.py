@@ -356,7 +356,8 @@ def device_status(
     api_key: Annotated[Optional[str], typer.Option(help="Override API key.")] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Emit raw JSON.")] = False,
 ) -> None:
-    """Check device compliance status for a given PIN."""
+    """Check device compliance status for a given PIN (unsupported by TaxID; see device_health)."""
+    from kra_etims.exceptions import UnsupportedOperationError
     from ._client import get_client
 
     client = get_client(api_key)
@@ -369,7 +370,11 @@ def device_status(
         transient=True,
     ) as progress:
         progress.add_task("Checking compliance...", total=None)
-        result = client.check_compliance(pin)
+        try:
+            result = client.check_compliance(pin)
+        except UnsupportedOperationError as exc:
+            err_console.print(err_panel(str(exc)))
+            raise typer.Exit(1)
 
     if as_json:
         print_json(result)

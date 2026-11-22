@@ -395,3 +395,58 @@ async def test_other_z_report_conflicts_propagate(async_mode):
     finally:
         await invoke(raw, "aclose" if async_mode else "close")
     assert not isinstance(caught.value, ZReportAlreadyIssuedError)
+
+
+# ---------------------------------------------------------------------------
+# B6 — routes that do not exist on the backend
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_lookup_pin_uses_customer_lookup_route(async_mode):
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, json={"pin": "A000123456B", "status": "FOUND"})
+
+    client, raw = make_client(async_mode, handler)
+    try:
+        result = await invoke(client, "lookup_pin", "A000123456B")
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+    assert seen[0].method == "GET"
+    assert seen[0].url.path == "/v2/etims/customers/lookup"
+    assert seen[0].url.params["pin"] == "A000123456B"
+    assert result["status"] == "FOUND"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_check_compliance_fails_clearly_without_a_request(async_mode):
+    from kra_etims.exceptions import KRAeTIMSError, UnsupportedOperationError
+    seen = []
+    client, raw = make_client(async_mode, lambda request: seen.append(request) or httpx.Response(404))
+    try:
+        with pytest.warns(DeprecationWarning), pytest.raises(UnsupportedOperationError) as caught:
+            await invoke(client, "check_compliance", "A000123456B")
+    finally:
+        await invoke(raw, "aclose" if async_mode else "close")
+    assert isinstance(caught.value, KRAeTIMSError) and isinstance(caught.value, NotImplementedError)
+    assert "device_health" in str(caught.value)
+    assert seen == []
+
+
+def test_cli_device_status_reports_unsupported_route():
+    from unittest.mock import patch
+    from typer.testing import CliRunner
+    from kra_etims.cli.main import app
+    client, raw = make_client(False, lambda request: httpx.Response(404))
+    try:
+        with patch("kra_etims.cli._client.get_client", return_value=client), \
+                pytest.warns(DeprecationWarning):
+            result = CliRunner().invoke(app, ["device", "status", "--pin", "A000123456B", "--api-key", "k"])
+    finally:
+        raw.close()
+    assert result.exit_code == 1
+    assert "not supported" in result.output
