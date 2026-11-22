@@ -427,7 +427,7 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         Poll the ground-truth outcome of a sale that returned 202 PENDING_SYNC
         from :meth:`submit_sale` (middleware Track C4). Polling with backoff is
         the supported path; webhooks are optional, deployment-dependent,
-        at-least-once and per-tenant signed, so do not rely on them. See
+        at-least-once and signed per branch, so do not rely on them. See
         :meth:`KRAeTIMSClient.get_sale_status` for full semantics.
 
         :raises KRAeTIMSError: HTTP 404 — no sale with this ``purchaseId`` for

@@ -57,7 +57,7 @@ All notable changes to kra-etims-sdk are documented here.
 ### Documentation
 - Polling `get_sale_status` with backoff is the supported way to follow a sale.
   Webhooks are optional, deployment-dependent, at-least-once and signed with a
-  per-tenant secret. The recovery example uses `find_sale()`.
+  per-branch secret. The recovery example uses `find_sale()`.
 
 ## [0.8.1] - 2026-10-22
 

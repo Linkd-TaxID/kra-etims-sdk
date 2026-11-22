@@ -165,7 +165,7 @@ Check `receipt["status"]`. HTTP success does not mean the sale is signed.
 
 Polling is the supported way to follow a sale. Webhooks are optional: whether
 they are sent depends on the deployment's configuration, delivery is
-at-least-once, and each delivery is signed with a per-tenant secret. Do not rely
+at-least-once, and each delivery is signed with a per-branch secret. Do not rely
 on receiving `receipt.signed`. A reasonable polling schedule starts at 2 seconds,
 doubles up to 60 seconds, adds jitter, and honours `Retry-After` on HTTP 429
 (`RateLimitError.retry_after_seconds`):

@@ -434,7 +434,7 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
 
         Webhooks are optional: whether they are sent depends on the deployment
         configuration, delivery is at-least-once, and deliveries are signed
-        with a per-tenant secret. Do not rely on receiving ``receipt.signed``.
+        with a per-branch secret. Do not rely on receiving ``receipt.signed``.
 
         :raises KRAeTIMSError: HTTP 404 — no sale with this ``purchaseId`` for
             the authenticated tenant.
