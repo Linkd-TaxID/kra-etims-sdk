@@ -8,6 +8,8 @@ Schema:
   invoice_json — full SaleInvoice JSON
   queued_at    — ISO-8601 UTC timestamp
   status       — pending | success | failed | already_processed (historical) | outcome_unknown
+                 success only for SIGNED with CU invoice number, SDC id and signature;
+                 PENDING_SYNC stays pending; any other or unknown status is never success.
   attempts     — number of flush attempts
   last_error   — last error message (nullable)
 
@@ -38,6 +40,27 @@ CREATE TABLE IF NOT EXISTS queue (
     last_error   TEXT
 );
 """
+
+
+_EVIDENCE_FIELDS = ("cuInvoiceNumber", "sdcId", "receiptSignature")
+
+
+def _classify_sale_outcome(outcome: Any) -> tuple[str, str | None]:
+    """Map a returned sale body to a queue status; only evidenced SIGNED is success."""
+    sale_status = outcome.get("status") if isinstance(outcome, dict) else None
+    purchase = outcome.get("purchaseId") if isinstance(outcome, dict) else None
+    if sale_status == "SIGNED" and all(
+        isinstance(outcome.get(field), str) and outcome[field].strip() for field in _EVIDENCE_FIELDS
+    ):
+        return "success", None
+    detail = f"Sale status {sale_status or 'missing'} (purchaseId={purchase})"
+    if sale_status == "PENDING_SYNC":
+        return "pending", f"{detail}; poll get_sale_status before treating it as signed"
+    if sale_status in {"NOT_SENT", "FAILED"}:
+        return "failed", detail
+    # OUTCOME_UNKNOWN, RECONCILIATION_REQUIRED, SIGNED without evidence, or a status
+    # this SDK does not know: retain the original identity and investigate.
+    return "outcome_unknown", f"{detail}; inspect the original before any resubmission"
 
 
 class Queue:
@@ -116,9 +139,13 @@ class Queue:
             data = json.loads(row["invoice_json"])
             invoice = SaleInvoice(**data)
             idem_key = f"{invoice.tin}:{invoice.bhfId}:{invoice.invcNo}"
-            client.submit_sale(invoice, idempotency_key=idem_key)
-            self._update(row_id, "success")
-            return {"id": row_id, "invoice_no": invoice.invcNo, "status": "success"}
+            outcome = client.submit_sale(invoice, idempotency_key=idem_key)
+            status, note = _classify_sale_outcome(outcome)
+            self._update(row_id, status, note)
+            result = {"id": row_id, "invoice_no": invoice.invcNo, "status": status}
+            if note:
+                result["error"] = note
+            return result
         except (KRADuplicateInvoiceError, KRADeviceInstalledError, TIaaSAmbiguousStateError) as exc:
             self._update(row_id, "outcome_unknown", str(exc))
             return {"id": row_id, "status": "outcome_unknown", "error": str(exc)}

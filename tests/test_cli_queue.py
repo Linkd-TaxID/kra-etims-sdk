@@ -45,6 +45,11 @@ _ITEM = {
     "taxAmt": "0.00",
 }
 
+# A signed sale body with the evidence the queue requires before counting success.
+_SIGNED = {"purchaseId": 1, "status": "SIGNED", "cuInvoiceNumber": "SIM01/1 NS",
+           "sdcId": "SIM01", "receiptSignature": "synthetic-signature"}
+
+
 def _invoice(invc_no: str = "INV-001") -> dict:
     return {
         "tin": "A000123456B",
@@ -166,7 +171,7 @@ class TestQueueUnit:
     def test_flush_one_success_calls_submit_sale(self, q: Queue) -> None:
         q.enqueue(_invoice())
         client = MagicMock()
-        client.submit_sale.return_value = {"resultCd": "000"}
+        client.submit_sale.return_value = _SIGNED
         row = q.pending()[0]
         result = q.flush_one(client, row)
         assert result["status"] == "success"
@@ -184,6 +189,7 @@ class TestQueueUnit:
     def test_flush_one_success_updates_db_status(self, q: Queue) -> None:
         q.enqueue(_invoice())
         client = MagicMock()
+        client.submit_sale.return_value = _SIGNED
         row = q.pending()[0]
         q.flush_one(client, row)
         assert len(q.pending()) == 0     # no longer pending
@@ -300,7 +306,7 @@ class TestQueueFlushCLI:
     @pytest.fixture()
     def mock_client(self) -> MagicMock:
         client = MagicMock()
-        client.submit_sale.return_value = {"resultCd": "000"}
+        client.submit_sale.return_value = _SIGNED
         return client
 
     def test_flush_empty_queue_skips_api(self, db_path: Path, mock_client: MagicMock) -> None:
@@ -348,7 +354,7 @@ class TestQueueFlushCLI:
         q.enqueue(_invoice("INV-002"))
         # Second call raises a generic error
         mock_client.submit_sale.side_effect = [
-            {"resultCd": "000"},
+            _SIGNED,
             RuntimeError("timeout"),
         ]
         with patch(f"{_QUEUE_MOD}.data_dir", return_value=db_path.parent):
@@ -364,7 +370,7 @@ class TestQueueFlushCLI:
         q.enqueue(_invoice("INV-001"))
         q.enqueue(_invoice("INV-002"))
         mock_client.submit_sale.side_effect = [
-            {"resultCd": "000"},
+            _SIGNED,
             RuntimeError("timeout"),
         ]
         with patch(f"{_QUEUE_MOD}.data_dir", return_value=db_path.parent):

@@ -692,8 +692,11 @@ def queue_flush(
     held = sum(1 for r in results if r["status"] == "outcome_unknown")
     if held:
         console.print(f"{held} outcome unknown; inspect original operations before considering replay.")
+    queued = sum(1 for r in results if r["status"] == "pending")
+    if queued:
+        console.print(f"{queued} accepted as PENDING_SYNC, not yet signed; poll get_sale_status with backoff.")
     ok = sum(1 for r in results if r["status"] in ("success", "already_processed"))
-    failed = len(results) - ok - held
+    failed = len(results) - ok - held - queued
     console.print(success_panel(
         f"Flushed {ok}/{len(results)} invoice(s)."
         + (f" [red]{failed} failed[/red] — re-run to retry." if failed else "")
