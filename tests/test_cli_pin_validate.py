@@ -163,16 +163,19 @@ class TestPinValidateHumanOutput:
             result = runner.invoke(app, ["pin", "validate", _VALID_PIN, "--api-key", "dummy"])
         assert "ACTIVE" in result.output
 
-    def test_active_registered_shows_yes(self, mock_client: MagicMock) -> None:
+    def test_found_shows_taxpayer_status(self, mock_client: MagicMock) -> None:
+        # /v2/etims/customers/lookup shape (the route lookup_pin calls).
+        mock_client.lookup_pin.return_value = {"pin": _VALID_PIN, "status": "FOUND",
+                                               "name": "Acme Trading Ltd", "taxpayerStatus": "A"}
         with patch(f"{_CLIENT_MOD}.get_client", return_value=mock_client):
             result = runner.invoke(app, ["pin", "validate", _VALID_PIN, "--api-key", "dummy"])
-        assert "Yes" in result.output
+        assert "FOUND" in result.output and "Acme Trading Ltd" in result.output
 
-    def test_inactive_shows_no(self, mock_client: MagicMock) -> None:
-        mock_client.lookup_pin.return_value = _INACTIVE_RESPONSE
+    def test_not_found_is_shown(self, mock_client: MagicMock) -> None:
+        mock_client.lookup_pin.return_value = {"pin": _VALID_PIN, "status": "NOT_FOUND"}
         with patch(f"{_CLIENT_MOD}.get_client", return_value=mock_client):
             result = runner.invoke(app, ["pin", "validate", _VALID_PIN, "--api-key", "dummy"])
-        assert "No" in result.output
+        assert "NOT_FOUND" in result.output
 
     def test_flat_response_no_data_wrapper(self, mock_client: MagicMock) -> None:
         # Middleware may return flat JSON without a "data" key

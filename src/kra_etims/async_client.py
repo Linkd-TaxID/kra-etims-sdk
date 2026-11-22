@@ -462,6 +462,9 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         KRA TIS 6.16 defines once-only cancellation; live combinations need a verified
         contract and production corrections remain evidence-gated. Unknown/deferred
         corrections reserve their original quantities and must never be replaced.
+        An unresolved earlier claim for the key raises
+        ``IdempotentOutcomeUnresolvedError`` (a ``KRAConflictError``, not a
+        ``CreditNoteConflictError``).
         """
         with _span("kra_etims.issue_credit_note", {"sale.id": str(original_purchase_id)}):
             if not client_reference and not idempotency_key:

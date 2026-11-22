@@ -14,10 +14,21 @@ All notable changes to kra-etims-sdk are documented here.
 - HTTP 409 `IDEMPOTENT_RESULT_LOOKUP_REQUIRED`, `IDEMPOTENT_IDENTITY_UNAVAILABLE`
   and `IDEMPOTENCY_SCOPE_UNBOUND` (and 425 in-flight) raise
   `IdempotentOutcomeUnresolvedError`, a `TIaaSAmbiguousStateError` that is also a
-  `KRAConflictError`, carrying the original idempotency key and code.
+  `KRAConflictError`, carrying the original idempotency key and code. On
+  `issue_credit_note` these codes are no longer `CreditNoteConflictError`; catch
+  `KRAConflictError` or `TIaaSAmbiguousStateError`.
+- The supplier gateway no longer resends a mutation after a server-side 503;
+  `flush_offline_queue` marks HTTP 429 rows `retryable`.
+- `etims pin validate` (TaxID path) shows the customer-lookup `status` and
+  `taxpayerStatus` instead of an "Active" flag that route never returns.
 - Request bodies are serialized by the SDK (compact separators, UTF-8, no NaN,
   insertion order) and sent as `application/json`, so the bytes TaxID hashes for
   idempotency no longer depend on the installed httpx version (0.27 vs 0.28).
+  **Upgrade note:** this matches httpx 0.28's format. Under httpx 0.25–0.27 the
+  previous SDK sent spaced, ASCII-escaped JSON, so retrying a key first sent from
+  such an install returns 422 `IDEMPOTENCY_KEY_REUSED`. Settle in-flight
+  (ambiguous) operations with `find_sale` before upgrading; never resubmit them
+  under a new key.
 - `find_sale`, `get_sale_original`, `issue_credit_note` and the stock adjustment /
   stock master calls validate their results and carry `response_metadata`. Invalid
   mutation bodies raise `TIaaSAmbiguousStateError`, never a raw pydantic error.

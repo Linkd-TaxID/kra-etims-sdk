@@ -42,14 +42,18 @@ def _is_retryable(exc: Exception, method: str, idempotency_key: Optional[str]) -
     """
     Retry only what cannot have produced a side effect.
 
-    TIaaSUnavailableError means the request never left the client (or was a
-    read). An OSCU 503 is a server-declared transient failure, retried for a
+    TIaaSUnavailableError means the request never left the client, was a
+    read, or was refused before dispatch (FiscalWorkerUnavailableError); a
+    server-side 503 on a mutation is marked requires_reconciliation and is not
+    retried. An OSCU 503 is a server-declared transient failure, retried for a
     mutation only under an idempotency key. The VSCU 24h ceiling
     (KRAConnectivityTimeoutError) lasts hours and is never retried here, nor
     is TIaaSAmbiguousStateError, which needs reconciliation, not a resend.
     """
     if isinstance(exc, TIaaSUnavailableError):
-        return True
+        # A server-side 503 on a mutation may follow a commit; only errors that
+        # never reached the server, reads, or pre-dispatch worker refusals retry.
+        return not getattr(exc, "requires_reconciliation", False)
     if isinstance(exc, OSCUUnavailableError):
         return method.upper() == "GET" or idempotency_key is not None
     return False

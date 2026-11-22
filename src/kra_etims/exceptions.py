@@ -109,7 +109,7 @@ class RateLimitError(KRAeTIMSError):
         if value is None:
             return None
         value = value.strip()
-        if value.isdigit():
+        if value.isascii() and value.isdigit():
             return float(value)
         try:
             from email.utils import parsedate_to_datetime

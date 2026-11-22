@@ -806,12 +806,14 @@ def pin_validate(
                 print_json(result)
                 return
 
+            # /v2/etims/customers/lookup: status FOUND | NOT_FOUND | UNVERIFIED,
+            # plus name and taxpayerStatus when FOUND.
             data = result.get("data", result)
             console.print(kv_table([
                 ("PIN",    pin),
                 ("Name",   str(data.get("taxpayerName") or data.get("name") or "—")),
                 ("Status", str(data.get("status") or "—")),
-                ("Active", "Yes" if data.get("registered") or data.get("active") else "No"),
+                ("Taxpayer status", str(data.get("taxpayerStatus") or "—")),
                 ("Source", "TIaaS"),
             ], title="PIN Lookup"))
 

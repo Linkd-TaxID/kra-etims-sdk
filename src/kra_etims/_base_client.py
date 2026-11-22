@@ -526,8 +526,9 @@ class _BaseKRAeTIMSClient(ABC):
                 "message":         str(outcome),
                 "error_type":      type(outcome).__name__,
                 "ambiguous":       isinstance(outcome, TIaaSAmbiguousStateError) or getattr(outcome, "requires_reconciliation", False),
-                "retryable":       isinstance(outcome, TIaaSUnavailableError)
-                                   and not getattr(outcome, "requires_reconciliation", False),
+                "retryable":       isinstance(outcome, RateLimitError) or (
+                                       isinstance(outcome, TIaaSUnavailableError)
+                                       and not getattr(outcome, "requires_reconciliation", False)),
                 "result_cd":       getattr(outcome, "result_cd", None),
                 "http_status":     getattr(outcome, "http_status", None),
                 "idempotency_key": idem_key,

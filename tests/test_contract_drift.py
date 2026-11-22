@@ -506,3 +506,65 @@ async def test_generic_errors_expose_code(async_mode):
     finally:
         await invoke(raw, "aclose" if async_mode else "close")
     assert caught.value.code == "INVALID_REQUEST"
+
+
+# ---------------------------------------------------------------------------
+# Review follow-ups
+# ---------------------------------------------------------------------------
+
+def test_gateway_does_not_resend_mutation_after_server_503(monkeypatch):
+    import kra_etims.gateway as gw
+    from kra_etims.exceptions import TIaaSUnavailableError
+    monkeypatch.setattr(gw, "_backoff", lambda attempt: 0)
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(503, json={})
+
+    client, raw = make_client(False, handler)
+    try:
+        with pytest.raises(TIaaSUnavailableError):
+            client.gateway._execute("POST", "/v2/gateway/supplier-onboarding/single", json={"a": 1})
+    finally:
+        raw.close()
+    assert len(calls) == 1
+
+
+def test_gateway_retries_worker_refusal(monkeypatch):
+    import kra_etims.gateway as gw
+    monkeypatch.setattr(gw, "_backoff", lambda attempt: 0)
+    replies = [httpx.Response(503, json={"code": "WORKER_STOPPING", "message": "x", "retryable": True}),
+               httpx.Response(200, json={"ok": True})]
+    client, raw = make_client(False, lambda request: replies.pop(0))
+    try:
+        assert client.gateway._execute("POST", "/v2/gateway/supplier-onboarding/single", json={"a": 1}) == {"ok": True}
+    finally:
+        raw.close()
+
+
+def test_flush_outcome_marks_rate_limit_retryable():
+    from kra_etims._base_client import _BaseKRAeTIMSClient
+    from kra_etims.exceptions import RateLimitError
+    row = _BaseKRAeTIMSClient._flush_outcome("1", "k", RateLimitError("limited"))
+    assert row["retryable"] is True and row["ambiguous"] is False
+
+
+def test_retry_after_ignores_non_ascii_digits():
+    from kra_etims.exceptions import RateLimitError
+    assert RateLimitError.parse_retry_after("²") is None
+
+
+def test_cli_pin_validate_reads_customer_lookup_shape():
+    from unittest.mock import MagicMock, patch
+    from typer.testing import CliRunner
+    from kra_etims.cli.main import app
+    client = MagicMock()
+    client.lookup_pin.return_value = {"pin": "A000123456B", "status": "FOUND", "name": "Synthetic Co",
+                                      "taxpayerStatus": "A"}
+    with patch("kra_etims.cli._client.get_client", return_value=client), \
+            patch("kra_etims.cli._client.resolve_gavaconnect_creds", return_value=None):
+        result = CliRunner().invoke(app, ["pin", "validate", "A000123456B", "--api-key", "k"])
+    assert result.exit_code == 0, result.output
+    assert "Synthetic Co" in result.output and "FOUND" in result.output
+    assert "Active" not in result.output or "No" not in result.output.split("Active")[1].splitlines()[0]
