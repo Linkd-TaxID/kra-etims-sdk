@@ -61,3 +61,43 @@ def test_httpx_floor_is_0_28():
     deps = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["dependencies"]
     httpx_dep = next(d for d in deps if re.match(r"httpx\b", d))
     assert re.fullmatch(r"httpx>=0\.28(\.\d+)?(,<\d+)?", httpx_dep.replace(" ", "")), httpx_dep
+
+
+# ---------------------------------------------------------------------------
+# P7 — an unrecognised 503 on a mutation may follow a commit: it must be
+#      catchable as TIaaSAmbiguousStateError while staying a TIaaSUnavailableError
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("body", [
+    {},
+    {"status": "ERROR", "code": "SOMETHING_NEW", "message": "x"},
+    {"title": "VSCU Temporarily Unavailable", "status": 503, "vscu_code": "91"},
+])
+async def test_unknown_503_on_mutation_is_ambiguous(async_mode, body, minimal_invoice):
+    from kra_etims.exceptions import TIaaSAmbiguousStateError, TIaaSUnavailableError
+    client, raw = make_client(async_mode, respond(503, body))
+    try:
+        with pytest.raises(TIaaSUnavailableError) as caught:  # existing except-clauses keep matching
+            await invoke(client, "submit_sale", minimal_invoice, idempotency_key="original-key")
+    finally:
+        await close(raw, async_mode)
+    err = caught.value
+    assert isinstance(err, TIaaSAmbiguousStateError)
+    assert err.idempotency_key == "original-key"
+    assert getattr(err, "retryable", False) is False
+    assert err.requires_reconciliation is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_unknown_503_on_read_is_not_ambiguous(async_mode):
+    from kra_etims.exceptions import TIaaSAmbiguousStateError, TIaaSUnavailableError
+    client, raw = make_client(async_mode, respond(503, {}))
+    try:
+        with pytest.raises(TIaaSUnavailableError) as caught:
+            await invoke(client, "get_sale_status", 7)
+    finally:
+        await close(raw, async_mode)
+    assert not isinstance(caught.value, TIaaSAmbiguousStateError)

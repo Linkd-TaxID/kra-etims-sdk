@@ -35,6 +35,7 @@ from .exceptions import (
     KRAeTIMSAuthError,
     KRAAuthorizationError,
     KRAeTIMSError,
+    MutationServiceUnavailableError,
     OSCUUnavailableError,
     RateLimitError,
     TIaaSAmbiguousStateError,
@@ -279,7 +280,7 @@ class _BaseKRAeTIMSClient(ABC):
         return body, str(message), str(code) if code is not None else None
 
     @staticmethod
-    def _raise_for_503(resp: httpx.Response) -> None:
+    def _raise_for_503(resp: httpx.Response, mutating: bool = False) -> None:
         """
         Discriminate a TaxID 503. Several unrelated conditions share the status:
 
@@ -292,7 +293,9 @@ class _BaseKRAeTIMSClient(ABC):
         - anything else (transient VSCU ``vscu_code``, worker role not fiscal,
           held stock dispatch, token outage, a proxy, an empty body):
           :class:`TIaaSUnavailableError`. These are not the 24-hour ceiling, so
-          they no longer default to it.
+          they no longer default to it. On a mutation the original may still
+          have been applied, so it is :class:`MutationServiceUnavailableError`
+          (also a :class:`TIaaSAmbiguousStateError`).
         """
         body, message, code = _BaseKRAeTIMSClient._error_fields(resp)
         if "oscu_code" in body:
@@ -309,7 +312,12 @@ class _BaseKRAeTIMSClient(ABC):
             error = WorkerStoppingError(f"TaxID fiscal worker is stopping (HTTP 503): {message}", code=code)
         else:
             detail = f" [{code}]" if code else ""
-            error = TIaaSUnavailableError(f"TaxID service unavailable (HTTP 503){detail}: {message}")
+            text = f"TaxID service unavailable (HTTP 503){detail}: {message}"
+            if mutating:
+                error = MutationServiceUnavailableError(
+                    f"{text} The original may have been applied; inspect it before any replay.")
+            else:
+                error = TIaaSUnavailableError(text)
             if body.get("vscu_code") is not None:
                 error.vscu_code = str(body["vscu_code"])
         error.code = code
@@ -390,7 +398,7 @@ class _BaseKRAeTIMSClient(ABC):
         # transient OSCU failure — see _raise_for_503's docstring.
         if resp.status_code == 503:
             try:
-                self._raise_for_503(resp)
+                self._raise_for_503(resp, method.upper() in _MUTATING_METHODS)
             except KRAeTIMSError as error:
                 error.http_status = resp.status_code
                 error.idempotency_key = idempotency_key

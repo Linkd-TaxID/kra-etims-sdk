@@ -35,6 +35,13 @@ All notable changes to kra-etims-sdk are documented here.
   Return types are unchanged.
 - A 503 is `KRAConnectivityTimeoutError` only for code `KRA_CONNECTIVITY_TIMEOUT`;
   other 503s without `oscu_code` raise `TIaaSUnavailableError` with the server code.
+- An unrecognised 503 on a mutating request raises
+  `MutationServiceUnavailableError`, both a `TIaaSUnavailableError` and a
+  `TIaaSAmbiguousStateError`, with `retryable = False` and the original
+  idempotency key: the original may have been applied. Reads still raise a plain
+  `TIaaSUnavailableError`. If you catch `TIaaSUnavailableError` and retry, catch
+  `TIaaSAmbiguousStateError` (or `MutationServiceUnavailableError`) first and
+  inspect the original instead.
 - `ZReportAlreadyIssuedError` is raised when the 409 code is in `code` or only in
   the legacy `error` field (which current backends send).
 - Sync `lookup_pin` uses `/v2/etims/customers/lookup`, like the async client.

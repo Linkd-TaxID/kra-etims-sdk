@@ -188,6 +188,25 @@ class TIaaSAmbiguousStateError(KRAeTIMSError):
         self.idempotency_key = idempotency_key
 
 
+class MutationServiceUnavailableError(TIaaSUnavailableError, TIaaSAmbiguousStateError):
+    """
+    An unrecognised HTTP 503 on a mutating request (no ``WORKER_STOPPING``,
+    ``KRA_CONNECTIVITY_TIMEOUT`` or ``oscu_code``).
+
+    TaxID cannot always show such a 503 was raised before dispatch (a transient
+    control-unit code, a proxy, an empty body), so the original may have been
+    applied. It is a :class:`TIaaSAmbiguousStateError`: keep ``idempotency_key``
+    and inspect the original before any replay. It stays a
+    :class:`TIaaSUnavailableError` so existing handlers still match, but it is
+    not retryable: handle it before any ``except TIaaSUnavailableError`` that
+    retries. Reads keep raising a plain :class:`TIaaSUnavailableError`.
+    """
+    retryable: bool = False
+
+    def __init__(self, message: str, idempotency_key: Optional[str] = None):
+        TIaaSAmbiguousStateError.__init__(self, message, idempotency_key=idempotency_key)
+
+
 class UnsupportedOperationError(KRAeTIMSError, NotImplementedError):
     """The SDK method targets a route the TaxID backend does not serve.
 
