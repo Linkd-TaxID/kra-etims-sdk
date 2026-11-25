@@ -4,6 +4,11 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- The supplier gateway no longer resends an ambiguous mutation. An OSCU 503 under an
+  idempotency key was retried up to three times although the original may have been
+  applied; every `TIaaSAmbiguousStateError` now surfaces after one request.
+
 ## [0.8.2] - 2026-11-25
 
 **Release order:** the TaxID backend change (taxID#53) was deployed before this

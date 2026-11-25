@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING, Union
 
 from pydantic import BaseModel, Field
 
-from .exceptions import OSCUUnavailableError, RateLimitError, TIaaSUnavailableError
+from .exceptions import OSCUUnavailableError, RateLimitError, TIaaSAmbiguousStateError, TIaaSUnavailableError
 
 if TYPE_CHECKING:
     from .client import KRAeTIMSClient
@@ -48,13 +48,15 @@ def _is_retryable(exc: Exception, method: str, idempotency_key: Optional[str]) -
     RateLimitError (HTTP 429) means nothing was processed; the retry waits at
     least the server's Retry-After (capped at _MAX_RETRY_AFTER).
     TIaaSUnavailableError means the request never left the client, was a
-    read, or was refused before dispatch (FiscalWorkerUnavailableError); a
-    server-side 503 on a mutation is marked requires_reconciliation and is not
-    retried. An OSCU 503 is a server-declared transient failure, retried for a
-    mutation only under an idempotency key. The VSCU 24h ceiling
-    (KRAConnectivityTimeoutError) lasts hours and is never retried here, nor
-    is TIaaSAmbiguousStateError, which needs reconciliation, not a resend.
+    read, or was refused before dispatch (FiscalWorkerUnavailableError). A
+    TIaaSAmbiguousStateError, which includes every server-side 503 on a mutation
+    (OSCU 503s too), is never retried, with or without an idempotency key. The
+    VSCU 24h ceiling
+    (KRAConnectivityTimeoutError) lasts hours and is never retried here.
     """
+    if isinstance(exc, TIaaSAmbiguousStateError):
+        # The original may have been applied: inspect it, never resend it.
+        return False
     if isinstance(exc, RateLimitError):
         # HTTP 429: nothing was processed, so resending the same request is safe.
         return True
@@ -63,7 +65,7 @@ def _is_retryable(exc: Exception, method: str, idempotency_key: Optional[str]) -
         # never reached the server, reads, or pre-dispatch worker refusals retry.
         return not getattr(exc, "requires_reconciliation", False)
     if isinstance(exc, OSCUUnavailableError):
-        return method.upper() == "GET" or idempotency_key is not None
+        return method.upper() == "GET"
     return False
 
 

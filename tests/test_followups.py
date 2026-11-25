@@ -15,6 +15,7 @@ import httpx
 import pytest
 
 from kra_etims import AsyncKRAeTIMSClient, KRAeTIMSClient
+from kra_etims.exceptions import KRAeTIMSError
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -493,3 +494,55 @@ def test_accepted_row_the_server_does_not_know_is_not_polled_forever(tmp_path):
     result = queue.poll_one(Client(), queue.accepted()[0])
     assert result["status"] == "outcome_unknown"
     assert queue.accepted() == []
+
+
+# ---------------------------------------------------------------------------
+# The supplier gateway never resends an ambiguous mutation
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("status,body", [
+    (503, {"oscu_code": "894", "title": "OSCU Signing Error"}),
+    (503, {}), (500, {}), (502, {}), (504, {}),
+    (409, {"status": "ERROR", "code": "IDEMPOTENT_OUTCOME_UNRESOLVED", "message": "m"}),
+    (425, {"status": "ERROR", "code": "IDEMPOTENT_REQUEST_IN_FLIGHT", "message": "m"}),
+])
+@pytest.mark.parametrize("key", [None, "gw-key"])
+async def test_gateway_sends_an_ambiguous_mutation_once(async_mode, status, body, key, monkeypatch):
+    import kra_etims.exceptions as exc_mod
+    monkeypatch.setattr("kra_etims.gateway._backoff", lambda attempt: 0)
+    sent = []
+    answer = respond(status, body)
+
+    def handler(request):
+        sent.append(request)
+        return answer(request)
+    client, raw = make_client(async_mode, handler)
+    try:
+        with pytest.raises(exc_mod.KRAeTIMSError):
+            await invoke(client.gateway, "_execute", "POST", "/v2/gateway/supplier-onboarding/single",
+                         json={"a": 1}, idempotency_key=key)
+    finally:
+        await close(raw, async_mode)
+    assert len(sent) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_gateway_still_retries_an_oscu_503_on_a_read(async_mode, monkeypatch):
+    import kra_etims.exceptions as exc_mod
+    monkeypatch.setattr("kra_etims.gateway._backoff", lambda attempt: 0)
+    sent = []
+    answer = respond(503, {"oscu_code": "894"})
+
+    def handler(request):
+        sent.append(request)
+        return answer(request)
+    client, raw = make_client(async_mode, handler)
+    try:
+        with pytest.raises(exc_mod.OSCUUnavailableError):
+            await invoke(client.gateway, "_execute", "GET", "/v2/gateway/supplier-onboarding/5/status")
+    finally:
+        await close(raw, async_mode)
+    assert len(sent) == 4
