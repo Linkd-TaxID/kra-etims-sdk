@@ -1,25 +1,22 @@
 #!/usr/bin/env node
-// Generate the docs.taxid.co.ke result-code reference from docs/errors.js.
+// Build docs.taxid.co.ke into an output directory (default build/pages-site).
 //
-// Writes:
-//   docs/index.html      code list, pre-rendered so it works without JavaScript
-//   docs/<code>.html     one page per resultCd
-//   docs/errors.json     machine-readable copy of docs/errors.js
-//   docs/sitemap.xml     index, FAQ, errors.json and every code page
+//   node site/build.js [output]
 //
-// docs/faq.html is hand-maintained but uses the same shell (nav, footer, styles).
-// Styles live in docs/assets/taxid-docs.css and match taxid.co.ke.
+// Inputs: site/errors.json (the codes), site/faq.html (FAQ questions and their
+// JSON-LD) and site/static/ (copied as is). Nothing generated is committed.
 
 const fs   = require('fs');
 const path = require('path');
 
-const { ERRORS } = require('../docs/errors.js');
+const ERRORS = require('./errors.json');
 
 const BASE_URL     = 'https://docs.taxid.co.ke';
 const SITE_URL     = 'https://taxid.co.ke';
 const REPO_URL     = 'https://github.com/Linkd-TaxID/kra-etims-sdk';
 const ISSUE_URL    = `${REPO_URL}/issues/new`;
-const DOCS_DIR     = path.join(__dirname, '..', 'docs');
+const STATIC_DIR   = path.join(__dirname, 'static');
+const OUT_DIR      = path.resolve(process.argv[2] || path.join(__dirname, '..', 'build', 'pages-site'));
 const DEFAULT_DATE = '2026-10-07';
 
 // Index and FAQ dates for the sitemap. Bump when that page's content changes.
@@ -371,11 +368,11 @@ ${footer()}
 
 // ─────────────────────────────────────────
 // FAQ: keep the hand-written questions, wrap them in the shared shell.
-// Edit the questions in docs/faq.html between the FAQ markers.
+// Edit the questions in site/faq.html between the FAQ markers.
 // ─────────────────────────────────────────
 
 function buildFaq() {
-  const file = path.join(DOCS_DIR, 'faq.html');
+  const file = path.join(__dirname, 'faq.html');
   const src = fs.readFileSync(file, 'utf8');
   const ld = src.match(/<script type="application\/ld\+json">[\s\S]*?<\/script>/);
   const body = src.match(/<!-- FAQ:START -->([\s\S]*?)<!-- FAQ:END -->/);
@@ -446,16 +443,34 @@ ${[
 
 function write(name, content) {
   const out = content.split('\n').map(line => line.trimEnd()).join('\n');
-  fs.writeFileSync(path.join(DOCS_DIR, name), out, 'utf8');
-  console.log(`  wrote ${name}`);
+  fs.writeFileSync(path.join(OUT_DIR, name), out, 'utf8');
 }
 
-fs.writeFileSync(path.join(DOCS_DIR, 'errors.json'), JSON.stringify(ERRORS, null, 2) + '\n', 'utf8');
-console.log('  wrote errors.json');
+function copyStatic(from, to) {
+  fs.mkdirSync(to, { recursive: true });
+  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    const source = path.join(from, entry.name);
+    const target = path.join(to, entry.name);
+    if (entry.isDirectory()) copyStatic(source, target);
+    else if (entry.isFile()) fs.copyFileSync(source, target);
+    else throw new Error(`Not a regular file: ${source}`);
+  }
+}
+
+// A page for a removed code must not survive an earlier build.
+if (fs.existsSync(OUT_DIR) && fs.readdirSync(OUT_DIR).length) {
+  throw new Error(`Output directory is not empty: ${OUT_DIR}`);
+}
+copyStatic(STATIC_DIR, OUT_DIR);
+
+const json = JSON.stringify(ERRORS, null, 2);
+fs.writeFileSync(path.join(OUT_DIR, 'errors.json'), json + '\n', 'utf8');
+fs.writeFileSync(path.join(OUT_DIR, 'errors.js'),
+  `const ERRORS = ${json};\n\nif (typeof module !== "undefined") module.exports = { ERRORS };\n`, 'utf8');
 
 write('index.html', buildIndex());
 for (const e of ERRORS) write(`${e.code}.html`, buildPage(e));
 write('faq.html', buildFaq());
 write('sitemap.xml', buildSitemap());
 
-console.log(`\nDone — index, ${ERRORS.length} code pages, FAQ and sitemap written to docs/`);
+console.log(`Built ${ERRORS.length} code pages in ${OUT_DIR}`);

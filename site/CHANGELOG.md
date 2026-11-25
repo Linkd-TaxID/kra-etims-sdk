@@ -1,4 +1,6 @@
-# Sandbox contract guidance correction — 2026-10-13
+# Result-code reference changelog
+
+## 2026-10-13: sandbox contract guidance
 
 This correction uses published OSCU v2.0 §4.18 / VSCU v2.0 §4.14 contracts and
 local SDK boundary reproduction; no new real-device acceptance is claimed.
@@ -21,8 +23,6 @@ replay. Historical entries below describe earlier guidance, not current policy.
 
 Earlier entries record changes made at the time; current guidance is in the
 [reference](https://docs.taxid.co.ke/) and SDK README.
-
-# KRA eTIMS Error Code Reference — Changelog
 
 ## 2026-09-23
 

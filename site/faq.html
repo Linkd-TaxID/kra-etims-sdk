@@ -1,30 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KRA eTIMS FAQ — Common Integration Questions Answered</title>
-  <meta name="description" content="TaxID API outcomes, authentication, original-reference lookup and KRA control-unit response semantics.">
-  <meta name="keywords" content="KRA eTIMS FAQ, eTIMS integration questions, OSCU VSCU setup, KRA resultCd 901 fix, eTIMS 921 error, Kenya eTIMS developer guide">
-  <meta name="robots" content="index, follow, max-snippet:-1">
-  <link rel="canonical" href="https://docs.taxid.co.ke/faq.html">
-  <link rel="icon" type="image/x-icon" href="https://taxid.co.ke/favicon.ico">
-  <link rel="icon" type="image/png" sizes="32x32" href="https://taxid.co.ke/favicon-32x32.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="https://taxid.co.ke/apple-touch-icon.png">
-  <meta property="og:title" content="KRA eTIMS FAQ — Common Integration Questions Answered">
-  <meta property="og:description" content="Developer FAQ for KRA eTIMS: resultCd errors, VSCU vs OSCU differences, cmcKey, tax bands, offline queueing, and more.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://docs.taxid.co.ke/faq.html">
-  <meta property="og:site_name" content="TaxID">
-  <meta property="og:image" content="https://taxid.co.ke/og-image.png">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="KRA eTIMS FAQ — Common Integration Questions Answered">
-  <meta name="twitter:description" content="Developer FAQ for KRA eTIMS: resultCd errors, VSCU vs OSCU differences, cmcKey, tax bands, offline queueing, and more.">
-  <meta name="twitter:image" content="https://taxid.co.ke/og-image.png">
-  <link rel="preload" href="assets/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="assets/fonts/jetbrains-mono-var.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/taxid-docs.css">
-  <script type="application/ld+json">{
+<script type="application/ld+json">{
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
@@ -102,32 +76,7 @@
     }
   ]
 }</script>
-</head>
-<body>
-<nav id="nav">
-  <div class="nav-row">
-    <a href="https://taxid.co.ke/" class="nav-logo" aria-label="TaxID home">Tax<span>ID</span><span class="docs-tag">docs</span></a>
-    <button class="nav-burger" id="nav-burger" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">
-      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
-    <div class="nav-links" id="nav-links">
-      <a href="https://taxid.co.ke/#how-it-works" class="nav-link">How it works</a>
-      <a href="https://taxid.co.ke/blog/" class="nav-link">Blog</a>
-      <a href="./" class="nav-link">Error codes</a>
-      <a href="faq.html" class="nav-link is-active" aria-current="page">FAQ</a>
-      <a href="https://taxid.co.ke/#waitlist" class="btn btn-primary" style="margin-left: 8px; font-size: var(--fs-sm); padding: 8px 18px;">Request developer access</a>
-    </div>
-  </div>
-</nav>
 
-<main id="main">
-  <section class="d-head wrap d-page">
-    <a class="back-link" href="./">&larr; All error codes</a>
-    <span class="eyebrow">Developer FAQ</span>
-    <h1 class="d-title">KRA eTIMS integration FAQ</h1>
-    <p class="lead">TaxID integration contracts and control-unit evidence.</p>
-
-    <div class="faq-list">
 <!-- FAQ:START -->
     <div class="faq-item"><h2>What does TaxID provide?</h2><p>TaxID connects fiscal operations to partners’ existing invoicing, accounting, POS and ERP software. Its API retains source references, branch-scoped results and evidence for safe recovery. Current invited access is simulated; production access requires separate KRA and operational acceptance.</p></div>
     <div class="faq-item"><h2>How do application requests authenticate?</h2><p>Use the assigned branch API key on your server with Authorization: Bearer. Configure the exact TaxID API origin. Workspace invitations authenticate browser access and are separate from application keys. Never embed keys in browser code.</p></div>
@@ -139,36 +88,3 @@
     <div class="faq-item"><h2>How should an operator handle initialization code 902?</h2><p>902 is the documented installed-device condition. For OSCU, verify matching identity and an issued or retained communication key; for VSCU, verify retained device state and the application checkpoint. Missing state or credentials require operator/KRA recovery. The code alone proves neither recovered credentials nor transaction readiness.</p></div>
     <div class="faq-item"><h2>Where do tax rates and unit codes come from?</h2><p>Use the endpoint’s current reference data and merchant tax classification. Packaging-unit and quantity-unit code tables differ. Historical specification samples and SDK defaults are not current tax advice.</p></div>
 <!-- FAQ:END -->
-    </div>
-
-    <p class="d-sub source-note">Data sourced from KRA OSCU Specification v2.0 §4.18 and retained sandbox observations and separately labelled reports. <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new">Add a missing question</a>.</p>
-
-    <aside class="d-cta">
-      <div>
-        <h3>Integrating eTIMS?</h3>
-        <p>TaxID handles device setup, signing and recovery behind one API.</p>
-      </div>
-      <a href="https://taxid.co.ke/#waitlist" class="btn btn-primary">Request developer access</a>
-    </aside>
-  </section>
-</main>
-
-<footer>
-  <div class="wrap">
-    <div class="footer-row">
-      <a href="https://taxid.co.ke/" class="nav-logo">Tax<span>ID</span></a>
-      <div class="footer-links">
-        <a href="https://taxid.co.ke/blog/">Blog</a>
-        <a href="./">Error codes</a>
-        <a href="faq.html">FAQ</a>
-        <a href="https://github.com/Linkd-TaxID/kra-etims-sdk">Python SDK</a>
-        <a href="https://github.com/Linkd-TaxID/kra-etims-sdk/issues/new">Add a missing code</a>
-        <a href="mailto:support@taxid.co.ke">Contact</a>
-      </div>
-      <p class="footer-copy">© 2026 TaxID. Built for Kenya.</p>
-    </div>
-  </div>
-</footer>
-<script src="assets/nav.js" defer></script>
-</body>
-</html>

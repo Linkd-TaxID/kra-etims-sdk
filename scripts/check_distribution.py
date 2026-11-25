@@ -171,27 +171,15 @@ def check_packages(directory: Path, gitleaks: Path | None = None) -> None:
 
 
 def docs_inventory() -> set[str]:
-    entries = json.loads((ROOT / "docs/errors.json").read_text())
+    entries = json.loads((ROOT / "site/errors.json").read_text())
     codes = {str(entry["code"]) for entry in entries}
     if any(not code.isalnum() for code in codes):
         raise ValueError("Result codes must be alphanumeric filenames")
     return DOC_FILES | {f"{code}.html" for code in codes}
 
 
-def check_docs(directory: Path, *, stage: bool = False) -> None:
+def check_docs(directory: Path) -> None:
     expected = docs_inventory()
-    if stage:
-        if directory.resolve() == (ROOT / "docs").resolve():
-            raise ValueError("Stage docs into a separate output directory")
-        for name in sorted(expected):
-            source = ROOT / "docs" / name
-            if source.is_symlink() or not source.is_file():
-                raise ValueError(f"Missing regular docs source: {name}")
-            destination = directory / name
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            if destination.is_symlink():
-                raise ValueError(f"Docs destination symlink: {name}")
-            shutil.copyfile(source, destination)
     actual = set()
     for path in directory.rglob("*"):
         if path.is_symlink():
@@ -207,15 +195,12 @@ def main() -> None:
     parser.add_argument("--dist-dir", type=Path)
     parser.add_argument("--gitleaks", type=Path, help="Gitleaks executable for archive payload scanning")
     parser.add_argument("--docs-dir", type=Path)
-    parser.add_argument("--stage-docs", type=Path)
     args = parser.parse_args()
-    if not any((args.dist_dir, args.docs_dir, args.stage_docs)):
-        parser.error("select --dist-dir, --docs-dir or --stage-docs")
+    if not any((args.dist_dir, args.docs_dir)):
+        parser.error("select --dist-dir or --docs-dir")
     try:
         if args.dist_dir:
             check_packages(args.dist_dir, args.gitleaks)
-        if args.stage_docs:
-            check_docs(args.stage_docs, stage=True)
         if args.docs_dir:
             check_docs(args.docs_dir)
     except (ValueError, OSError, KeyError, tarfile.TarError, zipfile.BadZipFile, subprocess.TimeoutExpired) as exc:
