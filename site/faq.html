@@ -36,6 +36,14 @@
     },
     {
       "@type": "Question",
+      "name": "Does a failed result code mean the sale has no receipt?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Not always. For a VSCU sale, TaxID records FAILED only for 834 and 836, which the JAR returns before contacting KRA, and for 910, 911 and 912, which are documented request refusals. KRA has not confirmed that 910, 911 and 912 prove no receipt was recorded. Any other non-success code, including 999, holds the sale as OUTCOME_UNKNOWN until an operator resolves it. Do not resubmit a held sale."
+      }
+    },
+    {
+      "@type": "Question",
       "name": "How should an application handle a timeout?",
       "acceptedAnswer": {
         "@type": "Answer",
@@ -82,6 +90,7 @@
     <div class="faq-item"><h2>How do application requests authenticate?</h2><p>Use the assigned branch API key on your server with Authorization: Bearer. Configure the exact TaxID API origin. Workspace invitations authenticate browser access and are separate from application keys. Never embed keys in browser code.</p></div>
     <div class="faq-item"><h2>Is resultCd the TaxID receipt status?</h2><p>No. resultCd belongs to the underlying KRA endpoint. TaxID returns HTTP errors and transaction statuses such as SIGNED and OUTCOME_UNKNOWN. Inspect the contract for the API you called; HTTP 200 alone does not establish signing.</p></div>
     <div class="faq-item"><h2>Does SIGNED mean KRA accepted the invoice centrally?</h2><p>SIGNED means TaxID persisted a control-unit receipt. It does not independently establish central KRA acceptance. SIMULATED responses issue no fiscal invoice and make no KRA submission.</p></div>
+    <div class="faq-item"><h2>Does a failed result code mean the sale has no receipt?</h2><p>Not always. For a VSCU sale, TaxID records FAILED only for 834 and 836, which the JAR returns before contacting KRA, and for 910, 911 and 912, which are documented request refusals. KRA has not confirmed that 910, 911 and 912 prove no receipt was recorded. Any other non-success code, including 999, holds the sale as OUTCOME_UNKNOWN until an operator resolves it. Do not resubmit a held sale.</p></div>
     <div class="faq-item"><h2>How should an application handle a timeout?</h2><p>Keep the original clientReference, idempotency key and exact submitted body. Retrieve GET /v2/etims/sales/search?clientReference= with the URL-encoded reference. OUTCOME_UNKNOWN or RECONCILIATION_REQUIRED requires operator investigation. Do not generate a replacement reference or blindly resubmit.</p></div>
     <div class="faq-item"><h2>Does a duplicate result recover the original receipt?</h2><p>No. A duplicate code does not provide the original signature or prove that identical contents were signed. Investigate the original transaction and retained receipt evidence. Counters alone are insufficient.</p></div>
     <div class="faq-item"><h2>Does VSCU signing require a second saveInvoice call?</h2><p>The implemented TaxID VSCU signing flow calls /trnsSales/saveSales. The cited VSCU v2.0 specification documents that sale endpoint. The wording of codes 921 and 922 does not establish an additional saveInvoice API contract.</p></div>
