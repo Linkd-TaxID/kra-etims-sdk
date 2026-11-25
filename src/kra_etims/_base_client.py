@@ -29,12 +29,15 @@ from .exceptions import (
     KRADuplicateInvoiceError,
     CreditNoteConflictError,
     CreditNoteExceedsOriginalError,
+    CreditNoteQuantityExceedsOriginalError,
+    CreditNoteOutcomeUnresolvedError,
     IdempotentOutcomeUnresolvedError,
     KRAConflictError,
     KRAConnectivityTimeoutError,
     KRAeTIMSAuthError,
     KRAAuthorizationError,
     KRAeTIMSError,
+    MutationServiceUnavailableError,
     OSCUUnavailableError,
     RateLimitError,
     TIaaSAmbiguousStateError,
@@ -85,6 +88,14 @@ _RESULT_MODELS: tuple = (
     (re.compile(r"/v2/etims/stock/master$"), StockMasterResult),
     (re.compile(r"/v2/etims/stock/master/operations/[^/]+$"), StockMasterResult),
 )
+
+_CREDIT_NOTE_PATH = re.compile(r"/v2/etims/sale/[^/]+/credit-note$")
+
+
+def _unresolved_error_type(path: str) -> type[IdempotentOutcomeUnresolvedError]:
+    """Credit notes get the subclass that is also a CreditNoteConflictError."""
+    return CreditNoteOutcomeUnresolvedError if _CREDIT_NOTE_PATH.search(path) else IdempotentOutcomeUnresolvedError
+
 
 # An UPPER_SNAKE machine code, as opposed to a reason phrase such as "Conflict".
 _MACHINE_CODE = re.compile(r"^[A-Z][A-Z0-9_]+$")
@@ -225,6 +236,21 @@ class _BaseKRAeTIMSClient(ABC):
         return _encode_json_body(json)
 
     @staticmethod
+    def _unsupported_update_stock() -> None:
+        import warnings
+        warnings.warn(
+            "update_stock() targets the legacy /v2/etims/stock route, which TaxID refuses "
+            "(HTTP 501), and will be removed. Use submit_stock_adjustment(..., idempotency_key=...).",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        raise UnsupportedOperationError(
+            "update_stock() is not supported: TaxID refuses the legacy /v2/etims/stock route "
+            "because it has no durable identity. Use submit_stock_adjustment(lines, "
+            "idempotency_key=...) with a stable key."
+        )
+
+    @staticmethod
     def _unsupported_compliance() -> None:
         import warnings
         warnings.warn(
@@ -279,7 +305,7 @@ class _BaseKRAeTIMSClient(ABC):
         return body, str(message), str(code) if code is not None else None
 
     @staticmethod
-    def _raise_for_503(resp: httpx.Response) -> None:
+    def _raise_for_503(resp: httpx.Response, mutating: bool = False) -> None:
         """
         Discriminate a TaxID 503. Several unrelated conditions share the status:
 
@@ -292,7 +318,9 @@ class _BaseKRAeTIMSClient(ABC):
         - anything else (transient VSCU ``vscu_code``, worker role not fiscal,
           held stock dispatch, token outage, a proxy, an empty body):
           :class:`TIaaSUnavailableError`. These are not the 24-hour ceiling, so
-          they no longer default to it.
+          they no longer default to it. On a mutation the original may still
+          have been applied, so it is :class:`MutationServiceUnavailableError`
+          (also a :class:`TIaaSAmbiguousStateError`).
         """
         body, message, code = _BaseKRAeTIMSClient._error_fields(resp)
         if "oscu_code" in body:
@@ -309,7 +337,12 @@ class _BaseKRAeTIMSClient(ABC):
             error = WorkerStoppingError(f"TaxID fiscal worker is stopping (HTTP 503): {message}", code=code)
         else:
             detail = f" [{code}]" if code else ""
-            error = TIaaSUnavailableError(f"TaxID service unavailable (HTTP 503){detail}: {message}")
+            text = f"TaxID service unavailable (HTTP 503){detail}: {message}"
+            if mutating:
+                error = MutationServiceUnavailableError(
+                    f"{text} The original may have been applied; inspect it before any replay.")
+            else:
+                error = TIaaSUnavailableError(text)
             if body.get("vscu_code") is not None:
                 error.vscu_code = str(body["vscu_code"])
         error.code = code
@@ -390,7 +423,7 @@ class _BaseKRAeTIMSClient(ABC):
         # transient OSCU failure — see _raise_for_503's docstring.
         if resp.status_code == 503:
             try:
-                self._raise_for_503(resp)
+                self._raise_for_503(resp, method.upper() in _MUTATING_METHODS)
             except KRAeTIMSError as error:
                 error.http_status = resp.status_code
                 error.idempotency_key = idempotency_key
@@ -411,7 +444,7 @@ class _BaseKRAeTIMSClient(ABC):
                     code = body["error"]
                 message = f"Conflict (HTTP 409){f' [{code}]' if code else ''}: {msg}"
                 if code in _UNRESOLVED_IDEMPOTENCY_CODES:
-                    raise IdempotentOutcomeUnresolvedError(
+                    raise _unresolved_error_type(exc.request.url.path)(
                         f"{message} Retain the original idempotency key and look up the original "
                         "operation; do not resubmit under a new key.",
                         idempotency_key=idempotency_key, code=code,
@@ -429,7 +462,7 @@ class _BaseKRAeTIMSClient(ABC):
                 # still running. Its outcome is not known yet, and the fix is the
                 # same as for any ambiguous mutation — retry with the same key.
                 _, msg, code = self._error_fields(exc.response)
-                raise IdempotentOutcomeUnresolvedError(
+                raise _unresolved_error_type(exc.request.url.path)(
                     f"Request with this idempotency key is still in flight (HTTP 425): {msg} "
                     "Retain the original key and inspect its status before considering replay.",
                     idempotency_key=idempotency_key, code=code,
@@ -445,6 +478,12 @@ class _BaseKRAeTIMSClient(ABC):
                         msg,
                         remaining=body.get("remaining"),
                         already_reversed=body.get("alreadyReversed"),
+                    ) from exc
+                if code == "CREDIT_NOTE_QUANTITY_EXCEEDS_ORIGINAL":
+                    raise CreditNoteQuantityExceedsOriginalError(
+                        msg,
+                        original_item_seq=body.get("originalItemSeq"),
+                        remaining_quantity=body.get("remainingQuantity"),
                     ) from exc
                 # Other 422s fall through to the generic handler below.
             if sc == 401:

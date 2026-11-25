@@ -133,7 +133,9 @@ from .exceptions import (
     WorkerDeferredError,
     WorkerStoppingError,
     TIaaSAmbiguousStateError,
+    MutationServiceUnavailableError,
     IdempotentOutcomeUnresolvedError,
+    CreditNoteOutcomeUnresolvedError,
     UnsupportedOperationError,
     RateLimitError,
     KRAValidationError,
@@ -147,6 +149,7 @@ from .exceptions import (
     KRAConflictError,
     CreditNoteConflictError,
     CreditNoteExceedsOriginalError,
+    CreditNoteQuantityExceedsOriginalError,
     ZReportAlreadyIssuedError,
 )
 
@@ -204,7 +207,9 @@ __all__ = [
     "WorkerDeferredError",
     "WorkerStoppingError",
     "TIaaSAmbiguousStateError",
+    "MutationServiceUnavailableError",
     "IdempotentOutcomeUnresolvedError",
+    "CreditNoteOutcomeUnresolvedError",
     "UnsupportedOperationError",
     "RateLimitError",
     "KRAValidationError",
@@ -218,6 +223,7 @@ __all__ = [
     "KRAConflictError",
     "CreditNoteConflictError",
     "CreditNoteExceedsOriginalError",
+    "CreditNoteQuantityExceedsOriginalError",
     "ZReportAlreadyIssuedError",
     # GavaConnect
     "GavaConnectClient",

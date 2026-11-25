@@ -188,6 +188,25 @@ class TIaaSAmbiguousStateError(KRAeTIMSError):
         self.idempotency_key = idempotency_key
 
 
+class MutationServiceUnavailableError(TIaaSUnavailableError, TIaaSAmbiguousStateError):
+    """
+    An unrecognised HTTP 503 on a mutating request (no ``WORKER_STOPPING``,
+    ``KRA_CONNECTIVITY_TIMEOUT`` or ``oscu_code``).
+
+    TaxID cannot always show such a 503 was raised before dispatch (a transient
+    control-unit code, a proxy, an empty body), so the original may have been
+    applied. It is a :class:`TIaaSAmbiguousStateError`: keep ``idempotency_key``
+    and inspect the original before any replay. It stays a
+    :class:`TIaaSUnavailableError` so existing handlers still match, but it is
+    not retryable: handle it before any ``except TIaaSUnavailableError`` that
+    retries. Reads keep raising a plain :class:`TIaaSUnavailableError`.
+    """
+    retryable: bool = False
+
+    def __init__(self, message: str, idempotency_key: Optional[str] = None):
+        TIaaSAmbiguousStateError.__init__(self, message, idempotency_key=idempotency_key)
+
+
 class UnsupportedOperationError(KRAeTIMSError, NotImplementedError):
     """The SDK method targets a route the TaxID backend does not serve.
 
@@ -342,6 +361,23 @@ class CreditNoteConflictError(KRAConflictError):
         self.existing_cu_invoice_no = existing_cu_invoice_no
 
 
+class CreditNoteOutcomeUnresolvedError(IdempotentOutcomeUnresolvedError, CreditNoteConflictError):
+    """
+    :class:`IdempotentOutcomeUnresolvedError` raised by ``issue_credit_note``:
+    TaxID holds an earlier claim for this credit-note idempotency key but cannot
+    return its result. The original correction may have been applied; keep
+    ``idempotency_key``, inspect the original and never resubmit under a new key.
+
+    Also a :class:`CreditNoteConflictError` (and so a :class:`KRAConflictError`),
+    so credit-note 409 handlers written for SDK 0.8.1 still match.
+    """
+    def __init__(self, message: str, idempotency_key: Optional[str] = None, code: Optional[str] = None):
+        IdempotentOutcomeUnresolvedError.__init__(self, message, idempotency_key=idempotency_key, code=code)
+        self.original_purchase_id = None
+        self.existing_credit_note_id = None
+        self.existing_cu_invoice_no = None
+
+
 class CreditNoteExceedsOriginalError(KRAeTIMSError):
     """
     Issuing this credit note would exceed the original receipt's reversible
@@ -374,9 +410,28 @@ class CreditNoteExceedsOriginalError(KRAeTIMSError):
         self.original_purchase_id = original_purchase_id
 
 
-class ZReportAlreadyIssuedError(KRAeTIMSError):
+class CreditNoteQuantityExceedsOriginalError(CreditNoteExceedsOriginalError):
     """
-    The Z-report for the requested date has already been issued (HTTP 409).
+    A returned line exceeds the quantity still reversible on the original (HTTP
+    422, code ``CREDIT_NOTE_QUANTITY_EXCEEDS_ORIGINAL``). Also a
+    :class:`CreditNoteExceedsOriginalError`; its amount balances are ``None``.
+
+    ``original_item_seq`` is the original line and ``remaining_quantity`` the
+    quantity still reversible on it.
+    """
+    def __init__(self, message: str, original_item_seq: Optional[int] = None,
+                 remaining_quantity: Any = None):
+        super().__init__(message)
+        self.original_item_seq = original_item_seq
+        self.remaining_quantity: Optional[Decimal] = (
+            None if remaining_quantity is None else Decimal(str(remaining_quantity)))
+
+
+class ZReportAlreadyIssuedError(KRAConflictError):
+    """
+    The Z-report for the requested date has already been issued (HTTP 409,
+    ``code`` ``Z_REPORT_ALREADY_ISSUED``). Also a :class:`KRAConflictError`, so
+    generic 409 handlers match it.
 
     This records completion of the local daily aggregate. No remote device
     fiscal-close request or central KRA acknowledgement is implied. Retrieve
@@ -393,8 +448,9 @@ class ZReportAlreadyIssuedError(KRAeTIMSError):
             "for totals; no remote fiscal-close acknowledgement is implied."
         ),
         report_date: Optional[str] = None,
+        code: Optional[str] = "Z_REPORT_ALREADY_ISSUED",
     ):
-        super().__init__(message)
+        super().__init__(message, code=code)
         self.report_date = report_date
 
 
