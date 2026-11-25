@@ -14,6 +14,9 @@ requires merchant authorization, real KRA evidence and applicable approval.
   SIMULATED output makes no KRA submission.
 - OUTCOME_UNKNOWN and RECONCILIATION_REQUIRED require investigation of the
   original transaction, not automatic resubmission or a replacement reference.
+- For a VSCU sale, TaxID records FAILED only for 834, 836, 910, 911 and 912. Any other
+  non-success code holds the sale as OUTCOME_UNKNOWN until an operator resolves it.
+  KRA has not confirmed that 910, 911 and 912 prove no receipt was recorded.
 - Raw resultCd values differ from TaxID HTTP errors and transaction statuses.
   Duplicate codes do not recover receipt signatures or prove identical contents.
 - VSCU signing uses /trnsSales/saveSales. Do not invent a second saveInvoice call.
@@ -27,7 +30,7 @@ requires merchant authorization, real KRA evidence and applicable approval.
 ## Sources
 
 Official: cited KRA v2.0 response-code tables.
-Observed: retained, version-specific TaxID sandbox evidence.
+Observed: retained, version-specific evidence from TaxID sandbox runs or the VSDC JAR.
 Reported: external reports requiring independent verification.
 
 Reference: https://docs.taxid.co.ke/

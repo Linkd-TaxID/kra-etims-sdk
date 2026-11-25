@@ -160,7 +160,8 @@ Check `receipt["status"]`. HTTP success does not mean the sale is signed.
 | `PENDING_SYNC` | Queued before reaching the control unit. TaxID signs it later. | Poll `client.get_sale_status(receipt["purchaseId"])` with backoff (below) until the status changes |
 | `RECONCILIATION_REQUIRED` | Automatic processing stopped. Sometimes TaxID already holds the signed receipt but has not yet stored its independent evidence copy; it retries that write, and the same `purchaseId` turns `SIGNED` once the write succeeds. Otherwise an operator reconciles it. | **Do not resubmit.** Keep polling the same `purchaseId` at a slow interval |
 | `OUTCOME_UNKNOWN` | It may or may not have been signed | **Do not resubmit.** TaxID's operators reconcile it |
-| `NOT_SENT`, `FAILED` | Not signed: reconciliation proved it was never applied, or the control unit rejected it | Investigate the cause before any new submission |
+| `NOT_SENT` | Reconciliation proved it was never applied | Investigate the cause before any new submission |
+| `FAILED` | Refused before dispatch, or the control unit answered with a code TaxID treats as a refusal. KRA has not confirmed that every such code proves no receipt exists | Investigate the cause before any new submission |
 | anything else | A status this SDK version does not know | Treat as not signed and investigate; never as success |
 
 Polling is the supported way to follow a sale. Webhooks are optional: whether
