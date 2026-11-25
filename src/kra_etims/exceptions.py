@@ -207,6 +207,21 @@ class MutationServiceUnavailableError(TIaaSUnavailableError, TIaaSAmbiguousState
         TIaaSAmbiguousStateError.__init__(self, message, idempotency_key=idempotency_key)
 
 
+class MutationOSCUUnavailableError(OSCUUnavailableError, TIaaSAmbiguousStateError):
+    """
+    A transient OSCU 503 (``oscu_code``) on a mutating request.
+
+    The control unit may have applied the original before it failed, so this is
+    also a :class:`TIaaSAmbiguousStateError`: keep ``idempotency_key`` and inspect
+    the original before any replay. Reads raise a plain
+    :class:`OSCUUnavailableError`.
+    """
+    def __init__(self, message: str, oscu_code: Optional[str] = None,
+                 idempotency_key: Optional[str] = None):
+        TIaaSAmbiguousStateError.__init__(self, message, idempotency_key=idempotency_key)
+        self.oscu_code = oscu_code
+
+
 class UnsupportedOperationError(KRAeTIMSError, NotImplementedError):
     """The SDK method targets a route the TaxID backend does not serve.
 

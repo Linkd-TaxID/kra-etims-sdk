@@ -4,10 +4,10 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
-## [0.8.2] - unreleased
+## [0.8.2] - 2026-11-25
 
-**Release order:** deploy the TaxID backend change (taxID#53) first, then publish
-0.8.2. This release reads the backend's worker codes (`WORKER_DEFERRED`,
+**Release order:** the TaxID backend change (taxID#53) was deployed before this
+release. This release reads the backend's worker codes (`WORKER_DEFERRED`,
 `WORKER_STOPPING`) and 409 `code` fields that #53 adds or completes.
 
 ### Breaking changes
@@ -49,6 +49,12 @@ All notable changes to kra-etims-sdk are documented here.
   processing (`WORKER_STOPPING`, `WORKER_DEFERRED`, HTTP 429, connection
   failure), so the next flush retries it; it was marked `failed` and never
   retried. Rejected rows stay `failed`.
+- A 503 with `oscu_code` on a mutation raises `MutationOSCUUnavailableError`, an
+  `OSCUUnavailableError` that is also a `TIaaSAmbiguousStateError`, with the
+  idempotency key. **Migration:** as for `MutationServiceUnavailableError`, put an
+  ambiguous-state handler before one that retries.
+- `etims queue flush` marks an accepted row `outcome_unknown` when the status lookup
+  returns 404; it was polled forever.
 - A 422 `CREDIT_NOTE_QUANTITY_EXCEEDS_ORIGINAL` raises
   `CreditNoteQuantityExceedsOriginalError` (a `CreditNoteExceedsOriginalError` with
   `original_item_seq` and `remaining_quantity`); it raised a plain `KRAeTIMSError`.
