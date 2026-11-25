@@ -73,19 +73,14 @@ def test_sdist_rejects_missing_fixture(distributions, tmp_path):
         policy.check_packages(tmp_path)
 
 
-def test_docs_stage_excludes_source_and_rejects_extra_file(tmp_path, monkeypatch):
-    source = tmp_path / "source"
-    docs = source / "docs"
-    for name in policy.DOC_FILES | {"000.html"}:
-        path = docs / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("public asset")
-    (docs / "errors.json").write_text('[{"code": "000"}]')
-    (docs / "CONTRIBUTING.md").write_text("source documentation")
-    monkeypatch.setattr(policy, "ROOT", source)
+def test_built_site_is_exactly_the_public_inventory(tmp_path):
+    # The unpacked sdist has no site; the checkout's CI runners have node.
+    if not (ROOT / "site").is_dir() or shutil.which("node") is None:
+        pytest.skip("site sources or node unavailable")
     output = tmp_path / "site"
-    policy.check_docs(output, stage=True)
-    assert not (output / "CONTRIBUTING.md").exists()
+    subprocess.run(["node", str(ROOT / "site/build.js"), str(output)], check=True, capture_output=True)
+    policy.check_docs(output)
+    assert not (output / "CHANGELOG.md").exists()
     (output / "phase4-verification.md").write_text("internal notes")
     with pytest.raises(ValueError, match="unexpected=.*phase4-verification"):
         policy.check_docs(output)

@@ -34,9 +34,8 @@ jobs:
         run: python3 scripts/check_repository.py --ref "$GITHUB_SHA"
       - name: Generate public reference
         run: |
-          node scripts/generate-pages.js
-          git diff --exit-code -- docs/
-          python3 scripts/check_distribution.py --stage-docs build/pages-site
+          node site/build.js build/pages-site
+          python3 scripts/check_distribution.py --docs-dir build/pages-site
           python3 scripts/check_repository.py --artifact-dir build/pages-site
       - name: Configure Pages
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
