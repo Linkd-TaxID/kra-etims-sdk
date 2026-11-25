@@ -154,7 +154,7 @@ from .exceptions import (
     ZReportAlreadyIssuedError,
 )
 
-__version__ = "0.8.2"
+__version__ = "0.8.3"
 
 __all__ = [
     "ResponseMetadata", "SaleResult", "SaleStatusResult", "CreditNoteResult", "SaleOriginalResult",

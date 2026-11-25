@@ -26,6 +26,8 @@ class KRAeTIMSError(Exception):
     ``Retry-After`` header and ``retry_after_seconds`` its parsed value.
     """
     code: Optional[str] = None
+    #: True only for a 404 whose body is TaxID's own ``NOT_FOUND`` error, not an edge's.
+    taxid_not_found: bool = False
 
     @property
     def retry_after_seconds(self) -> Optional[float]:

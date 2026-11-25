@@ -507,11 +507,15 @@ class _BaseKRAeTIMSClient(ABC):
                     f"Authorization denied (HTTP 403){detail}: {message}"
                 ) from exc
             if sc == 404:
-                _, message, code = self._error_fields(exc.response)
+                body, message, code = self._error_fields(exc.response)
                 detail = f" [{code}]" if code else ""
-                raise KRAeTIMSError(
-                    f"Resource not found (HTTP 404){detail}: {message}"
-                ) from exc
+                not_found = KRAeTIMSError(f"Resource not found (HTTP 404){detail}: {message}")
+                # An edge or proxy can also answer 404. Only TaxID's own flat error
+                # body shows that TaxID looked the resource up and did not find it.
+                not_found.taxid_not_found = (
+                    body.get("status") == "ERROR" and body.get("code") == "NOT_FOUND"
+                    and isinstance(body.get("message"), str))
+                raise not_found from exc
             if sc == 429:
                 _, message, code = self._error_fields(exc.response)
                 suffix = f" [{code}]" if code else ""
