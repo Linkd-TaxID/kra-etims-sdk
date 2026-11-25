@@ -478,22 +478,76 @@ async def test_oscu_503_on_a_mutation_is_ambiguous_and_keeps_the_key(async_mode)
     assert not isinstance(read.value, exc_mod.TIaaSAmbiguousStateError)
 
 
-def test_accepted_row_the_server_does_not_know_is_not_polled_forever(tmp_path):
+# ---------------------------------------------------------------------------
+# An accepted row is settled by a 404 only when TaxID itself sent it
+# ---------------------------------------------------------------------------
+
+TAXID_SALE_404 = {"status": "ERROR", "code": "NOT_FOUND", "message": "No sale with invcNo=7 for this tenant."}
+EDGE_404S = [
+    {"status": "error", "code": 404, "message": "Application not found", "request_id": "r"},  # Railway edge
+    {"status": "ERROR", "code": 404, "message": "x"},
+    {"status": "ERROR", "code": "ROUTE_NOT_FOUND", "message": "x"},
+    {"status": "error", "code": "NOT_FOUND", "message": "x"},   # wrong status case
+    {"status": "ERROR", "code": "NOT_FOUND"},                   # no message
+    {"errorCode": "NOT_FOUND", "status": "ERROR", "message": "x"},
+    {"title": "Not Found", "status": 404, "detail": "No static resource"},
+    {},
+]
+
+
+def _accepted_queue(tmp_path):
     from kra_etims.cli.queue import Queue
-    from kra_etims.exceptions import KRAeTIMSError
     queue = Queue(tmp_path / "queue.db")
-    row_id = queue.enqueue({"x": 1})
-    queue._update(row_id, "accepted", None, purchase_id=7)
+    queue._update(queue.enqueue({"x": 1}), "accepted", None, purchase_id=7)
+    return queue
+
+
+async def _poll_status_404(async_mode, respond_with):
+    """Drive a real client's get_sale_status and hand its error to the queue."""
+    client, raw = make_client(async_mode, respond_with)
+    try:
+        with pytest.raises(KRAeTIMSError) as caught:
+            await invoke(client, "get_sale_status", 7)
+    finally:
+        await close(raw, async_mode)
 
     class Client:
         def get_sale_status(self, purchase_id):
-            error = KRAeTIMSError("No sale with invcNo=7")
-            error.http_status = 404
-            raise error
+            raise caught.value
+    return Client()
 
-    result = queue.poll_one(Client(), queue.accepted()[0])
-    assert result["status"] == "outcome_unknown"
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_accepted_row_taxid_does_not_know_is_settled(async_mode, tmp_path):
+    queue = _accepted_queue(tmp_path)
+    poller = await _poll_status_404(async_mode, respond(404, TAXID_SALE_404))
+    assert queue.poll_one(poller, queue.accepted()[0])["status"] == "outcome_unknown"
     assert queue.accepted() == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("body", EDGE_404S)
+async def test_accepted_row_survives_a_404_not_proven_to_be_taxids(async_mode, body, tmp_path):
+    queue = _accepted_queue(tmp_path)
+    poller = await _poll_status_404(async_mode, respond(404, body))
+    assert queue.poll_one(poller, queue.accepted()[0])["status"] == "accepted"
+    assert len(queue.accepted()) == 1
+
+
+def test_accepted_row_survives_an_html_404(tmp_path):
+    queue = _accepted_queue(tmp_path)
+    client = KRAeTIMSClient.__new__(KRAeTIMSClient)
+    response = httpx.Response(404, text="<html>NOT_FOUND</html>",
+                              request=httpx.Request("GET", "https://x.test/v2/etims/sales/7/status"))
+    with pytest.raises(KRAeTIMSError) as caught:
+        client._parse_response(response, "GET")
+
+    class Client:
+        def get_sale_status(self, purchase_id):
+            raise caught.value
+    assert queue.poll_one(Client(), queue.accepted()[0])["status"] == "accepted"
 
 
 # ---------------------------------------------------------------------------

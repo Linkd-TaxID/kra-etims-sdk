@@ -8,6 +8,9 @@ All notable changes to kra-etims-sdk are documented here.
 - The supplier gateway no longer resends an ambiguous mutation. An OSCU 503 under an
   idempotency key was retried up to three times although the original may have been
   applied; every `TIaaSAmbiguousStateError` now surfaces after one request.
+- `etims queue flush` settles an accepted sale on a 404 only when the body is TaxID's
+  own error (`status` `ERROR`, `code` `NOT_FOUND`). A 404 from a hosting edge or proxy,
+  or with any other body, leaves the sale accepted and polling continues.
 
 ## [0.8.2] - 2026-11-25
 
