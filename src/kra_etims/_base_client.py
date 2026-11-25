@@ -29,6 +29,7 @@ from .exceptions import (
     KRADuplicateInvoiceError,
     CreditNoteConflictError,
     CreditNoteExceedsOriginalError,
+    CreditNoteQuantityExceedsOriginalError,
     CreditNoteOutcomeUnresolvedError,
     IdempotentOutcomeUnresolvedError,
     KRAConflictError,
@@ -477,6 +478,12 @@ class _BaseKRAeTIMSClient(ABC):
                         msg,
                         remaining=body.get("remaining"),
                         already_reversed=body.get("alreadyReversed"),
+                    ) from exc
+                if code == "CREDIT_NOTE_QUANTITY_EXCEEDS_ORIGINAL":
+                    raise CreditNoteQuantityExceedsOriginalError(
+                        msg,
+                        original_item_seq=body.get("originalItemSeq"),
+                        remaining_quantity=body.get("remainingQuantity"),
                     ) from exc
                 # Other 422s fall through to the generic handler below.
             if sc == 401:

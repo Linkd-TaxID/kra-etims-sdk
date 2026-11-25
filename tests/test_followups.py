@@ -429,3 +429,27 @@ def test_examples_pass_idempotency_key_to_stock_calls():
             except SyntaxError:
                 continue  # illustrative fragments
     assert missing == [], f"stock calls without idempotency_key (raise ValueError): {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Over-quantity credit notes are typed like over-amount ones
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_credit_note_quantity_exceeds_original_is_typed(async_mode):
+    import kra_etims.exceptions as exc_mod
+    client, raw = make_client(async_mode, respond(422, {
+        "status": "ERROR", "code": "CREDIT_NOTE_QUANTITY_EXCEEDS_ORIGINAL",
+        "message": "Too many", "originalItemSeq": 2, "remainingQuantity": 1.5}))
+    try:
+        with pytest.raises(exc_mod.CreditNoteExceedsOriginalError) as caught:
+            await invoke(client, "issue_credit_note", 7, idempotency_key="cn-key")
+    finally:
+        await close(raw, async_mode)
+    err = caught.value
+    assert type(err).__name__ == "CreditNoteQuantityExceedsOriginalError"
+    assert err.original_item_seq == 2
+    assert str(err.remaining_quantity) == "1.5"
+    assert err.remaining is None
+    assert "Too many" in str(err)

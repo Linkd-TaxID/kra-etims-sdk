@@ -49,6 +49,9 @@ All notable changes to kra-etims-sdk are documented here.
   processing (`WORKER_STOPPING`, `WORKER_DEFERRED`, HTTP 429, connection
   failure), so the next flush retries it; it was marked `failed` and never
   retried. Rejected rows stay `failed`.
+- A 422 `CREDIT_NOTE_QUANTITY_EXCEEDS_ORIGINAL` raises
+  `CreditNoteQuantityExceedsOriginalError` (a `CreditNoteExceedsOriginalError` with
+  `original_item_seq` and `remaining_quantity`); it raised a plain `KRAeTIMSError`.
 - The supplier gateway retries HTTP 429 (nothing was processed), waiting at least
   the server's `Retry-After` (capped at 30 s) between attempts.
 - The supplier gateway no longer resends a mutation after a server-side 503;
