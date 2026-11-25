@@ -10,7 +10,9 @@
       "00",
       "0000",
       "001"
-    ]
+    ],
+    "gotcha": "VSDC 2.0.6 also returns 000, with the message INVOICE IS SIGNED BUT NOT TRANSMITTED, when it could not reach KRA. The device has issued a receipt that KRA does not have yet.",
+    "dateModified": "2026-11-25"
   },
   {
     "code": "00",
@@ -130,7 +132,9 @@
       "896",
       "990",
       "E11"
-    ]
+    ],
+    "gotcha": "VSDC 2.0.6 does not return 894 from saveSales. When it cannot reach KRA it returns 000 with the message INVOICE IS SIGNED BUT NOT TRANSMITTED.",
+    "dateModified": "2026-11-25"
   },
   {
     "code": "895",
@@ -157,7 +161,9 @@
     "related": [
       "894",
       "999"
-    ]
+    ],
+    "gotcha": "VSDC 2.0.6 does not return 896 from saveSales; it returns 000 with the message INVOICE IS SIGNED BUT NOT TRANSMITTED.",
+    "dateModified": "2026-11-25"
   },
   {
     "code": "899",
@@ -244,12 +250,14 @@
     "category": "Official",
     "description": "Request parameter validation failed.",
     "causes": [],
-    "fix": "Use the schema and code tables for the specific endpoint. Read the field identified in resultMsg; tax classification and rates require current configuration.",
+    "fix": "Use the schema and code tables for the specific endpoint. Read the field identified in resultMsg; tax classification and rates require current configuration. If the device had already signed the sale, keep its receipt: the code does not cancel it.",
     "related": [
       "911",
       "900",
       "893"
-    ]
+    ],
+    "gotcha": "TaxID records a sale refused with this code as FAILED. KRA has not confirmed that the code proves no receipt was recorded. In one retained case, the device had already signed the sale and KRA rejected it with 910 when the device resent it.",
+    "dateModified": "2026-11-25"
   },
   {
     "code": "911",
@@ -262,7 +270,9 @@
       "910",
       "912",
       "895"
-    ]
+    ],
+    "gotcha": "TaxID records a sale refused with this code as FAILED. KRA has not confirmed that the code proves no receipt was recorded.",
+    "dateModified": "2026-11-25"
   },
   {
     "code": "912",
@@ -275,7 +285,9 @@
       "911",
       "921",
       "895"
-    ]
+    ],
+    "gotcha": "TaxID records a sale refused with this code as FAILED. KRA has not confirmed that the code proves no receipt was recorded.",
+    "dateModified": "2026-11-25"
   },
   {
     "code": "913",
@@ -295,12 +307,13 @@
     "category": "Official",
     "description": "Declared sales or invoice data could not be received.",
     "causes": [],
-    "fix": "Inspect the request against the endpoint schema and retained runtime evidence. This code does not establish an undocumented two-call signing flow.",
+    "fix": "Inspect the request against the endpoint schema and retained runtime evidence. This code does not establish an undocumented two-call signing flow. If it was returned for a sale, hold the original: the code does not show whether a receipt was recorded.",
     "related": [
       "922",
       "912",
       "994"
-    ]
+    ],
+    "dateModified": "2026-11-25"
   },
   {
     "code": "922",
@@ -308,11 +321,12 @@
     "category": "Official",
     "description": "The response-code table describes invoice data received before sales data.",
     "causes": [],
-    "fix": "Investigate the endpoint and runtime-specific sequence. Do not add a saveInvoice request to TaxID’s implemented sale flow or replay an uncertain sale.",
+    "fix": "Investigate the endpoint and runtime-specific sequence. Do not add a saveInvoice request to TaxID’s implemented sale flow or replay an uncertain sale. If it was returned for a sale, hold the original: the code does not show whether a receipt was recorded.",
     "related": [
       "921",
       "994"
-    ]
+    ],
+    "dateModified": "2026-11-25"
   },
   {
     "code": "924",
@@ -347,12 +361,13 @@
     "category": "Official",
     "description": "Registration failed.",
     "causes": [],
-    "fix": "Retain redacted diagnostics and investigate the affected record. The code alone does not authorize replay of a fiscal mutation.",
+    "fix": "Retain redacted diagnostics and investigate the affected record. The code alone does not authorize replay of a fiscal mutation. If it was returned for a sale, hold the original: the code does not show whether a receipt was recorded.",
     "related": [
       "992",
       "994",
       "999"
-    ]
+    ],
+    "dateModified": "2026-11-25"
   },
   {
     "code": "992",
@@ -360,11 +375,12 @@
     "category": "Official",
     "description": "Modification failed.",
     "causes": [],
-    "fix": "Inspect the existing record and operator evidence before repeating a mutation.",
+    "fix": "Inspect the existing record and operator evidence before repeating a mutation. If it was returned for a sale, hold the original: the code does not show whether a receipt was recorded.",
     "related": [
       "991",
       "993"
-    ]
+    ],
+    "dateModified": "2026-11-25"
   },
   {
     "code": "993",
@@ -372,11 +388,12 @@
     "category": "Official",
     "description": "Deletion failed.",
     "causes": [],
-    "fix": "Inspect the existing record and operator evidence before repeating a mutation.",
+    "fix": "Inspect the existing record and operator evidence before repeating a mutation. If it was returned for a sale, hold the original: the code does not show whether a receipt was recorded.",
     "related": [
       "992",
       "999"
-    ]
+    ],
+    "dateModified": "2026-11-25"
   },
   {
     "code": "994",
@@ -403,10 +420,11 @@
       "Document no longer available on KRA servers",
       "Invalid document reference"
     ],
-    "fix": "Verify the document reference is current. Re-fetch the notice list to confirm the document still exists before retrying.",
+    "fix": "Verify the document reference is current. Re-fetch the notice list to confirm the document still exists before retrying. If it was returned for a sale, hold the original: the code does not show whether a receipt was recorded.",
     "related": [
       "999"
-    ]
+    ],
+    "dateModified": "2026-11-25"
   },
   {
     "code": "999",

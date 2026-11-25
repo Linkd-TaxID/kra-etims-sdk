@@ -5,6 +5,10 @@
 - 999: states that the code does not show whether a sale was recorded, with the observed behaviour.
 - 899 and 994: hold the original sale.
 - Added 834, 836 and 924, found in VSDC 2.0.6.
+- 000, 894 and 896: what VSDC 2.0.6 returns from saveSales when it cannot reach KRA.
+- 910, 911 and 912: TaxID fails the sale, but KRA has not confirmed that no receipt exists.
+- 921, 922, 991 to 993 and 995: hold the original sale.
+- Index: added an Observed filter. FAQ: how TaxID treats a sale's result code.
 
 ## 2026-10-13: sandbox contract guidance
 
