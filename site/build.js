@@ -20,8 +20,8 @@ const OUT_DIR      = path.resolve(process.argv[2] || path.join(__dirname, '..', 
 const DEFAULT_DATE = '2026-10-07';
 
 // Index and FAQ dates for the sitemap. Bump when that page's content changes.
-const INDEX_UPDATED = '2026-10-14';
-const FAQ_UPDATED   = '2026-10-14';
+const INDEX_UPDATED = '2026-11-25';
+const FAQ_UPDATED   = '2026-11-25';
 
 const ERROR_MAP = Object.fromEntries(ERRORS.map(e => [e.code, e]));
 
@@ -227,6 +227,7 @@ ${nav('codes')}
       <div class="filters" role="group" aria-label="Filter by source">
         <button class="chip" data-filter="All" aria-pressed="true">All</button>
         <button class="chip" data-filter="Official" aria-pressed="false">Official spec</button>
+        <button class="chip" data-filter="Observed" aria-pressed="false">Observed</button>
         <button class="chip" data-filter="Reported" aria-pressed="false">Reported</button>
         <button class="chip" data-filter="Client" aria-pressed="false">Client-side</button>
         <button class="chip" data-filter="Notes" aria-pressed="false">Has notes</button>
