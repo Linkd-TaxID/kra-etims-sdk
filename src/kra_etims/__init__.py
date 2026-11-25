@@ -149,6 +149,7 @@ from .exceptions import (
     KRAConflictError,
     CreditNoteConflictError,
     CreditNoteExceedsOriginalError,
+    CreditNoteQuantityExceedsOriginalError,
     ZReportAlreadyIssuedError,
 )
 
@@ -222,6 +223,7 @@ __all__ = [
     "KRAConflictError",
     "CreditNoteConflictError",
     "CreditNoteExceedsOriginalError",
+    "CreditNoteQuantityExceedsOriginalError",
     "ZReportAlreadyIssuedError",
     # GavaConnect
     "GavaConnectClient",

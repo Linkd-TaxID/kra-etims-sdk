@@ -410,6 +410,23 @@ class CreditNoteExceedsOriginalError(KRAeTIMSError):
         self.original_purchase_id = original_purchase_id
 
 
+class CreditNoteQuantityExceedsOriginalError(CreditNoteExceedsOriginalError):
+    """
+    A returned line exceeds the quantity still reversible on the original (HTTP
+    422, code ``CREDIT_NOTE_QUANTITY_EXCEEDS_ORIGINAL``). Also a
+    :class:`CreditNoteExceedsOriginalError`; its amount balances are ``None``.
+
+    ``original_item_seq`` is the original line and ``remaining_quantity`` the
+    quantity still reversible on it.
+    """
+    def __init__(self, message: str, original_item_seq: Optional[int] = None,
+                 remaining_quantity: Any = None):
+        super().__init__(message)
+        self.original_item_seq = original_item_seq
+        self.remaining_quantity: Optional[Decimal] = (
+            None if remaining_quantity is None else Decimal(str(remaining_quantity)))
+
+
 class ZReportAlreadyIssuedError(KRAConflictError):
     """
     The Z-report for the requested date has already been issued (HTTP 409,

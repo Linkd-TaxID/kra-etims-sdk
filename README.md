@@ -331,7 +331,7 @@ All exceptions inherit from `KRAeTIMSError`.
 | `OSCUUnavailableError` | 503 from an OSCU-backed branch (the control unit is temporarily unavailable) |
 | `KRADuplicateInvoiceError` | VSCU codes 12/994/902. `is_idempotent_success` is a legacy classification flag, not receipt evidence or permission to replay. |
 | `KRAInvalidPINError`, `KRAInvalidItemCodeError`, `KRAInvalidBranchError`, `KRAVSCUMemoryFullError`, `KRAServerError` | VSCU codes 10, 13, 14, 11, and 20/96/99 |
-| `CreditNoteExceedsOriginalError` | 422: the credit notes would exceed the receipt |
+| `CreditNoteExceedsOriginalError` | 422: the credit notes would exceed the receipt (`CreditNoteQuantityExceedsOriginalError` when a returned line exceeds its remaining quantity) |
 | `KRAConflictError` | 409. `exc.code` is `FISCAL_DAY_CLOSED` (the date is already Z-closed) or `ETIMS_NOT_INITIALIZED` (the branch has not completed its handshake). |
 | `CreditNoteConflictError` | A `KRAConflictError` raised on a credit-note request (`CreditNoteOutcomeUnresolvedError` for the unresolved idempotency codes) |
 | `ZReportAlreadyIssuedError` | 409 `Z_REPORT_ALREADY_ISSUED`: a Z report already exists for that date (also a `KRAConflictError`) |
