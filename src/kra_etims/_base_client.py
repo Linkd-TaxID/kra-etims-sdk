@@ -37,6 +37,7 @@ from .exceptions import (
     KRAeTIMSAuthError,
     KRAAuthorizationError,
     KRAeTIMSError,
+    MutationOSCUUnavailableError,
     MutationServiceUnavailableError,
     OSCUUnavailableError,
     RateLimitError,
@@ -312,7 +313,8 @@ class _BaseKRAeTIMSClient(ABC):
         - ``code: KRA_CONNECTIVITY_TIMEOUT`` — the 24-hour VSCU offline ceiling
           (``SystemSuspendedException``): :class:`KRAConnectivityTimeoutError`.
         - ``oscu_code`` property — transient OSCU failure (OSCU Spec v2.0 §4.18
-          has no offline ceiling): :class:`OSCUUnavailableError`.
+          has no offline ceiling): :class:`OSCUUnavailableError`, or
+          :class:`MutationOSCUUnavailableError` (also ambiguous) on a mutation.
         - ``code: WORKER_STOPPING`` — worker shutdown, refused before dispatch:
           :class:`WorkerStoppingError` (retryable).
         - anything else (transient VSCU ``vscu_code``, worker role not fiscal,
@@ -324,7 +326,8 @@ class _BaseKRAeTIMSClient(ABC):
         """
         body, message, code = _BaseKRAeTIMSClient._error_fields(resp)
         if "oscu_code" in body:
-            raise OSCUUnavailableError(
+            oscu_error = MutationOSCUUnavailableError if mutating else OSCUUnavailableError
+            raise oscu_error(
                 message=message or (
                     f"OSCU Temporarily Unavailable (code {body.get('oscu_code')}): "
                     f"{body.get('title', 'no further detail')}"

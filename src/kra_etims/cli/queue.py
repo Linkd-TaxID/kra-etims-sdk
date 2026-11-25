@@ -185,13 +185,19 @@ class Queue:
     def poll_one(self, client: Any, row: sqlite3.Row) -> dict[str, Any]:
         """
         Follow an accepted (PENDING_SYNC) row with get_sale_status. Never resubmits.
-        A failed poll leaves the row accepted for the next flush.
+        A failed poll leaves the row accepted for the next flush, except a 404: no
+        further poll can settle it, so it becomes outcome_unknown.
         """
         row_id: int = row["id"]
         purchase_id = row["purchase_id"]
         try:
             outcome = client.get_sale_status(purchase_id)
         except Exception as exc:
+            if getattr(exc, "http_status", None) == 404:
+                # Polling cannot settle a sale the server does not know for this branch.
+                note = f"Status lookup found no sale {purchase_id} for this branch; inspect it: {exc}"
+                self._update(row_id, "outcome_unknown", note)
+                return {"id": row_id, "status": "outcome_unknown", "purchase_id": purchase_id, "error": note}
             self._update(row_id, "accepted", f"Status poll failed: {exc}")
             return {"id": row_id, "status": "accepted", "purchase_id": purchase_id, "error": str(exc)}
         if isinstance(outcome, dict) and outcome.get("status") == "PENDING_SYNC":

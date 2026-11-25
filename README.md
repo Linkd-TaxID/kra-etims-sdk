@@ -328,7 +328,7 @@ All exceptions inherit from `KRAeTIMSError`.
 | `KRAAuthorizationError` | 403: the key's role or environment does not allow the call |
 | `KRAConnectivityTimeoutError` | 503: the branch is suspended (24-hour offline limit) |
 | `TIaaSUnavailableError` / `TIaaSAmbiguousStateError` | See [Outcomes, retries and idempotency](#outcomes-retries-and-idempotency) |
-| `OSCUUnavailableError` | 503 from an OSCU-backed branch (the control unit is temporarily unavailable) |
+| `OSCUUnavailableError` | 503 from an OSCU-backed branch (the control unit is temporarily unavailable). On a mutation it is `MutationOSCUUnavailableError`, also a `TIaaSAmbiguousStateError` |
 | `KRADuplicateInvoiceError` | VSCU codes 12/994/902. `is_idempotent_success` is a legacy classification flag, not receipt evidence or permission to replay. |
 | `KRAInvalidPINError`, `KRAInvalidItemCodeError`, `KRAInvalidBranchError`, `KRAVSCUMemoryFullError`, `KRAServerError` | VSCU codes 10, 13, 14, 11, and 20/96/99 |
 | `CreditNoteExceedsOriginalError` | 422: the credit notes would exceed the receipt (`CreditNoteQuantityExceedsOriginalError` when a returned line exceeds its remaining quantity) |

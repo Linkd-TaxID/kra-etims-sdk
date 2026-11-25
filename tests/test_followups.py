@@ -453,3 +453,43 @@ async def test_credit_note_quantity_exceeds_original_is_typed(async_mode):
     assert str(err.remaining_quantity) == "1.5"
     assert err.remaining is None
     assert "Too many" in str(err)
+
+
+# ---------------------------------------------------------------------------
+# A transient OSCU 503 on a mutation is ambiguous; on a read it is not
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_mode", [False, True])
+async def test_oscu_503_on_a_mutation_is_ambiguous_and_keeps_the_key(async_mode):
+    import kra_etims.exceptions as exc_mod
+    client, raw = make_client(async_mode, respond(503, {"oscu_code": "894", "title": "OSCU Signing Error"}))
+    try:
+        with pytest.raises(exc_mod.OSCUUnavailableError) as caught:
+            await invoke(client, "issue_credit_note", 7, idempotency_key="cn-key")
+        with pytest.raises(exc_mod.OSCUUnavailableError) as read:
+            await invoke(client, "get_sale_status", 7)
+    finally:
+        await close(raw, async_mode)
+    assert isinstance(caught.value, exc_mod.TIaaSAmbiguousStateError)
+    assert caught.value.oscu_code == "894"
+    assert caught.value.idempotency_key == "cn-key"
+    assert not isinstance(read.value, exc_mod.TIaaSAmbiguousStateError)
+
+
+def test_accepted_row_the_server_does_not_know_is_not_polled_forever(tmp_path):
+    from kra_etims.cli.queue import Queue
+    from kra_etims.exceptions import KRAeTIMSError
+    queue = Queue(tmp_path / "queue.db")
+    row_id = queue.enqueue({"x": 1})
+    queue._update(row_id, "accepted", None, purchase_id=7)
+
+    class Client:
+        def get_sale_status(self, purchase_id):
+            error = KRAeTIMSError("No sale with invcNo=7")
+            error.http_status = 404
+            raise error
+
+    result = queue.poll_one(Client(), queue.accepted()[0])
+    assert result["status"] == "outcome_unknown"
+    assert queue.accepted() == []
