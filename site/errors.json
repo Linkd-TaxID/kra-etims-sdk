@@ -49,6 +49,34 @@
     ]
   },
   {
+    "code": "834",
+    "title": "Invalid Sale and Receipt Type",
+    "category": "Observed",
+    "description": "The VSCU JAR rejected the combination of salesTyCd and rcptTyCd before contacting KRA.",
+    "causes": [],
+    "fix": "Send a supported combination: NS, NR, TS, TR, CS, CR or PS. No receipt was issued for this request.",
+    "gotcha": "Found in VSDC 2.0.6; not in the cited v2.0 response-code table. The JAR may still send older queued sales during the same call.",
+    "related": [
+      "836",
+      "910"
+    ],
+    "dateModified": "2026-11-25"
+  },
+  {
+    "code": "836",
+    "title": "Local Sequence Altered",
+    "category": "Observed",
+    "description": "The VSCU JAR could not read its local receipt sequence and stopped before contacting KRA.",
+    "causes": [],
+    "fix": "Preserve the device storage and contact KRA. Do not edit sequence files or re-initialise the device. No receipt was issued for this request.",
+    "gotcha": "Found in VSDC 2.0.6; not in the cited v2.0 response-code table. The JAR may still send older queued sales during the same call.",
+    "related": [
+      "834",
+      "902"
+    ],
+    "dateModified": "2026-11-25"
+  },
+  {
     "code": "891",
     "title": "URL Construction Error",
     "category": "Client",
@@ -137,12 +165,13 @@
     "category": "Client",
     "description": "Generic client error; the code alone does not identify the cause.",
     "causes": [],
-    "fix": "Inspect redacted diagnostics and device state. Following a timeout, investigate the original transaction; do not infer a receipt from counters or replace its identity.",
+    "fix": "Inspect redacted diagnostics and device state. For a sale, hold the original transaction and investigate it; do not infer a receipt from counters or replace its identity.",
     "related": [
       "994",
       "902",
       "891"
-    ]
+    ],
+    "dateModified": "2026-11-25"
   },
   {
     "code": "900",
@@ -286,6 +315,20 @@
     ]
   },
   {
+    "code": "924",
+    "title": "Invoice Number Already Processed",
+    "category": "Observed",
+    "description": "The invoice number was already processed, so a receipt may exist for it.",
+    "causes": [],
+    "fix": "Hold the original sale and find its receipt. Do not resend it under a new invoice number.",
+    "gotcha": "Found in VSDC 2.0.6, whose offline mode returns it for a repeated invoice number; not in the cited v2.0 response-code table.",
+    "related": [
+      "994",
+      "999"
+    ],
+    "dateModified": "2026-11-25"
+  },
+  {
     "code": "990",
     "title": "Rate Limit Exceeded",
     "category": "Official",
@@ -341,13 +384,15 @@
     "category": "Official",
     "description": "Duplicate data was reported. This is not a recovered receipt or proof of identical invoice contents.",
     "causes": [],
-    "fix": "Investigate the original transaction and obtain receipt evidence. Do not treat this code as signed success or create a replacement reference.",
+    "fix": "Hold the original sale and obtain its receipt evidence. A receipt may already exist: do not treat this code as signed success or create a replacement reference.",
     "related": [
+      "924",
       "899",
       "991",
       "921",
       "922"
-    ]
+    ],
+    "dateModified": "2026-11-25"
   },
   {
     "code": "995",
@@ -367,14 +412,17 @@
     "code": "999",
     "title": "Unknown Error",
     "category": "Official",
-    "description": "Unclassified server error.",
+    "description": "Unclassified server error. It does not say whether the request was recorded.",
     "causes": [],
-    "fix": "Retain request ID, endpoint, runtime version, timestamps and redacted resultMsg. Hold uncertain fiscal mutations for operator investigation; exclude keys, headers containing secrets and buyer data.",
+    "fix": "Hold the original sale and do not resubmit it or sign a replacement. Retain the endpoint, runtime version, time, resultDt and redacted resultMsg, then ask KRA whether the invoice was recorded.",
     "related": [
-      "991",
-      "995",
+      "899",
+      "924",
+      "994",
       "896"
-    ]
+    ],
+    "gotcha": "Observed on VSDC 2.0.6 in sandbox sale responses. The JAR relays the code from upstream, and its own receipt counter did not move. In an earlier test, one of two concurrent calls for an invoice received 999 while the other received its signed receipt.",
+    "dateModified": "2026-11-25"
   },
   {
     "code": "E04",

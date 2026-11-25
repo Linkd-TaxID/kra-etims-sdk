@@ -1,5 +1,11 @@
 # Result-code reference changelog
 
+## 2026-11-25
+
+- 999: states that the code does not show whether a sale was recorded, with the observed behaviour.
+- 899 and 994: hold the original sale.
+- Added 834, 836 and 924, found in VSDC 2.0.6.
+
 ## 2026-10-13: sandbox contract guidance
 
 This correction uses published OSCU v2.0 §4.18 / VSCU v2.0 §4.14 contracts and
