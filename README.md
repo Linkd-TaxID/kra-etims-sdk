@@ -157,8 +157,29 @@ Check `receipt["status"]`. HTTP success does not mean the sale is signed.
 | `status` | Meaning | What to do |
 |---|---|---|
 | `SIGNED` | Control-unit receipt persisted; not proof of central KRA acceptance | Inspect it; simulator receipts are test output only |
-| `PENDING_SYNC` | Queued before reaching the control unit. TaxID signs it later. | `client.get_sale_status(receipt["purchaseId"])` until `SIGNED` |
-| `OUTCOME_UNKNOWN`, `RECONCILIATION_REQUIRED` | It may or may not have been signed | **Do not resubmit.** TaxID's operators reconcile it. |
+| `PENDING_SYNC` | Queued before reaching the control unit. TaxID signs it later. | Poll `client.get_sale_status(receipt["purchaseId"])` with backoff (below) until the status changes |
+| `RECONCILIATION_REQUIRED` | Automatic processing stopped. Sometimes TaxID already holds the signed receipt but has not yet stored its independent evidence copy; it retries that write, and the same `purchaseId` turns `SIGNED` once the write succeeds. Otherwise an operator reconciles it. | **Do not resubmit.** Keep polling the same `purchaseId` at a slow interval |
+| `OUTCOME_UNKNOWN` | It may or may not have been signed | **Do not resubmit.** TaxID's operators reconcile it |
+| `NOT_SENT`, `FAILED` | Not signed: reconciliation proved it was never applied, or the control unit rejected it | Investigate the cause before any new submission |
+| anything else | A status this SDK version does not know | Treat as not signed and investigate; never as success |
+
+Polling is the supported way to follow a sale. Webhooks are optional: whether
+they are sent depends on the deployment's configuration, delivery is
+at-least-once, and each delivery is signed with a per-branch secret. Do not rely
+on receiving `receipt.signed`. A reasonable polling schedule starts at 2 seconds,
+doubles up to 60 seconds, adds jitter, and honours `Retry-After` on HTTP 429
+(`RateLimitError.retry_after_seconds`):
+
+```python
+import random, time
+
+delay = 2.0
+status = client.get_sale_status(purchase_id)
+while status["status"] in ("PENDING_SYNC", "RECONCILIATION_REQUIRED"):
+    time.sleep(delay + random.uniform(0, delay / 2))
+    delay = min(delay * 2, 60.0)
+    status = client.get_sale_status(purchase_id)
+```
 
 Failures are split by whether the request could have had an effect:
 
@@ -166,11 +187,19 @@ Failures are split by whether the request could have had an effect:
 |---|---|---|
 | Never left the client (connect error, pool timeout), or any failure on a GET | `TIaaSUnavailableError` | Yes |
 | Sent, then no usable response (read timeout, dropped connection, HTTP 500/502/504), or HTTP 425 because an earlier request with this key is still running | `TIaaSAmbiguousStateError` | Look up the original reference first; preserve `exc.idempotency_key`. Do not blindly resubmit. |
+| HTTP 409 `IDEMPOTENT_RESULT_LOOKUP_REQUIRED`, `IDEMPOTENT_IDENTITY_UNAVAILABLE` or `IDEMPOTENCY_SCOPE_UNBOUND`: an earlier request with this key exists but its result cannot be returned | `IdempotentOutcomeUnresolvedError` (a `TIaaSAmbiguousStateError` and `KRAConflictError`); on `issue_credit_note`, `CreditNoteOutcomeUnresolvedError` (also a `CreditNoteConflictError`) | As above: look up the original; never resubmit under a new key |
+| Refused by the fiscal worker before dispatch: HTTP 403 `WORKER_DEFERRED`, HTTP 503 `WORKER_STOPPING` | `WorkerDeferredError` / `WorkerStoppingError` (`retryable = True`) | Yes, with the same key and body after a backoff |
+| HTTP 503 `KRA_CONNECTIVITY_TIMEOUT` (24-hour offline ceiling) | `KRAConnectivityTimeoutError` | After connectivity is restored; inspect mutations first |
+| Any other HTTP 503 on a GET | `TIaaSUnavailableError` (`exc.code` has the server code) | Yes |
+| Any other HTTP 503 on a mutation | `MutationServiceUnavailableError` (a `TIaaSUnavailableError` and `TIaaSAmbiguousStateError`, `retryable = False`) | Inspect the original first; catch it before any `except TIaaSUnavailableError` that retries |
+| HTTP 429 | `RateLimitError` (`exc.retry_after_seconds`) | Yes, after the delay; nothing was processed |
 
 The implemented server cache replays a stored response for the same key and exact
 request-body bytes; that response may still be uncertain. It is not an exactly-once
 or indefinite-retention guarantee. Different bytes under the same key raise
-`KRAeTIMSError` (`IDEMPOTENCY_KEY_REUSED`). Preserve the original invoice and
+`KRAConflictError` (`IDEMPOTENCY_KEY_REUSED`). The SDK serializes request bodies
+itself (compact UTF-8 JSON), so the bytes for the same payload do not depend on
+the installed httpx version. Preserve the original invoice and
 reference instead of rebuilding them with a new date or identifier. If you omit
 `idempotency_key`, the SDK uses `"{tin}:{invcNo}"` and warns.
 
@@ -179,16 +208,9 @@ try:
     receipt = client.submit_sale(invoice, idempotency_key="INV-0001")
 except TIaaSAmbiguousStateError:
     # submit_sale maps invoice.invcNo to the API clientReference.
-    import httpx
-    response = httpx.get(
-        os.environ["TAXID_API_URL"].rstrip("/") + "/v2/etims/sales/search",
-        params={"clientReference": invoice.invcNo},
-        headers={"Authorization": "Bearer " + os.environ["TAXID_API_KEY"]},
-        timeout=30,
-    )
-    response.raise_for_status()
-    receipt = response.json()
-    # Inspect status; unresolved or missing results need investigation, not resend.
+    receipt = client.find_sale(client_reference=invoice.invcNo)
+    # Inspect receipt["status"]; unresolved or missing results need investigation,
+    # not a resend. A missing sale raises KRAeTIMSError (HTTP 404).
 ```
 
 ## Credit notes
@@ -223,7 +245,8 @@ Configured scheduling may finalize the local aggregate after unresolved work set
 client.get_sale_status(purchase_id)                       # current status and receipt fields
 client.submit_stock_adjustment([StockAdjustmentLine(
     itemCd="SKU1", itemNm="Laptop", ioType="M", qty=10, prc=5000, totDcAmt=0, taxTyCd="B",
-)], remark="Stock in")                                    # ioType: M in, A adjust out, I issue out
+)], remark="Stock in", idempotency_key="stock-in-1")  # ioType: M in, A adjust out, I issue out
+                                                          # reuse the same key on any retry
 client.bulk_import_items("catalog.csv")                   # CSV item registration
 client.initialize_device_handshake()                      # needs a branch admin key
 
@@ -279,7 +302,7 @@ etims invoice submit invoice.json --idempotency-key INV-0001
 etims report x --date 2026-09-25
 etims report z                           # asks for confirmation
 etims queue status                       # local SQLite queue of unsent invoices
-etims queue flush
+etims queue flush                        # sends pending rows; polls PENDING_SYNC (accepted) rows
 etims pin validate A000123456B
 etims tcc check --pin A000123456B --tcc-number TCC2026001234
 ```
@@ -308,10 +331,10 @@ All exceptions inherit from `KRAeTIMSError`.
 | `OSCUUnavailableError` | 503 from an OSCU-backed branch (the control unit is temporarily unavailable) |
 | `KRADuplicateInvoiceError` | VSCU codes 12/994/902. `is_idempotent_success` is a legacy classification flag, not receipt evidence or permission to replay. |
 | `KRAInvalidPINError`, `KRAInvalidItemCodeError`, `KRAInvalidBranchError`, `KRAVSCUMemoryFullError`, `KRAServerError` | VSCU codes 10, 13, 14, 11, and 20/96/99 |
-| `CreditNoteExceedsOriginalError` | 422: the credit notes would exceed the receipt |
+| `CreditNoteExceedsOriginalError` | 422: the credit notes would exceed the receipt (`CreditNoteQuantityExceedsOriginalError` when a returned line exceeds its remaining quantity) |
 | `KRAConflictError` | 409. `exc.code` is `FISCAL_DAY_CLOSED` (the date is already Z-closed) or `ETIMS_NOT_INITIALIZED` (the branch has not completed its handshake). |
-| `CreditNoteConflictError` | A `KRAConflictError` raised on a credit-note request |
-| `ZReportAlreadyIssuedError` | 409: a Z report already exists for that date |
+| `CreditNoteConflictError` | A `KRAConflictError` raised on a credit-note request (`CreditNoteOutcomeUnresolvedError` for the unresolved idempotency codes) |
+| `ZReportAlreadyIssuedError` | 409 `Z_REPORT_ALREADY_ISSUED`: a Z report already exists for that date (also a `KRAConflictError`) |
 | `GavaConnectAuthError`, `GavaConnectPINNotFoundError`, `GavaConnectTCCError`, `GavaConnectError` | GavaConnect failures |
 
 Any other 4xx/5xx raises `KRAeTIMSError` with the server's `code` and `message`.

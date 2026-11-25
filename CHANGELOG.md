@@ -4,6 +4,119 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+## [0.8.2] - unreleased
+
+**Release order:** deploy the TaxID backend change (taxID#53) first, then publish
+0.8.2. This release reads the backend's worker codes (`WORKER_DEFERRED`,
+`WORKER_STOPPING`) and 409 `code` fields that #53 adds or completes.
+
+### Breaking changes
+- httpx 0.25–0.27 are no longer supported: the minimum is now `httpx>=0.28`, so
+  pip/uv refuse to install 0.8.2 alongside an older httpx. **Migration:** upgrade
+  httpx to 0.28 or later together with the SDK. The SDK's request bytes already
+  match httpx 0.28's JSON format (see the idempotency upgrade note under Fixed).
+- A 503 is `KRAConnectivityTimeoutError` only when the body's code is
+  `KRA_CONNECTIVITY_TIMEOUT` (the 24-hour offline ceiling). `WORKER_STOPPING` now
+  raises `WorkerStoppingError` (retryable), an unrecognised 503 on a GET raises
+  `TIaaSUnavailableError`, and on a mutation `MutationServiceUnavailableError`.
+  0.8.1 raised `KRAConnectivityTimeoutError` for every 503 without `oscu_code`.
+  **Migration:** if you used `except KRAConnectivityTimeoutError` to catch every
+  503, also catch `TIaaSUnavailableError` (it covers `WorkerStoppingError` and
+  `MutationServiceUnavailableError`). Put a handler for `TIaaSAmbiguousStateError`
+  before it: an unrecognised 503 on a mutation may follow a commit, so inspect the
+  original with the same idempotency key (`find_sale(operation_key=...)`) instead
+  of resending. `WorkerStoppingError`/`WorkerDeferredError` (`retryable = True`)
+  are safe to retry with the same key and body after `retry_after_seconds`.
+
+### Fixed
+- CLI `etims queue flush` classifies each result by the sale body: only `SIGNED`
+  with CU invoice number, SDC id and signature is `success`; `PENDING_SYNC` is
+  `accepted`; `NOT_SENT`/`FAILED` are `failed`; `OUTCOME_UNKNOWN`,
+  `RECONCILIATION_REQUIRED` and unknown statuses are `outcome_unknown`.
+- Later `etims queue flush` runs poll `get_sale_status` for `accepted` rows and
+  never resubmit them; each settles to `success`, `failed` or `outcome_unknown`,
+  or stays `accepted` while still `PENDING_SYNC`. Queue files from older SDKs keep
+  working (a nullable `purchase_id` column is added on open). `etims queue status`
+  shows the accepted count.
+- HTTP 409 `IDEMPOTENT_RESULT_LOOKUP_REQUIRED`, `IDEMPOTENT_IDENTITY_UNAVAILABLE`
+  and `IDEMPOTENCY_SCOPE_UNBOUND` (and 425 in-flight) raise
+  `IdempotentOutcomeUnresolvedError`, a `TIaaSAmbiguousStateError` that is also a
+  `KRAConflictError`, carrying the original idempotency key and code. On
+  `issue_credit_note` they raise `CreditNoteOutcomeUnresolvedError`, which is both
+  an `IdempotentOutcomeUnresolvedError` and a `CreditNoteConflictError`, so
+  existing credit-note 409 handlers still match.
+- `etims queue flush` keeps a row `pending` when the request was refused before
+  processing (`WORKER_STOPPING`, `WORKER_DEFERRED`, HTTP 429, connection
+  failure), so the next flush retries it; it was marked `failed` and never
+  retried. Rejected rows stay `failed`.
+- A 422 `CREDIT_NOTE_QUANTITY_EXCEEDS_ORIGINAL` raises
+  `CreditNoteQuantityExceedsOriginalError` (a `CreditNoteExceedsOriginalError` with
+  `original_item_seq` and `remaining_quantity`); it raised a plain `KRAeTIMSError`.
+- The supplier gateway retries HTTP 429 (nothing was processed), waiting at least
+  the server's `Retry-After` (capped at 30 s) between attempts.
+- The supplier gateway no longer resends a mutation after a server-side 503;
+  `flush_offline_queue` marks HTTP 429 rows `retryable`.
+- `etims pin validate` (TaxID path) shows the customer-lookup `status` and
+  `taxpayerStatus` instead of an "Active" flag that route never returns.
+- Request bodies are serialized by the SDK (compact separators, UTF-8, no NaN,
+  insertion order) and sent as `application/json`, so the bytes TaxID hashes for
+  idempotency no longer depend on the installed httpx version (0.27 vs 0.28).
+  **Upgrade note:** this matches httpx 0.28's format. Under httpx 0.25–0.27 the
+  previous SDK sent spaced, ASCII-escaped JSON, so retrying a key first sent from
+  such an install returns 422 `IDEMPOTENCY_KEY_REUSED`. Settle in-flight
+  (ambiguous) operations with `find_sale` before upgrading; never resubmit them
+  under a new key.
+- `GavaConnectClient` / `AsyncGavaConnectClient` serialize POST bodies the same
+  way, instead of leaving it to httpx.
+- `find_sale`, `get_sale_original`, `issue_credit_note` and the stock adjustment /
+  stock master calls validate their results and carry `response_metadata`. Invalid
+  mutation bodies raise `TIaaSAmbiguousStateError`, never a raw pydantic error.
+  Return types are unchanged.
+- A 503 is `KRAConnectivityTimeoutError` only for code `KRA_CONNECTIVITY_TIMEOUT`;
+  other 503s without `oscu_code` raise `TIaaSUnavailableError` with the server code.
+- An unrecognised 503 on a mutating request raises
+  `MutationServiceUnavailableError`, both a `TIaaSUnavailableError` and a
+  `TIaaSAmbiguousStateError`, with `retryable = False` and the original
+  idempotency key: the original may have been applied. Reads still raise a plain
+  `TIaaSUnavailableError`. If you catch `TIaaSUnavailableError` and retry, catch
+  `TIaaSAmbiguousStateError` (or `MutationServiceUnavailableError`) first and
+  inspect the original instead.
+- `ZReportAlreadyIssuedError` is raised when the 409 code is in `code` or only in
+  the legacy `error` field (which current backends send).
+- `ZReportAlreadyIssuedError` is now also a `KRAConflictError` (with `code`
+  `Z_REPORT_ALREADY_ISSUED`, `report_date` and the 409's `http_status` and
+  `response_metadata`), so generic 409 handlers match it.
+- Sync `lookup_pin` uses `/v2/etims/customers/lookup`, like the async client.
+
+### Added
+- `WorkerDeferredError` (403 `WORKER_DEFERRED`) and `WorkerStoppingError`
+  (503 `WORKER_STOPPING`), both `FiscalWorkerUnavailableError` with
+  `retryable = True`.
+- `RateLimitError` for HTTP 429. Every `KRAeTIMSError` gains `retry_after_seconds`
+  (the `Retry-After` header parsed as seconds or an HTTP-date; TaxID sends it on
+  429, `WORKER_DEFERRED` and `WORKER_STOPPING`) and `code`, the server's error
+  code on every HTTP error.
+- `CreditNoteResult` and `SaleOriginalResult` models; `UnsupportedOperationError`;
+  `CreditNoteOutcomeUnresolvedError`; `MutationServiceUnavailableError`.
+
+### Deprecated
+- `update_stock()` targets the legacy `/v2/etims/stock` route, which TaxID
+  refuses (HTTP 501). It now warns and raises `UnsupportedOperationError` without
+  sending a request; use `submit_stock_adjustment(..., idempotency_key=...)`.
+- `check_compliance()` targets a route TaxID does not serve. It now warns and
+  raises `UnsupportedOperationError` without sending a request; use
+  `device_health()` or `lookup_customer()`.
+
+### Documentation
+- The README stock example, `examples/petrol_station_day.py` and
+  `examples/javahouse_day.py` pass the `idempotency_key` that
+  `submit_stock_adjustment` requires; as written they raised `ValueError`. A test
+  runs the README snippet against a mock, and another checks every stock call in
+  `examples/` and the docs passes a key.
+- Polling `get_sale_status` with backoff is the supported way to follow a sale.
+  Webhooks are optional, deployment-dependent, at-least-once and signed with a
+  per-branch secret. The recovery example uses `find_sale()`.
+
 ## [0.8.1] - 2026-10-22
 
 ### Tests

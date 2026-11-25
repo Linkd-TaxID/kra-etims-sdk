@@ -213,8 +213,9 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             headers = self._build_auth_headers(idempotency_key)
             inject_trace_context(headers)
 
+            content = self._encode_request_body(json, headers)
             try:
-                resp = self._http.request(method, url, json=json, files=files, headers=headers, timeout=self._timeout)
+                resp = self._http.request(method, url, content=content, files=files, headers=headers, timeout=self._timeout)
             except httpx.RequestError as exc:
                 raise self._transport_error(exc, method, idempotency_key) from exc
             return self._parse_response(resp, method, idempotency_key)
@@ -423,10 +424,17 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         from :meth:`submit_sale` (middleware Track C4).
 
         ``invc_no`` is the ``purchaseId`` from the original :meth:`submit_sale`
-        response, not the KRA ``invcNo`` sequence number. Prefer a registered
-        ``receipt.signed``/``receipt.failed`` webhook over polling this in a
-        loop; this endpoint is the authoritative fallback for tenants with no
-        webhook configured or a missed delivery.
+        response, not the KRA ``invcNo`` sequence number. Polling this method
+        is the supported way to follow a sale: poll with exponential backoff
+        and jitter (for example 2 s doubling to 60 s), and honour
+        ``RateLimitError.retry_after_seconds`` on HTTP 429. A
+        ``RECONCILIATION_REQUIRED`` sale can still become ``SIGNED`` under the
+        same ``purchaseId`` once TaxID stores its receipt evidence; never
+        resubmit it.
+
+        Webhooks are optional: whether they are sent depends on the deployment
+        configuration, delivery is at-least-once, and deliveries are signed
+        with a per-branch secret. Do not rely on receiving ``receipt.signed``.
 
         :raises KRAeTIMSError: HTTP 404 — no sale with this ``purchaseId`` for
             the authenticated tenant.
@@ -456,6 +464,9 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
         KRA TIS 6.16 defines once-only cancellation; live combinations need a verified
         contract and production corrections remain evidence-gated. Unknown/deferred
         corrections reserve their original quantities and must never be replaced.
+        An unresolved earlier claim for the key raises
+        ``CreditNoteOutcomeUnresolvedError`` (an ``IdempotentOutcomeUnresolvedError``
+        that is also a ``CreditNoteConflictError``).
         """
         with _span("kra_etims.issue_credit_note", {"sale.id": str(original_purchase_id)}):
             if not client_reference and not idempotency_key:
@@ -503,11 +514,14 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
     # ------------------------------------------------------------------
 
     def update_stock(self, data: StockItem) -> Dict[str, Any]:
-        """Restricted legacy stock route; use submit_stock_adjustment with an original operation key."""
-        return self._request(
-            "POST", "/v2/etims/stock",
-            json=data.model_dump(mode="json", exclude_none=True),
-        )
+        """
+        .. deprecated::
+            TaxID refuses the legacy ``/v2/etims/stock`` route (HTTP 501). This
+            warns and raises :class:`~kra_etims.exceptions.UnsupportedOperationError`
+            without sending a request; use :meth:`submit_stock_adjustment` with a
+            stable ``idempotency_key``.
+        """
+        self._unsupported_update_stock()
 
     def submit_stock_adjustment(
         self,
@@ -542,13 +556,13 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             json=request.model_dump(mode="json", exclude_none=True),
             idempotency_key=idempotency_key,
         )
-        return StockOperationResult.model_validate(result)
+        return self._typed_result(StockOperationResult, result)
 
     def inspect_stock_operation(self, operation_key: str) -> StockOperationResult:
         """Read retained current stock outcome; a cached POST response may be older."""
         from urllib.parse import quote
         result = self._request("GET", "/v2/etims/stock/operations/" + quote(operation_key, safe=""))
-        return StockOperationResult.model_validate(result)
+        return self._typed_result(StockOperationResult, result)
 
     def submit_stock_master(self, request: StockMasterRequest, *, idempotency_key: str) -> StockMasterResult:
         """Send supplied absolute residual quantity after confirmed original I/O.
@@ -560,13 +574,13 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
             raise ValueError("Stock master requires a stable idempotency_key")
         result = self._request("POST", "/v2/etims/stock/master",
             json=request.model_dump(mode="json"), idempotency_key=idempotency_key)
-        return StockMasterResult.model_validate(result)
+        return self._typed_result(StockMasterResult, result)
 
     def inspect_stock_master(self, operation_key: str) -> StockMasterResult:
         """Inspect the original absolute stock operation without fiscal dispatch."""
         from urllib.parse import quote
         result = self._request("GET", "/v2/etims/stock/master/operations/" + quote(operation_key, safe=""))
-        return StockMasterResult.model_validate(result)
+        return self._typed_result(StockMasterResult, result)
 
     def batch_update_stock(self, items: List[StockItem]) -> List[Dict[str, Any]]:
         """
@@ -610,9 +624,16 @@ class KRAeTIMSClient(_BaseKRAeTIMSClient):
     # ------------------------------------------------------------------
 
     def check_compliance(self, pin: str) -> Dict[str, Any]:
-        """Verify device compliance for the given TIN/PIN."""
-        return self._request("GET", f"/v2/etims/compliance/{pin}")
+        """
+        .. deprecated:: 0.8.2
+            TaxID serves no ``/v2/etims/compliance/{pin}`` route; this method
+            only ever received HTTP 404. It now raises
+            :class:`~kra_etims.exceptions.UnsupportedOperationError` without
+            sending a request. Use :meth:`device_health` for branch reachability
+            and :meth:`lookup_customer` for a taxpayer PIN.
+        """
+        self._unsupported_compliance()
 
     def lookup_pin(self, pin: str) -> Dict[str, Any]:
-        """Look up a KRA PIN via GavaConnect (read-only, no VSCU state change)."""
-        return self._request("GET", f"/v2/taxpayer/lookup?pin={pin}")
+        """Compatibility alias for :meth:`lookup_customer`; does not register a buyer."""
+        return self.lookup_customer(pin)

@@ -356,7 +356,8 @@ def device_status(
     api_key: Annotated[Optional[str], typer.Option(help="Override API key.")] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Emit raw JSON.")] = False,
 ) -> None:
-    """Check device compliance status for a given PIN."""
+    """Check device compliance status for a given PIN (unsupported by TaxID; see device_health)."""
+    from kra_etims.exceptions import UnsupportedOperationError
     from ._client import get_client
 
     client = get_client(api_key)
@@ -369,7 +370,11 @@ def device_status(
         transient=True,
     ) as progress:
         progress.add_task("Checking compliance...", total=None)
-        result = client.check_compliance(pin)
+        try:
+            result = client.check_compliance(pin)
+        except UnsupportedOperationError as exc:
+            err_console.print(err_panel(str(exc)))
+            raise typer.Exit(1)
 
     if as_json:
         print_json(result)
@@ -645,6 +650,7 @@ def queue_status(
 
     console.print(kv_table([
         ("Pending",    str(counts["pending"])),
+        ("Accepted (PENDING_SYNC)", str(counts.get("accepted", 0))),
         ("Failed",     str(counts["failed"])),
         ("Completed",  str(counts["completed"])),
         ("Outcome unknown", str(counts.get("outcome_unknown", 0))),
@@ -658,14 +664,15 @@ def queue_flush(
     api_key: Annotated[Optional[str], typer.Option(help="Override API key.")] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Emit raw JSON.")] = False,
 ) -> None:
-    """Submit all pending offline invoices to TIaaS."""
+    """Submit pending offline invoices and poll the status of accepted (PENDING_SYNC) ones."""
     from ._client import get_client
     from .queue import Queue
 
     q = Queue()
     pending = q.pending()
+    accepted = q.accepted()
 
-    if not pending:
+    if not pending and not accepted:
         console.print(success_panel("Queue is empty — nothing to flush."))
         return
 
@@ -679,7 +686,12 @@ def queue_flush(
         console=console,
         transient=True,
     ) as progress:
-        task = progress.add_task(f"Flushing {len(pending)} invoice(s)...", total=len(pending))
+        total = len(pending) + len(accepted)
+        task = progress.add_task(f"Flushing {total} invoice(s)...", total=total)
+        for row in accepted:
+            # Accepted sales are followed by status, never resubmitted.
+            results.append(q.poll_one(client, row))
+            progress.advance(task)
         for row in pending:
             result = q.flush_one(client, row)
             results.append(result)
@@ -692,11 +704,16 @@ def queue_flush(
     held = sum(1 for r in results if r["status"] == "outcome_unknown")
     if held:
         console.print(f"{held} outcome unknown; inspect original operations before considering replay.")
+    retry = sum(1 for r in results if r["status"] == "pending")
+    queued = sum(1 for r in results if r["status"] == "accepted")
+    if queued:
+        console.print(f"{queued} accepted as PENDING_SYNC, not yet signed; re-run flush later to poll their status.")
     ok = sum(1 for r in results if r["status"] in ("success", "already_processed"))
-    failed = len(results) - ok - held
+    failed = len(results) - ok - held - queued - retry
     console.print(success_panel(
         f"Flushed {ok}/{len(results)} invoice(s)."
-        + (f" [red]{failed} failed[/red] — re-run to retry." if failed else "")
+        + (f" {retry} refused before processing and still queued — re-run to retry." if retry else "")
+        + (f" [red]{failed} failed[/red] — rejected; not retried." if failed else "")
     ))
 
 
@@ -798,12 +815,14 @@ def pin_validate(
                 print_json(result)
                 return
 
+            # /v2/etims/customers/lookup: status FOUND | NOT_FOUND | UNVERIFIED,
+            # plus name and taxpayerStatus when FOUND.
             data = result.get("data", result)
             console.print(kv_table([
                 ("PIN",    pin),
                 ("Name",   str(data.get("taxpayerName") or data.get("name") or "—")),
                 ("Status", str(data.get("status") or "—")),
-                ("Active", "Yes" if data.get("registered") or data.get("active") else "No"),
+                ("Taxpayer status", str(data.get("taxpayerStatus") or "—")),
                 ("Source", "TIaaS"),
             ], title="PIN Lookup"))
 

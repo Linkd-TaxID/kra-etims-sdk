@@ -20,7 +20,37 @@ class KRAeTIMSError(Exception):
     Root exception for all KRA eTIMS SDK errors.
 
     Full result code reference: https://linkd-taxid.github.io/kra-etims-sdk/
+
+    ``code`` is the server's machine-readable error code (e.g. ``INVALID_REQUEST``)
+    when the response carried one, else ``None``. ``retry_after`` is the raw
+    ``Retry-After`` header and ``retry_after_seconds`` its parsed value.
     """
+    code: Optional[str] = None
+
+    @property
+    def retry_after_seconds(self) -> Optional[float]:
+        """The raw ``retry_after`` header parsed to seconds (RFC 9110 §10.2.3:
+        delay-seconds or an HTTP-date), or ``None`` when absent or invalid."""
+        return self.parse_retry_after(getattr(self, "retry_after", None))
+
+    @staticmethod
+    def parse_retry_after(value: Optional[str]) -> Optional[float]:
+        if value is None:
+            return None
+        value = value.strip()
+        if value.isascii() and value.isdigit():
+            return float(value)
+        try:
+            from email.utils import parsedate_to_datetime
+            from datetime import datetime, timezone
+            when = parsedate_to_datetime(value)
+        except (TypeError, ValueError, IndexError):
+            return None
+        if when is None:
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
 
 
 # ---------------------------------------------------------------------------
@@ -90,12 +120,49 @@ class KRAAuthorizationError(KRAeTIMSError):
     """
 
 
+class RateLimitError(KRAeTIMSError):
+    """
+    HTTP 429 (``code`` usually ``RATE_LIMITED``). Nothing was processed.
+
+    Use ``retry_after_seconds`` (inherited) for the delay.
+    """
+
+
 class TIaaSUnavailableError(KRAeTIMSError):
     """The middleware service is unavailable."""
     def __init__(self, message: str = (
         "TIaaS Service Unavailable: The middleware service is unavailable."
     )):
         super().__init__(message)
+
+
+class FiscalWorkerUnavailableError(TIaaSUnavailableError):
+    """
+    TaxID's fiscal worker refused the request before dispatching it to the
+    control unit, and the server marked the refusal ``retryable``. Safe to
+    retry with the same idempotency key and body after a backoff.
+
+    ``code`` carries the server code (``WORKER_DEFERRED`` or ``WORKER_STOPPING``).
+    """
+    retryable: bool = True
+
+    def __init__(self, message: str = (
+        "TaxID fiscal worker unavailable: the request was refused before dispatch. "
+        "Retry with the same idempotency key after a backoff."
+    ), code: Optional[str] = None):
+        super().__init__(message)
+        self.code = code
+
+
+class WorkerDeferredError(FiscalWorkerUnavailableError, KRAAuthorizationError):
+    """HTTP 403 ``WORKER_DEFERRED``: worker-gate refusal, safe to retry.
+
+    Also a :class:`KRAAuthorizationError` so existing 403 handlers still match.
+    """
+
+
+class WorkerStoppingError(FiscalWorkerUnavailableError):
+    """HTTP 503 ``WORKER_STOPPING``: the worker is shutting down, safe to retry."""
 
 
 class TIaaSAmbiguousStateError(KRAeTIMSError):
@@ -119,6 +186,32 @@ class TIaaSAmbiguousStateError(KRAeTIMSError):
     ):
         super().__init__(message)
         self.idempotency_key = idempotency_key
+
+
+class MutationServiceUnavailableError(TIaaSUnavailableError, TIaaSAmbiguousStateError):
+    """
+    An unrecognised HTTP 503 on a mutating request (no ``WORKER_STOPPING``,
+    ``KRA_CONNECTIVITY_TIMEOUT`` or ``oscu_code``).
+
+    TaxID cannot always show such a 503 was raised before dispatch (a transient
+    control-unit code, a proxy, an empty body), so the original may have been
+    applied. It is a :class:`TIaaSAmbiguousStateError`: keep ``idempotency_key``
+    and inspect the original before any replay. It stays a
+    :class:`TIaaSUnavailableError` so existing handlers still match, but it is
+    not retryable: handle it before any ``except TIaaSUnavailableError`` that
+    retries. Reads keep raising a plain :class:`TIaaSUnavailableError`.
+    """
+    retryable: bool = False
+
+    def __init__(self, message: str, idempotency_key: Optional[str] = None):
+        TIaaSAmbiguousStateError.__init__(self, message, idempotency_key=idempotency_key)
+
+
+class UnsupportedOperationError(KRAeTIMSError, NotImplementedError):
+    """The SDK method targets a route the TaxID backend does not serve.
+
+    Raised locally without sending a request. Also a ``NotImplementedError``.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +311,24 @@ class KRAConflictError(KRAeTIMSError):
         self.code = code
 
 
+class IdempotentOutcomeUnresolvedError(TIaaSAmbiguousStateError, KRAConflictError):
+    """
+    The server holds an earlier claim for this idempotency key but cannot
+    return its result (HTTP 409/425 from TaxID's idempotency layer).
+
+    ``code`` is one of ``IDEMPOTENT_RESULT_LOOKUP_REQUIRED`` (original still in
+    flight or its cached response is unavailable), ``IDEMPOTENT_IDENTITY_UNAVAILABLE``
+    (the claim exists but cannot be read back) or ``IDEMPOTENCY_SCOPE_UNBOUND``
+    (a historical claim recorded before request scopes were stored). In every
+    case the original may have been applied: keep ``idempotency_key``, look the
+    original up (``find_sale(operation_key=...)``) and never resubmit under a
+    new key. Subclasses :class:`KRAConflictError` so existing 409 handlers match.
+    """
+    def __init__(self, message: str, idempotency_key: Optional[str] = None, code: Optional[str] = None):
+        TIaaSAmbiguousStateError.__init__(self, message, idempotency_key=idempotency_key)
+        self.code = code
+
+
 class CreditNoteConflictError(KRAConflictError):
     """
     HTTP 409 on a credit-note request (for example ``ETIMS_NOT_INITIALIZED``).
@@ -248,6 +359,23 @@ class CreditNoteConflictError(KRAConflictError):
         # existingCuInvoiceNo}) — the fields callers need to fetch the winner.
         self.existing_credit_note_id = existing_credit_note_id
         self.existing_cu_invoice_no = existing_cu_invoice_no
+
+
+class CreditNoteOutcomeUnresolvedError(IdempotentOutcomeUnresolvedError, CreditNoteConflictError):
+    """
+    :class:`IdempotentOutcomeUnresolvedError` raised by ``issue_credit_note``:
+    TaxID holds an earlier claim for this credit-note idempotency key but cannot
+    return its result. The original correction may have been applied; keep
+    ``idempotency_key``, inspect the original and never resubmit under a new key.
+
+    Also a :class:`CreditNoteConflictError` (and so a :class:`KRAConflictError`),
+    so credit-note 409 handlers written for SDK 0.8.1 still match.
+    """
+    def __init__(self, message: str, idempotency_key: Optional[str] = None, code: Optional[str] = None):
+        IdempotentOutcomeUnresolvedError.__init__(self, message, idempotency_key=idempotency_key, code=code)
+        self.original_purchase_id = None
+        self.existing_credit_note_id = None
+        self.existing_cu_invoice_no = None
 
 
 class CreditNoteExceedsOriginalError(KRAeTIMSError):
@@ -282,9 +410,28 @@ class CreditNoteExceedsOriginalError(KRAeTIMSError):
         self.original_purchase_id = original_purchase_id
 
 
-class ZReportAlreadyIssuedError(KRAeTIMSError):
+class CreditNoteQuantityExceedsOriginalError(CreditNoteExceedsOriginalError):
     """
-    The Z-report for the requested date has already been issued (HTTP 409).
+    A returned line exceeds the quantity still reversible on the original (HTTP
+    422, code ``CREDIT_NOTE_QUANTITY_EXCEEDS_ORIGINAL``). Also a
+    :class:`CreditNoteExceedsOriginalError`; its amount balances are ``None``.
+
+    ``original_item_seq`` is the original line and ``remaining_quantity`` the
+    quantity still reversible on it.
+    """
+    def __init__(self, message: str, original_item_seq: Optional[int] = None,
+                 remaining_quantity: Any = None):
+        super().__init__(message)
+        self.original_item_seq = original_item_seq
+        self.remaining_quantity: Optional[Decimal] = (
+            None if remaining_quantity is None else Decimal(str(remaining_quantity)))
+
+
+class ZReportAlreadyIssuedError(KRAConflictError):
+    """
+    The Z-report for the requested date has already been issued (HTTP 409,
+    ``code`` ``Z_REPORT_ALREADY_ISSUED``). Also a :class:`KRAConflictError`, so
+    generic 409 handlers match it.
 
     This records completion of the local daily aggregate. No remote device
     fiscal-close request or central KRA acknowledgement is implied. Retrieve
@@ -301,8 +448,9 @@ class ZReportAlreadyIssuedError(KRAeTIMSError):
             "for totals; no remote fiscal-close acknowledgement is implied."
         ),
         report_date: Optional[str] = None,
+        code: Optional[str] = "Z_REPORT_ALREADY_ISSUED",
     ):
-        super().__init__(message)
+        super().__init__(message, code=code)
         self.report_date = report_date
 
 

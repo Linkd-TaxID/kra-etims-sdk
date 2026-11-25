@@ -56,7 +56,7 @@ Exceptions
 # Clients
 from .client import KRAeTIMSClient
 from .async_client import AsyncKRAeTIMSClient
-from .outcomes import ResponseMetadata, SaleResult, SaleStatusResult
+from .outcomes import CreditNoteResult, ResponseMetadata, SaleOriginalResult, SaleResult, SaleStatusResult
 
 # GavaConnect — direct KRA API (no TIaaS subscription required)
 from .gavaconnect import (
@@ -129,7 +129,15 @@ from .exceptions import (
     KRAConnectivityTimeoutError,
     OSCUUnavailableError,
     TIaaSUnavailableError,
+    FiscalWorkerUnavailableError,
+    WorkerDeferredError,
+    WorkerStoppingError,
     TIaaSAmbiguousStateError,
+    MutationServiceUnavailableError,
+    IdempotentOutcomeUnresolvedError,
+    CreditNoteOutcomeUnresolvedError,
+    UnsupportedOperationError,
+    RateLimitError,
     KRAValidationError,
     KRAInvalidPINError,
     KRAVSCUMemoryFullError,
@@ -141,13 +149,14 @@ from .exceptions import (
     KRAConflictError,
     CreditNoteConflictError,
     CreditNoteExceedsOriginalError,
+    CreditNoteQuantityExceedsOriginalError,
     ZReportAlreadyIssuedError,
 )
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 
 __all__ = [
-    "ResponseMetadata", "SaleResult", "SaleStatusResult",
+    "ResponseMetadata", "SaleResult", "SaleStatusResult", "CreditNoteResult", "SaleOriginalResult",
     # Clients
     "KRAeTIMSClient",
     "AsyncKRAeTIMSClient",
@@ -194,7 +203,15 @@ __all__ = [
     "KRAConnectivityTimeoutError",
     "OSCUUnavailableError",
     "TIaaSUnavailableError",
+    "FiscalWorkerUnavailableError",
+    "WorkerDeferredError",
+    "WorkerStoppingError",
     "TIaaSAmbiguousStateError",
+    "MutationServiceUnavailableError",
+    "IdempotentOutcomeUnresolvedError",
+    "CreditNoteOutcomeUnresolvedError",
+    "UnsupportedOperationError",
+    "RateLimitError",
     "KRAValidationError",
     "KRAInvalidPINError",
     "KRAVSCUMemoryFullError",
@@ -206,6 +223,7 @@ __all__ = [
     "KRAConflictError",
     "CreditNoteConflictError",
     "CreditNoteExceedsOriginalError",
+    "CreditNoteQuantityExceedsOriginalError",
     "ZReportAlreadyIssuedError",
     # GavaConnect
     "GavaConnectClient",

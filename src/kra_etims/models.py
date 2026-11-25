@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Literal, List, Optional
 from decimal import Decimal, ROUND_HALF_UP
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+from .outcomes import ResponseMetadata
 
 _LAST_REQ_DT_RE = re.compile(r'^\d{14}$')  # YYYYMMDDHHmmss — exactly 14 digits
 
@@ -504,6 +505,7 @@ class StockOperationResult(BaseModel):
     totAmt: Decimal
     totTaxAmt: Decimal
     kraAcknowledged: bool = False
+    response_metadata: Optional[ResponseMetadata] = Field(default=None, exclude=True)
 
     def __getitem__(self, key):
         return self.model_dump()[key]
@@ -571,6 +573,7 @@ class StockMasterResult(BaseModel):
     payloadSha256: str
     transport: List[OriginalTransportSnapshot] = Field(default_factory=list)
     kraAcknowledged: bool = False
+    response_metadata: Optional[ResponseMetadata] = Field(default=None, exclude=True)
     semantics: str = "ABSOLUTE_RESIDUAL_QUANTITY"
 
 

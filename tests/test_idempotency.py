@@ -65,11 +65,11 @@ def test_sync_unavailable_state_on_get(httpx_mock):
     httpx_mock.add_exception(
         httpx.ConnectError("Down"),
         method="GET",
-        url="https://api.test/v2/etims/compliance/P1",
+        url="https://api.test/v2/etims/device",
     )
 
     with pytest.raises(TIaaSUnavailableError):
-        client.check_compliance("P1")
+        client.device_status()
 
 
 @pytest.mark.asyncio

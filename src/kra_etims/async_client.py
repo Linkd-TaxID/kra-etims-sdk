@@ -222,8 +222,9 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             headers = self._build_auth_headers(idempotency_key)
             inject_trace_context(headers)
 
+            content = self._encode_request_body(json, headers)
             try:
-                resp = await self._http.request(method, url, json=json, files=files, headers=headers, timeout=self._timeout)
+                resp = await self._http.request(method, url, content=content, files=files, headers=headers, timeout=self._timeout)
             except httpx.RequestError as exc:
                 raise self._transport_error(exc, method, idempotency_key) from exc
             return self._parse_response(resp, method, idempotency_key)
@@ -424,7 +425,9 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     async def get_sale_status(self, invc_no: int) -> Dict[str, Any]:
         """
         Poll the ground-truth outcome of a sale that returned 202 PENDING_SYNC
-        from :meth:`submit_sale` (middleware Track C4). See
+        from :meth:`submit_sale` (middleware Track C4). Polling with backoff is
+        the supported path; webhooks are optional, deployment-dependent,
+        at-least-once and signed per branch, so do not rely on them. See
         :meth:`KRAeTIMSClient.get_sale_status` for full semantics.
 
         :raises KRAeTIMSError: HTTP 404 — no sale with this ``purchaseId`` for
@@ -455,6 +458,9 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
         KRA TIS 6.16 defines once-only cancellation; live combinations need a verified
         contract and production corrections remain evidence-gated. Unknown/deferred
         corrections reserve their original quantities and must never be replaced.
+        An unresolved earlier claim for the key raises
+        ``CreditNoteOutcomeUnresolvedError`` (an ``IdempotentOutcomeUnresolvedError``
+        that is also a ``CreditNoteConflictError``).
         """
         with _span("kra_etims.issue_credit_note", {"sale.id": str(original_purchase_id)}):
             if not client_reference and not idempotency_key:
@@ -502,11 +508,14 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     # ------------------------------------------------------------------
 
     async def update_stock(self, data: StockItem) -> Dict[str, Any]:
-        """Restricted legacy stock route; use submit_stock_adjustment with an original operation key."""
-        return await self._request(
-            "POST", "/v2/etims/stock",
-            json=data.model_dump(mode="json", exclude_none=True),
-        )
+        """
+        .. deprecated::
+            TaxID refuses the legacy ``/v2/etims/stock`` route (HTTP 501). This
+            warns and raises :class:`~kra_etims.exceptions.UnsupportedOperationError`
+            without sending a request; use :meth:`submit_stock_adjustment` with a
+            stable ``idempotency_key``.
+        """
+        self._unsupported_update_stock()
 
     async def submit_stock_adjustment(
         self,
@@ -541,13 +550,13 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             json=request.model_dump(mode="json", exclude_none=True),
             idempotency_key=idempotency_key,
         )
-        return StockOperationResult.model_validate(result)
+        return self._typed_result(StockOperationResult, result)
 
     async def inspect_stock_operation(self, operation_key: str) -> StockOperationResult:
         """Read retained current stock outcome; a cached POST response may be older."""
         from urllib.parse import quote
         result = await self._request("GET", "/v2/etims/stock/operations/" + quote(operation_key, safe=""))
-        return StockOperationResult.model_validate(result)
+        return self._typed_result(StockOperationResult, result)
 
     async def submit_stock_master(self, request: StockMasterRequest, *, idempotency_key: str) -> StockMasterResult:
         """Send supplied absolute residual quantity after confirmed original I/O.
@@ -559,13 +568,13 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
             raise ValueError("Stock master requires a stable idempotency_key")
         result = await self._request("POST", "/v2/etims/stock/master",
             json=request.model_dump(mode="json"), idempotency_key=idempotency_key)
-        return StockMasterResult.model_validate(result)
+        return self._typed_result(StockMasterResult, result)
 
     async def inspect_stock_master(self, operation_key: str) -> StockMasterResult:
         """Inspect the original absolute stock operation without fiscal dispatch."""
         from urllib.parse import quote
         result = await self._request("GET", "/v2/etims/stock/master/operations/" + quote(operation_key, safe=""))
-        return StockMasterResult.model_validate(result)
+        return self._typed_result(StockMasterResult, result)
 
     async def batch_update_stock(
         self, items: List[StockItem]
@@ -619,9 +628,16 @@ class AsyncKRAeTIMSClient(_BaseKRAeTIMSClient):
     # ------------------------------------------------------------------
 
     async def check_compliance(self, pin: str) -> Dict[str, Any]:
-        """Verify device compliance for the given TIN/PIN."""
-        return await self._request("GET", f"/v2/etims/compliance/{pin}")
+        """
+        .. deprecated:: 0.8.2
+            TaxID serves no ``/v2/etims/compliance/{pin}`` route; this method
+            only ever received HTTP 404. It now raises
+            :class:`~kra_etims.exceptions.UnsupportedOperationError` without
+            sending a request. Use :meth:`device_health` for branch reachability
+            and :meth:`lookup_customer` for a taxpayer PIN.
+        """
+        self._unsupported_compliance()
 
     async def lookup_pin(self, pin: str) -> Dict[str, Any]:
-        """Compatibility alias for taxpayer lookup; does not register a buyer."""
+        """Compatibility alias for :meth:`lookup_customer`; does not register a buyer."""
         return await self.lookup_customer(pin)

@@ -10,6 +10,7 @@ Both transports use httpx:
   httpx.AsyncClient  — async, used by AsyncKRAeTIMSClient
 """
 
+import json as _json
 import os
 import re
 from abc import ABC, abstractmethod
@@ -17,21 +18,33 @@ from typing import Any, Dict, Optional
 
 import httpx
 from pydantic import ValidationError
-from .outcomes import FiscalResultDict, ResponseMetadata, SaleResult, SaleStatusResult
+from pydantic import BaseModel
+from .outcomes import (
+    CreditNoteResult, FiscalResultDict, has_signed_evidence, ResponseMetadata, SaleOriginalResult, SaleResult, SaleStatusResult,
+)
+from .models import StockMasterResult, StockOperationResult
 
 from .exceptions import (
     KRA_ERROR_MAP,
     KRADuplicateInvoiceError,
     CreditNoteConflictError,
     CreditNoteExceedsOriginalError,
+    CreditNoteQuantityExceedsOriginalError,
+    CreditNoteOutcomeUnresolvedError,
+    IdempotentOutcomeUnresolvedError,
     KRAConflictError,
     KRAConnectivityTimeoutError,
     KRAeTIMSAuthError,
     KRAAuthorizationError,
     KRAeTIMSError,
+    MutationServiceUnavailableError,
     OSCUUnavailableError,
+    RateLimitError,
     TIaaSAmbiguousStateError,
     TIaaSUnavailableError,
+    UnsupportedOperationError,
+    WorkerDeferredError,
+    WorkerStoppingError,
 )
 
 # KRA eTIMS success result codes — two officially documented variants:
@@ -55,9 +68,56 @@ _UNSETTLED_SALE_STATES: frozenset = frozenset(
     {"PENDING_SYNC", "OUTCOME_UNKNOWN", "RECONCILIATION_REQUIRED"}
 )
 
+# IdempotencyFilter refusals where an earlier claim for the key exists but its
+# outcome cannot be returned: the original may have been applied.
+_UNRESOLVED_IDEMPOTENCY_CODES: frozenset = frozenset(
+    {"IDEMPOTENT_RESULT_LOOKUP_REQUIRED", "IDEMPOTENT_IDENTITY_UNAVAILABLE", "IDEMPOTENCY_SCOPE_UNBOUND"}
+)
+
+# Routes whose 2xx bodies are fiscal outcomes: validated before they are returned
+# (an invalid mutation body is ambiguous, never a raw pydantic error) and returned
+# with response metadata attached.
+_RESULT_MODELS: tuple = (
+    (re.compile(r"/v2/etims/sale$"), SaleResult),
+    (re.compile(r"/v2/etims/sales/[^/]+/status$"), SaleStatusResult),
+    (re.compile(r"/v2/etims/sales/search$"), SaleStatusResult),
+    (re.compile(r"/v2/etims/sales/[^/]+/original$"), SaleOriginalResult),
+    (re.compile(r"/v2/etims/sale/[^/]+/credit-note$"), CreditNoteResult),
+    (re.compile(r"/v2/etims/stock/adjustment$"), StockOperationResult),
+    (re.compile(r"/v2/etims/stock/operations/[^/]+$"), StockOperationResult),
+    (re.compile(r"/v2/etims/stock/master$"), StockMasterResult),
+    (re.compile(r"/v2/etims/stock/master/operations/[^/]+$"), StockMasterResult),
+)
+
+_CREDIT_NOTE_PATH = re.compile(r"/v2/etims/sale/[^/]+/credit-note$")
+
+
+def _unresolved_error_type(path: str) -> type[IdempotentOutcomeUnresolvedError]:
+    """Credit notes get the subclass that is also a CreditNoteConflictError."""
+    return CreditNoteOutcomeUnresolvedError if _CREDIT_NOTE_PATH.search(path) else IdempotentOutcomeUnresolvedError
+
+
+# An UPPER_SNAKE machine code, as opposed to a reason phrase such as "Conflict".
+_MACHINE_CODE = re.compile(r"^[A-Z][A-Z0-9_]+$")
+
 # Failures where the request provably never reached the server: no TCP/TLS
 # connection was established, or no pooled connection became free in time.
 _NOT_SENT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
+
+
+def _encode_json_body(payload: Any) -> bytes:
+    """Serialize a request body the same way under every httpx version.
+
+    TaxID's IdempotencyFilter hashes the exact body bytes with the route and
+    rejects a reused key whose bytes differ (422 IDEMPOTENCY_KEY_REUSED).
+    httpx 0.27 sent ``json.dumps(obj)`` (spaced, ASCII-escaped) and 0.28 sends
+    compact UTF-8, so the same retry could hash differently depending on the
+    installed httpx. This matches the 0.28 format exactly, keeping keys first
+    sent from 0.28 installs replayable. Keys are not sorted: the server
+    digests bytes, not a canonical form, and sorting would change the bytes
+    of every request an earlier SDK version already sent under a key.
+    """
+    return _json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
 
 
 class _BaseKRAeTIMSClient(ABC):
@@ -167,6 +227,43 @@ class _BaseKRAeTIMSClient(ABC):
     def _build_url(self, path: str) -> str:
         return f"{self.base_url}/{path.lstrip('/')}"
 
+    @staticmethod
+    def _encode_request_body(json: Any, headers: Dict[str, str]) -> Optional[bytes]:
+        """SDK-owned JSON body bytes (see _encode_json_body); sets Content-Type."""
+        if json is None:
+            return None
+        headers["Content-Type"] = "application/json"
+        return _encode_json_body(json)
+
+    @staticmethod
+    def _unsupported_update_stock() -> None:
+        import warnings
+        warnings.warn(
+            "update_stock() targets the legacy /v2/etims/stock route, which TaxID refuses "
+            "(HTTP 501), and will be removed. Use submit_stock_adjustment(..., idempotency_key=...).",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        raise UnsupportedOperationError(
+            "update_stock() is not supported: TaxID refuses the legacy /v2/etims/stock route "
+            "because it has no durable identity. Use submit_stock_adjustment(lines, "
+            "idempotency_key=...) with a stable key."
+        )
+
+    @staticmethod
+    def _unsupported_compliance() -> None:
+        import warnings
+        warnings.warn(
+            "check_compliance() targets a route TaxID does not serve and will be removed. "
+            "Use device_health() or lookup_customer().",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        raise UnsupportedOperationError(
+            "check_compliance() is not supported: TaxID has no compliance-check route. "
+            "Use device_health() for branch reachability or lookup_customer(pin) for a taxpayer PIN."
+        )
+
     def _build_auth_headers(
         self, idempotency_key: Optional[str] = None
     ) -> Dict[str, str]:
@@ -208,26 +305,25 @@ class _BaseKRAeTIMSClient(ABC):
         return body, str(message), str(code) if code is not None else None
 
     @staticmethod
-    def _raise_for_503(resp: httpx.Response) -> None:
+    def _raise_for_503(resp: httpx.Response, mutating: bool = False) -> None:
         """
-        Discriminates a 503 between two unrelated conditions that happen to
-        share an HTTP status code: the 24-hour VSCU offline ceiling (VSCU
-        Spec §2.2 Policy 4) and a transient OSCU-side failure (OSCU Spec
-        v2.0 §4.18 — OSCU has zero offline tolerance by design, so it has
-        no 24-hour-ceiling concept at all). Every 503 was treated as the
-        former until this method existed; that stopped being safe once the
-        middleware could actually sign through OSCU.
+        Discriminate a TaxID 503. Several unrelated conditions share the status:
 
-        TIaaS's ``GlobalExceptionHandler`` puts an ``oscu_code`` property on
-        the response body specifically for OSCU failures (``vscu_code`` for
-        VSCU ones) — presence of ``oscu_code`` is the discriminator. Falls
-        back to the historical ``KRAConnectivityTimeoutError`` behavior if
-        the body doesn't parse or doesn't carry either marker, so an older
-        middleware version (or a 503 from something other than a signing
-        call) doesn't change behavior.
+        - ``code: KRA_CONNECTIVITY_TIMEOUT`` — the 24-hour VSCU offline ceiling
+          (``SystemSuspendedException``): :class:`KRAConnectivityTimeoutError`.
+        - ``oscu_code`` property — transient OSCU failure (OSCU Spec v2.0 §4.18
+          has no offline ceiling): :class:`OSCUUnavailableError`.
+        - ``code: WORKER_STOPPING`` — worker shutdown, refused before dispatch:
+          :class:`WorkerStoppingError` (retryable).
+        - anything else (transient VSCU ``vscu_code``, worker role not fiscal,
+          held stock dispatch, token outage, a proxy, an empty body):
+          :class:`TIaaSUnavailableError`. These are not the 24-hour ceiling, so
+          they no longer default to it. On a mutation the original may still
+          have been applied, so it is :class:`MutationServiceUnavailableError`
+          (also a :class:`TIaaSAmbiguousStateError`).
         """
-        body, message, _ = _BaseKRAeTIMSClient._error_fields(resp)
-        if isinstance(body, dict) and "oscu_code" in body:
+        body, message, code = _BaseKRAeTIMSClient._error_fields(resp)
+        if "oscu_code" in body:
             raise OSCUUnavailableError(
                 message=message or (
                     f"OSCU Temporarily Unavailable (code {body.get('oscu_code')}): "
@@ -235,7 +331,22 @@ class _BaseKRAeTIMSClient(ABC):
                 ),
                 oscu_code=body.get("oscu_code"),
             )
-        raise KRAConnectivityTimeoutError()
+        if code == "KRA_CONNECTIVITY_TIMEOUT":
+            error: KRAeTIMSError = KRAConnectivityTimeoutError()
+        elif code == "WORKER_STOPPING":
+            error = WorkerStoppingError(f"TaxID fiscal worker is stopping (HTTP 503): {message}", code=code)
+        else:
+            detail = f" [{code}]" if code else ""
+            text = f"TaxID service unavailable (HTTP 503){detail}: {message}"
+            if mutating:
+                error = MutationServiceUnavailableError(
+                    f"{text} The original may have been applied; inspect it before any replay.")
+            else:
+                error = TIaaSUnavailableError(text)
+            if body.get("vscu_code") is not None:
+                error.vscu_code = str(body["vscu_code"])
+        error.code = code
+        raise error
 
     def _parse_response(
         self,
@@ -243,18 +354,16 @@ class _BaseKRAeTIMSClient(ABC):
         method: str,
         idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
-        body, _, _ = self._error_fields(resp)
+        body, _, body_code = self._error_fields(resp)
         metadata = ResponseMetadata(
             http_status=resp.status_code,
             request_id=resp.headers.get("X-Request-Id") or body.get("requestId"),
             environment=resp.headers.get("X-TaxID-Environment") or body.get("environment"),
             retry_after=resp.headers.get("Retry-After"),
         )
-        result_model: Optional[type[SaleResult]] = None
-        if resp.request.url.path.endswith("/v2/etims/sale"):
-            result_model = SaleResult
-        elif re.search(r"/v2/etims/sales/[^/]+/status$", resp.request.url.path):
-            result_model = SaleStatusResult
+        path = resp.request.url.path
+        result_model: Optional[type[BaseModel]] = next(
+            (model for pattern, model in _RESULT_MODELS if pattern.search(path)), None)
         try:
             result = self._parse_response_body(resp, method, idempotency_key)
             if result_model is not None:
@@ -275,11 +384,13 @@ class _BaseKRAeTIMSClient(ABC):
             error.retry_after = metadata.retry_after
             error.http_status = metadata.http_status
             error.idempotency_key = idempotency_key
+            if error.code is None and body_code is not None and not resp.is_success:
+                error.code = body_code
             raise error
 
     @staticmethod
     def _validate_sale_result(
-        result: Any, method: str, idempotency_key: Optional[str], result_model: type[SaleResult]
+        result: Any, method: str, idempotency_key: Optional[str], result_model: type[BaseModel]
     ) -> None:
         try:
             result_model.model_validate(result)
@@ -288,6 +399,13 @@ class _BaseKRAeTIMSClient(ABC):
             if method.upper() in _MUTATING_METHODS:
                 raise TIaaSAmbiguousStateError(message, idempotency_key=idempotency_key) from invalid
             raise KRAeTIMSError(message) from invalid
+
+    @staticmethod
+    def _typed_result(model: type[BaseModel], result: Any) -> Any:
+        """Build a typed stock result from an already-validated body, keeping its metadata."""
+        typed = model.model_validate(result)
+        typed.response_metadata = getattr(result, "response_metadata", None)
+        return typed
 
     def _parse_response_body(
         self,
@@ -305,11 +423,12 @@ class _BaseKRAeTIMSClient(ABC):
         # transient OSCU failure — see _raise_for_503's docstring.
         if resp.status_code == 503:
             try:
-                self._raise_for_503(resp)
+                self._raise_for_503(resp, method.upper() in _MUTATING_METHODS)
             except KRAeTIMSError as error:
                 error.http_status = resp.status_code
                 error.idempotency_key = idempotency_key
-                error.requires_reconciliation = method.upper() in _MUTATING_METHODS
+                error.requires_reconciliation = (method.upper() in _MUTATING_METHODS
+                                                 and not getattr(error, "retryable", False))
                 error.result_cd = getattr(error, "oscu_code", None)
                 raise
 
@@ -317,11 +436,19 @@ class _BaseKRAeTIMSClient(ABC):
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             sc = exc.response.status_code
-            if sc == 503:
-                self._raise_for_503(exc.response)
             if sc == 409:
                 body, msg, code = self._error_fields(exc.response)
+                if code is None and _MACHINE_CODE.match(str(body.get("error", ""))):
+                    # Older backends put the 409 code (e.g. Z_REPORT_ALREADY_ISSUED)
+                    # only in "error"; newer ones send both "code" and "error".
+                    code = body["error"]
                 message = f"Conflict (HTTP 409){f' [{code}]' if code else ''}: {msg}"
+                if code in _UNRESOLVED_IDEMPOTENCY_CODES:
+                    raise _unresolved_error_type(exc.request.url.path)(
+                        f"{message} Retain the original idempotency key and look up the original "
+                        "operation; do not resubmit under a new key.",
+                        idempotency_key=idempotency_key, code=code,
+                    ) from exc
                 if "/credit-note" in exc.request.url.path:
                     raise CreditNoteConflictError(
                         message,
@@ -334,11 +461,11 @@ class _BaseKRAeTIMSClient(ABC):
                 # IDEMPOTENT_REQUEST_IN_FLIGHT: the first request with this key is
                 # still running. Its outcome is not known yet, and the fix is the
                 # same as for any ambiguous mutation — retry with the same key.
-                _, msg, _ = self._error_fields(exc.response)
-                raise TIaaSAmbiguousStateError(
+                _, msg, code = self._error_fields(exc.response)
+                raise _unresolved_error_type(exc.request.url.path)(
                     f"Request with this idempotency key is still in flight (HTTP 425): {msg} "
                     "Retain the original key and inspect its status before considering replay.",
-                    idempotency_key=idempotency_key,
+                    idempotency_key=idempotency_key, code=code,
                 ) from exc
             if sc == 422:
                 # 422 covers VSCU terminal rejections AND the credit-note
@@ -352,6 +479,12 @@ class _BaseKRAeTIMSClient(ABC):
                         remaining=body.get("remaining"),
                         already_reversed=body.get("alreadyReversed"),
                     ) from exc
+                if code == "CREDIT_NOTE_QUANTITY_EXCEEDS_ORIGINAL":
+                    raise CreditNoteQuantityExceedsOriginalError(
+                        msg,
+                        original_item_seq=body.get("originalItemSeq"),
+                        remaining_quantity=body.get("remainingQuantity"),
+                    ) from exc
                 # Other 422s fall through to the generic handler below.
             if sc == 401:
                 _, message, code = self._error_fields(exc.response)
@@ -362,6 +495,10 @@ class _BaseKRAeTIMSClient(ABC):
                 ) from exc
             if sc == 403:
                 _, message, code = self._error_fields(exc.response)
+                if code == "WORKER_DEFERRED":
+                    raise WorkerDeferredError(
+                        f"TaxID fiscal worker deferred the request (HTTP 403): {message}", code=code
+                    ) from exc
                 detail = f" [{code}]" if code else ""
                 raise KRAAuthorizationError(
                     f"Authorization denied (HTTP 403){detail}: {message}"
@@ -372,6 +509,10 @@ class _BaseKRAeTIMSClient(ABC):
                 raise KRAeTIMSError(
                     f"Resource not found (HTTP 404){detail}: {message}"
                 ) from exc
+            if sc == 429:
+                _, message, code = self._error_fields(exc.response)
+                suffix = f" [{code}]" if code else ""
+                raise RateLimitError(f"Rate limited (HTTP 429){suffix}: {message}") from exc
             if sc in (502, 504):
                 # Gateway failures from an edge proxy: the upstream may have
                 # committed before the proxy gave up.
@@ -442,7 +583,9 @@ class _BaseKRAeTIMSClient(ABC):
                 "message":         str(outcome),
                 "error_type":      type(outcome).__name__,
                 "ambiguous":       isinstance(outcome, TIaaSAmbiguousStateError) or getattr(outcome, "requires_reconciliation", False),
-                "retryable":       isinstance(outcome, TIaaSUnavailableError),
+                "retryable":       isinstance(outcome, RateLimitError) or (
+                                       isinstance(outcome, TIaaSUnavailableError)
+                                       and not getattr(outcome, "requires_reconciliation", False)),
                 "result_cd":       getattr(outcome, "result_cd", None),
                 "http_status":     getattr(outcome, "http_status", None),
                 "idempotency_key": idem_key,
@@ -453,10 +596,7 @@ class _BaseKRAeTIMSClient(ABC):
             "invoice_no":      invoice_no,
             "status":          "success",
             "data":            outcome,
-            "signed":          sale_state == "SIGNED" and all(
-                isinstance(outcome.get(field), str) and outcome[field].strip()
-                for field in ("cuInvoiceNumber", "sdcId", "receiptSignature")
-            ),
+            "signed":          has_signed_evidence(outcome),
             "sale_status":     sale_state,
             "idempotency_key": idem_key,
         }

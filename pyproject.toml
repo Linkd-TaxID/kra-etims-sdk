@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "taxid-etims"
-version = "0.8.1"
+version = "0.8.2"
 description = "Enterprise Python SDK for KRA eTIMS via TIaaS Middleware — idempotency engine with offline resilience"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,7 +32,7 @@ dependencies = [
     "pydantic>=2.0.0",
     # httpx serves both transports: httpx.Client (sync, thread-safe) and
     # httpx.AsyncClient (async). requests is no longer a dependency.
-    "httpx>=0.25.0",
+    "httpx>=0.28",
 ]
 
 [project.urls]

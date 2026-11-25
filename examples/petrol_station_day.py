@@ -223,6 +223,7 @@ def main():
                                     taxTyCd=TaxType.E, qtyUnitCd="LTR"),
             ],
             remark="KPC Nairobi depot delivery — tanker KBY 442T, waybill W-88231",
+            idempotency_key=f"stock-in-fuel-{TODAY}",
         )
         log("SUPERVISOR", "STOCK-IN", "Tanker: 12,000L PMS + 8,000L AGO", resp)
     except Exception as e:
@@ -253,6 +254,7 @@ def main():
                                     taxTyCd=TaxType.C),
             ],
             remark="Shop replenishment — Highlands distributors INV-20441",
+            idempotency_key=f"stock-in-shop-{TODAY}",
         )
         log("SUPERVISOR", "STOCK-IN", "Shop van: 24 oil, 120 soda, 40 LPG", resp)
     except Exception as e:
@@ -352,6 +354,7 @@ def main():
                                        qty=Decimal("18.4"), prc=Decimal("199.20"),
                                        taxTyCd=TaxType.E, qtyUnitCd="LTR")],
             remark="Daily dip-stick variance — evaporation + meter calibration (pump 1/2)",
+            idempotency_key=f"stock-out-shrinkage-{TODAY}",
         )
         log("SUPERVISOR", "STOCK-OUT", "Write-off 18.4L PMS shrinkage", resp)
     except Exception as e:

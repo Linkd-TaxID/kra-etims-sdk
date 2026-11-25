@@ -42,6 +42,17 @@ from pydantic import BaseModel, Field
 
 from .exceptions import KRAConflictError, ZReportAlreadyIssuedError
 
+
+def _z_already_issued(date: Any, conflict: KRAConflictError) -> ZReportAlreadyIssuedError:
+    """Typed Z-report conflict that keeps the original 409's response details."""
+    error = ZReportAlreadyIssuedError(
+        f"Z-Report already issued for date={date}: {conflict}", report_date=str(date))
+    for attr in ("response_metadata", "request_id", "environment", "retry_after",
+                 "http_status", "idempotency_key"):
+        if hasattr(conflict, attr):
+            setattr(error, attr, getattr(conflict, attr))
+    return error
+
 if TYPE_CHECKING:
     from .client import KRAeTIMSClient
     from .async_client import AsyncKRAeTIMSClient
@@ -263,9 +274,7 @@ class ReportsInterface:
         except KRAConflictError as exc:
             if exc.code != "Z_REPORT_ALREADY_ISSUED":
                 raise
-            raise ZReportAlreadyIssuedError(
-                f"Z-Report already issued for date={date}: {exc}"
-            ) from exc
+            raise _z_already_issued(date, exc) from exc
         return ZReport.from_api(raw)
 
 
@@ -301,7 +310,5 @@ class AsyncReportsInterface:
         except KRAConflictError as exc:
             if exc.code != "Z_REPORT_ALREADY_ISSUED":
                 raise
-            raise ZReportAlreadyIssuedError(
-                f"Z-Report already issued for date={date}: {exc}"
-            ) from exc
+            raise _z_already_issued(date, exc) from exc
         return ZReport.from_api(raw)

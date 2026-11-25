@@ -38,6 +38,8 @@ from typing import Any, Optional
 
 import httpx
 
+from ._base_client import _encode_json_body
+
 # ---------------------------------------------------------------------------
 # Endpoints (verified against open-source reference implementations)
 # ---------------------------------------------------------------------------
@@ -218,8 +220,10 @@ class GavaConnectClient:
             try:
                 resp = self._http.post(
                     f"{self._base}{path}",
-                    json=body,
-                    headers={"Authorization": f"Bearer {token}"},
+                    # SDK-owned bytes: identical under every httpx version.
+                    content=_encode_json_body(body),
+                    headers={"Authorization": f"Bearer {token}",
+                             "Content-Type": "application/json"},
                 )
             except httpx.RequestError as exc:
                 raise _unreachable(exc) from exc
@@ -368,8 +372,10 @@ class AsyncGavaConnectClient:
             try:
                 resp = await self._http.post(
                     f"{self._base}{path}",
-                    json=body,
-                    headers={"Authorization": f"Bearer {token}"},
+                    # SDK-owned bytes: identical under every httpx version.
+                    content=_encode_json_body(body),
+                    headers={"Authorization": f"Bearer {token}",
+                             "Content-Type": "application/json"},
                 )
             except httpx.RequestError as exc:
                 raise _unreachable(exc) from exc
