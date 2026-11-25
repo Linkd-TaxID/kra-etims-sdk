@@ -4,6 +4,8 @@ All notable changes to kra-etims-sdk are documented here.
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-11-25
+
 ### Fixed
 - The supplier gateway no longer resends an ambiguous mutation. An OSCU 503 under an
   idempotency key was retried up to three times although the original may have been
